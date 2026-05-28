@@ -82,18 +82,20 @@ These rules are how we avoid context drift. If you violate one, the user will te
 
 ## Commands
 
+**Package manager: pnpm** (pinned via `packageManager` in `package.json`). Don't `npm install` — the `package-lock.json` is intentionally absent and only `pnpm-lock.yaml` is committed.
+
 ```bash
 # Dev
-npm run dev                                                          # localhost:3000 (Turbopack)
-npm run build                                                        # production build (must be clean before deploys)
-npm run typecheck                                                    # tsc --noEmit (must be clean before commits)
-npm run lint                                                         # eslint
+pnpm dev                                                             # localhost:3000 (Turbopack)
+pnpm build                                                           # production build (must be clean before deploys)
+pnpm typecheck                                                       # tsc --noEmit (must be clean before commits)
+pnpm lint                                                            # eslint
 
 # Prisma
-npx prisma migrate dev --name <name>                                 # add + apply a migration in dev
-npx prisma migrate deploy                                            # apply migrations in CI/prod
-npx prisma studio                                                    # browse the DB locally
-npx prisma generate                                                  # regenerate the client after schema changes
+pnpm exec prisma migrate dev --name <name>                           # add + apply a migration in dev
+pnpm exec prisma migrate deploy                                      # apply migrations in CI/prod
+pnpm exec prisma studio                                              # browse the DB locally
+pnpm exec prisma generate                                            # regenerate the client after schema changes
 
 # Raw-SQL RLS migrations
 # Apply files under sql-migrations/ via the Supabase MCP apply_migration tool.

@@ -34,7 +34,7 @@ See [`CLAUDE.md`](./CLAUDE.md) for the full set of architectural rules.
 ### Prerequisites
 
 - Node.js 20+ (`nvm use 20` if you have nvm)
-- `npm` (or your package manager of choice)
+- **pnpm** 10+ — `npm install -g pnpm` (pinned via `packageManager` in `package.json`)
 - A Supabase Personal Access Token, exported in your shell as `SUPABASE_ACCESS_TOKEN` — required for the Supabase MCP server in `.mcp.json`. Add to `~/.zshrc`:
   ```bash
   echo 'export SUPABASE_ACCESS_TOKEN=sbp_xxx' >> ~/.zshrc && source ~/.zshrc
@@ -45,21 +45,22 @@ See [`CLAUDE.md`](./CLAUDE.md) for the full set of architectural rules.
 ### Setup
 
 ```bash
-git clone git@github.com:YourUsername/dental-ace.git
+git clone git@github.com:jaywilburn/dental-ace.git
 cd dental-ace
-npm install
+pnpm install
 cp .env.example .env.local   # fill in real values
-npm run dev
+pnpm dev
 ```
 
 ### Common commands
 
 ```bash
-npm run dev                                        # local dev server on :3000
-npm run build                                      # production build (must pass before deploy)
-npx tsc --noEmit                                   # typecheck (must pass before commit)
-npx prisma migrate dev --name <name>               # add a Prisma migration
-npx prisma studio                                  # browse the DB locally
+pnpm dev                                            # local dev server on :3000 (Turbopack)
+pnpm build                                          # production build (must pass before deploy)
+pnpm typecheck                                      # tsc --noEmit (must pass before commit)
+pnpm lint                                           # eslint
+pnpm exec prisma migrate dev --name <name>          # add a Prisma migration
+pnpm exec prisma studio                             # browse the DB locally
 stripe listen --forward-to localhost:3000/api/webhooks/stripe   # forward Stripe webhooks
 ```
 
