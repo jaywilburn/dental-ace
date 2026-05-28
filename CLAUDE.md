@@ -9,7 +9,10 @@ Project memory for Claude Code. Load this at the start of every session.
 - **Suite:** AADB Platform Suite — three products on one codebase for the American Association of Dental Boards.
 - **Products:** Dental ACE (accreditation), Dental Track (licensee CE dashboard), Dental Audit (state-board random audits).
 - **Domain:** `dentalace.org`.
-- **Current phase:** Phase 1 — Dental ACE (pre-build).
+- **Current phase:** Phase 1 — Dental ACE (Phase 0 scaffolding complete; Week 2 auth + portals up next).
+- **Repo:** `github.com/jaywilburn/dental-ace` (private; transfers to client at launch).
+- **Installed versions:** Next.js 16.2.6, React 19.2.4, Tailwind v4, Prisma 6+, @supabase/ssr.
+- **See also:** [`AGENTS.md`](./AGENTS.md) — auto-generated reminder that Next 16 has breaking changes from training data; check `node_modules/next/dist/docs/` when conventions feel uncertain.
 - **Timeline:** 24-week, 3-phase build. Weeks 1–8 ACE → 9–16 Track → 17–24 Audit.
 - **Source of truth (scope/pricing/schema):** [`logic/aadb-master-sow-v1.1.html`](./logic/aadb-master-sow-v1.1.html)
 - **Suite framing:** [`PRD.md`](./PRD.md)
@@ -39,6 +42,7 @@ These rules are how we avoid context drift. If you violate one, the user will te
 - **Never create a `middleware.ts` file.** Next 16 doesn't use it. Route protection goes in `app/(routeGroup)/layout.tsx` as a server component that reads the Supabase session and redirects on role mismatch.
 - **Never use the Pages Router.** The whole app is App Router under `app/`.
 - **Roles** live on `users.role` and are mirrored into JWT custom claims via a Supabase Auth hook or DB trigger. Read from the JWT on the server when possible; fall back to a `users` lookup only when needed.
+- **Supabase SSR cookie refresh** happens inside route-group layouts (`app/(customer)/layout.tsx` etc.) via `supabase.auth.getUser()`, not in `middleware.ts`. The server client's `setAll` swallows errors inside RSC reads — refresh writes only succeed in server actions and route handlers.
 
 ### Database
 - **Prisma** for application reads/writes.
@@ -60,6 +64,8 @@ These rules are how we avoid context drift. If you violate one, the user will te
 ### UI
 - **ShadCN + Tailwind, always heavily customized.** Default ShadCN look is never shipped. Theme matches the navy/gold AADB brand from the prototypes.
 - Mobile-first for any page an attendee will see (the public attendee form at `/attend/[token]` is the most critical).
+- **Tailwind v4** — design tokens live in `app/globals.css` inside `@theme inline { … }`. ShadCN-compatible aliases (`--color-primary`, etc.) are already set, so any `npx shadcn add <component>` works without overwriting the AADB theme. **Don't run `shadcn init`** — it would clobber globals.css. Just `shadcn add` individual components when needed.
+- The `cn()` helper lives at `lib/utils.ts` (clsx + tailwind-merge).
 
 ### Code quality
 - **TypeScript strict mode.** `npx tsc --noEmit` must be clean before any commit.
@@ -76,25 +82,25 @@ These rules are how we avoid context drift. If you violate one, the user will te
 
 ## Commands
 
-These will be fleshed out once the Next.js app is scaffolded (Week 1). For now, the conceptual list:
-
 ```bash
 # Dev
-npm run dev
+npm run dev                                                          # localhost:3000 (Turbopack)
+npm run build                                                        # production build (must be clean before deploys)
+npm run typecheck                                                    # tsc --noEmit (must be clean before commits)
+npm run lint                                                         # eslint
 
 # Prisma
-npx prisma migrate dev --name <name>
-npx prisma db push        # dev only — never on prod
-npx prisma studio
+npx prisma migrate dev --name <name>                                 # add + apply a migration in dev
+npx prisma migrate deploy                                            # apply migrations in CI/prod
+npx prisma studio                                                    # browse the DB locally
+npx prisma generate                                                  # regenerate the client after schema changes
+
+# Raw-SQL RLS migrations
+# Apply files under sql-migrations/ via the Supabase MCP apply_migration tool.
+# These are NOT in prisma/migrations because Prisma doesn't manage RLS.
 
 # Stripe (local webhook forwarding)
 stripe listen --forward-to localhost:3000/api/webhooks/stripe
-
-# Typecheck (must be clean before commits)
-npx tsc --noEmit
-
-# Production build (must be clean before deploys)
-npm run build
 ```
 
 ---
@@ -113,53 +119,67 @@ npm run build
 
 ---
 
-## File Layout (Anticipated)
+## File Layout
 
 ```
-/                                  # project root
-├── app/                            # Next.js App Router
-│   ├── (auth)/login/page.tsx
-│   ├── (customer)/...              # CUSTOMER portal
-│   ├── (reviewer)/...              # REVIEWER portal
-│   ├── (admin)/...                 # ADMIN portal
-│   ├── attend/[token]/page.tsx     # public attendee form
+/                                       # project root
+├── app/                                # Next.js App Router
+│   ├── (auth)/login/page.tsx           # ← Week 2
+│   ├── (customer)/...                  # CUSTOMER portal (← Week 2)
+│   ├── (reviewer)/...                  # REVIEWER portal (← Week 2)
+│   ├── (admin)/...                     # ADMIN portal (← Week 2)
+│   ├── attend/[token]/page.tsx         # public attendee form (← Weeks 5-6)
 │   ├── api/
-│   │   ├── webhooks/stripe/route.ts
+│   │   ├── webhooks/stripe/route.ts    # ← Weeks 3-4
 │   │   └── ...
-│   └── layout.tsx
-├── components/                     # ShadCN + custom UI
-├── emails/                         # React Email templates
+│   ├── fonts.ts                        # (optional — currently inline in layout.tsx)
+│   ├── globals.css                     # ✅ AADB theme tokens + ShadCN aliases
+│   ├── layout.tsx                      # ✅ Cormorant + DM Sans + JetBrains Mono
+│   └── page.tsx                        # 🟡 Phase 0 brand-verification page (temp)
+├── components/                         # ← added when first ShadCN component lands
+├── emails/                             # React Email templates (← Weeks 5-6)
 ├── lib/
-│   ├── prisma.ts
-│   ├── supabase/                   # auth + storage clients
-│   ├── stripe.ts
-│   └── resend.ts
+│   ├── supabase/
+│   │   ├── server.ts                   # ✅ SSR client (server components, actions, routes)
+│   │   ├── client.ts                   # ✅ Browser client
+│   │   └── service-role.ts             # ✅ Server-only; bypasses RLS
+│   ├── prisma.ts                       # ← add when first DB call is needed
+│   ├── stripe.ts                       # ← Weeks 3-4
+│   ├── resend.ts                       # ← Weeks 5-6
+│   └── utils.ts                        # ✅ cn() helper (clsx + tailwind-merge)
 ├── prisma/
-│   └── schema.prisma
-├── logic/                          # SOW + prototypes (read-only reference)
-├── PRD.md                          # suite-level PRD
-├── PRD-phase-1-dental-ace.md       # Phase 1 detail
-└── CLAUDE.md                       # this file
+│   ├── schema.prisma                   # ✅ 6 Phase 1 tables
+│   └── migrations/                     # ← created on first `prisma migrate dev`
+├── sql-migrations/                     # raw-SQL migrations (RLS, triggers)
+│   └── 0002_phase1_rls_policies.sql    # ✅ Phase 1 RLS policies (apply via MCP)
+├── logic/                              # SOW + prototypes (gitignored — local reference only)
+├── .mcp.json                           # ✅ project-scoped Supabase MCP
+├── .env.example                        # ✅ committed env contract
+├── .env.local                          # gitignored, populated locally
+├── AGENTS.md                           # Next 16 "this isn't the Next you know" notice (from scaffold)
+├── PRD.md                              # ✅ suite-level PRD
+├── PRD-phase-1-dental-ace.md           # ✅ Phase 1 detail
+└── CLAUDE.md                           # ✅ this file
 ```
 
 ---
 
 ## Key Pointers
 
-- **Single source of truth (scope, schema, pricing):** [`logic/aadb-master-sow-v1.1.html`](./logic/aadb-master-sow-v1.1.html) — 794 lines of contract-spec.
+- **Single source of truth (scope, schema, pricing):** [`logic/aadb-master-sow-v1.1.html`](./logic/aadb-master-sow-v1.1.html) — 794 lines of contract-spec. (Gitignored; only present on the dev machine.)
 - **Suite framing:** [`PRD.md`](./PRD.md)
 - **Phase 1 detail:** [`PRD-phase-1-dental-ace.md`](./PRD-phase-1-dental-ace.md)
-- **Prototypes** (open these only when their product's phase starts):
-  - ACE landing page: [`logic/dentalace-landing-page.html`](./logic/dentalace-landing-page.html)
-  - ACE landing handoff: [`logic/dentalace-landing-page-handoff.md`](./logic/dentalace-landing-page-handoff.md)
-  - Track demo: [`logic/dental-track-demo.html`](./logic/dental-track-demo.html)
-  - Audit demo: [`logic/dental-audit-demo.html`](./logic/dental-audit-demo.html)
+- **Next 16 scaffold notes:** [`AGENTS.md`](./AGENTS.md)
+- **Prototypes** (open only when their product's phase starts; gitignored, local only):
+  - ACE landing page: `logic/dentalace-landing-page.html`
+  - ACE landing handoff: `logic/dentalace-landing-page-handoff.md`
+  - Track demo: `logic/dental-track-demo.html`
+  - Audit demo: `logic/dental-audit-demo.html`
 
 ---
 
 ## GitHub
 
-- Repo lives under **`YourUsername`** (user's global instruction).
-- Private repo.
-- Branch protection on `main`: PR required before merge.
-- John Stamper + Christy Stamper invited as collaborators (when accounts exist).
+- Repo: **`github.com/jaywilburn/dental-ace`** (private).
+- Branch protection on `main`: PR required before merge (enable once a collaborator is added).
+- Will transfer to the client's GitHub at launch.

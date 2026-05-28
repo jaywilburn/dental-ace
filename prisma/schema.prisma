@@ -1,0 +1,163 @@
+// AADB Platform Suite — Prisma schema
+//
+// Phase 1 (Dental ACE) — 6 tables in this file. Phase 2 and 3 tables are added
+// when their phases start. See PRD-phase-1-dental-ace.md §4 for the full data
+// model and the rationale behind each column.
+//
+// RLS policies are managed separately as raw-SQL migrations in /sql-migrations
+// (Prisma doesn't manage RLS). The Supabase MCP applies them via apply_migration.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum Role {
+  CUSTOMER
+  REVIEWER
+  ADMIN
+  // LICENSEE and BOARD added in Phase 2 / Phase 3 migrations.
+}
+
+enum ApplicationStatus {
+  DRAFT
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum BillingTransactionType {
+  APP_CREDIT
+  CERT_BUNDLE
+  EXPEDITE
+  ADMIN_OVERRIDE
+}
+
+model User {
+  id        String   @id @default(uuid()) @db.Uuid
+  email     String   @unique
+  role      Role     @default(CUSTOMER)
+  companyId String?  @db.Uuid
+  company   Company? @relation(fields: [companyId], references: [id])
+  createdAt DateTime @default(now())
+  lastLogin DateTime?
+
+  reviewedApplications CourseApplication[] @relation("ReviewedBy")
+
+  @@map("users")
+}
+
+model Company {
+  id                          String   @id @default(uuid()) @db.Uuid
+  name                        String
+  stripeCustomerId            String?  @unique
+  applicationCredits          Int      @default(0)
+  applicationCreditsExpiresAt DateTime?
+  certBalance                 Int      @default(0)
+  certAlertThreshold          Int      @default(25)
+  totalCertsIssued            Int      @default(0)
+  createdAt                   DateTime @default(now())
+
+  users                User[]
+  applications         CourseApplication[]
+  accreditedCourses    AccreditedCourse[]
+  issuedCertificates   IssuedCertificate[]
+  billingTransactions  BillingTransaction[]
+
+  @@map("companies")
+}
+
+model CourseApplication {
+  id              String            @id @default(uuid()) @db.Uuid
+  companyId       String            @db.Uuid
+  company         Company           @relation(fields: [companyId], references: [id])
+  status          ApplicationStatus @default(DRAFT)
+  courseTitle     String?
+  ceHours         Decimal?          @db.Decimal(5, 2)
+  courseType      String?
+  deliveryMethod  String?
+  applicationData Json              // all 34 fields per SOW
+  isExpedited     Boolean           @default(false)
+  submittedAt     DateTime?
+  reviewedById    String?           @db.Uuid
+  reviewedBy      User?             @relation("ReviewedBy", fields: [reviewedById], references: [id])
+  reviewerNotes   String?
+  reviewedAt      DateTime?
+  createdAt       DateTime          @default(now())
+
+  accreditedCourse AccreditedCourse?
+
+  @@index([companyId, status])
+  @@index([status, isExpedited, submittedAt])
+  @@map("course_applications")
+}
+
+model AccreditedCourse {
+  id                   String            @id @default(uuid()) @db.Uuid
+  applicationId        String            @unique @db.Uuid
+  application          CourseApplication @relation(fields: [applicationId], references: [id])
+  companyId            String            @db.Uuid
+  company              Company           @relation(fields: [companyId], references: [id])
+  courseIdNumber       String            @unique // ACE-YYYY-#####
+  approvedAt           DateTime
+  expiresAt            DateTime          // approvedAt + 3 years
+  attendeeLinkToken    String            @unique @default(uuid()) @db.Uuid
+  qrCodeUrl            String?
+  approvalLetterUrl    String?
+  quizQuestions        Json              // 5-question quiz
+  certsIssuedCount     Int               @default(0)
+  createdAt            DateTime          @default(now())
+
+  issuedCertificates IssuedCertificate[]
+
+  @@index([companyId])
+  @@index([expiresAt])
+  @@map("accredited_courses")
+}
+
+model IssuedCertificate {
+  id              String           @id @default(uuid()) @db.Uuid
+  courseId        String           @db.Uuid
+  course          AccreditedCourse @relation(fields: [courseId], references: [id])
+  companyId       String           @db.Uuid
+  company         Company          @relation(fields: [companyId], references: [id])
+  attendeeName    String
+  attendeeEmail   String
+  licenseNumber   String?
+  licenseType     String?
+  licenseStates   String[]         // 2-char codes
+  deliveryMethod  String?
+  courseType      String?
+  quizResponses   Json
+  score           Int
+  passed          Boolean
+  certPdfUrl      String?
+  issuedAt        DateTime         @default(now())
+
+  @@index([companyId, issuedAt])
+  @@index([courseId])
+  @@index([attendeeEmail])
+  @@map("issued_certificates")
+}
+
+model BillingTransaction {
+  id              String                 @id @default(uuid()) @db.Uuid
+  companyId       String                 @db.Uuid
+  company         Company                @relation(fields: [companyId], references: [id])
+  type            BillingTransactionType
+  quantity        Int                    @default(1)
+  amountCents     Int
+  stripePaymentId String?
+  stripeEventId   String?                @unique // webhook idempotency key
+  isExpedited     Boolean                @default(false)
+  performedById   String?                @db.Uuid // for ADMIN_OVERRIDE
+  createdAt       DateTime               @default(now())
+
+  @@index([companyId, createdAt])
+  @@map("billing_transactions")
+}

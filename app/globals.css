@@ -1,0 +1,151 @@
+@import "tailwindcss";
+
+/*
+  AADB Platform Suite — design tokens.
+  Single source of truth for color + typography. Extracted from the brand
+  prototypes in /logic (kept locally, not in repo).
+*/
+:root {
+  /* Neutrals */
+  --navy: #0B1A2E;
+  --surface: #F4F7FB;
+  --surface-2: #EBF0F8;
+  --white: #ffffff;
+  --border: #CDD9EE;
+
+  /* Text */
+  --text: #0B1A2E;
+  --text-mid: #344E6E;
+  --text-muted: #6B87A8;
+
+  /* Brand — gold (primary accent across all three products) */
+  --gold: #C8971A;
+  --gold-light: #E4C060;
+  --gold-bg: #FEF9EC;
+  --gold-dark: #854F0B;
+
+  /* Landing-page product accents */
+  --pro: #0D9488;
+  --pro-light: #5DCAA5;
+  --pro-bg: #E1F5EE;
+  --pro-dark: #085041;
+
+  --ver: #2B6CB0;
+  --ver-light: #85B7EB;
+  --ver-bg: #EFF6FF;
+  --ver-dark: #0C447C;
+
+  /* Semantic (status / utility) */
+  --green: #059669;
+  --green-bg: #ECFDF5;
+  --green-border: #A7F3D0;
+  --red: #DC2626;
+  --red-bg: #FEF2F2;
+  --orange: #D97706;
+  --orange-bg: #FFFBEB;
+  --blue: #2B6CB0;
+  --blue-bg: #EFF6FF;
+  --teal: #0D9488;
+  --teal-bg: #F0FDFA;
+  --purple: #7C3AED;
+  --purple-bg: #F5F3FF;
+
+  /* ShadCN-compatible aliases — components render with the AADB palette out of the box. */
+  --background: var(--white);
+  --foreground: var(--text);
+  --card: var(--white);
+  --card-foreground: var(--text);
+  --popover: var(--white);
+  --popover-foreground: var(--text);
+  --primary: var(--navy);
+  --primary-foreground: var(--white);
+  --secondary: var(--gold);
+  --secondary-foreground: var(--navy);
+  --muted: var(--surface);
+  --muted-foreground: var(--text-muted);
+  --accent: var(--gold-bg);
+  --accent-foreground: var(--gold-dark);
+  --destructive: var(--red);
+  --destructive-foreground: var(--white);
+  --input: var(--border);
+  --ring: var(--gold);
+  --radius: 0.5rem;
+}
+
+@theme inline {
+  /* Map brand tokens to Tailwind utility classes (bg-navy, text-gold, etc.) */
+  --color-navy: var(--navy);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-border: var(--border);
+
+  --color-text: var(--text);
+  --color-text-mid: var(--text-mid);
+  --color-text-muted: var(--text-muted);
+
+  --color-gold: var(--gold);
+  --color-gold-light: var(--gold-light);
+  --color-gold-bg: var(--gold-bg);
+  --color-gold-dark: var(--gold-dark);
+
+  --color-pro: var(--pro);
+  --color-pro-light: var(--pro-light);
+  --color-pro-bg: var(--pro-bg);
+  --color-pro-dark: var(--pro-dark);
+
+  --color-ver: var(--ver);
+  --color-ver-light: var(--ver-light);
+  --color-ver-bg: var(--ver-bg);
+  --color-ver-dark: var(--ver-dark);
+
+  --color-green: var(--green);
+  --color-green-bg: var(--green-bg);
+  --color-red: var(--red);
+  --color-red-bg: var(--red-bg);
+  --color-orange: var(--orange);
+  --color-orange-bg: var(--orange-bg);
+  --color-blue: var(--blue);
+  --color-blue-bg: var(--blue-bg);
+  --color-teal: var(--teal);
+  --color-teal-bg: var(--teal-bg);
+  --color-purple: var(--purple);
+  --color-purple-bg: var(--purple-bg);
+
+  /* ShadCN-compatible color aliases. */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  /* Typography */
+  --font-serif: var(--font-cormorant), Georgia, "Times New Roman", serif;
+  --font-sans: var(--font-dm-sans), -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: var(--font-jetbrains-mono), "SF Mono", Menlo, Consolas, monospace;
+
+  /* ShadCN radius scale */
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+body {
+  font-family: var(--font-sans);
+  background: var(--background);
+  color: var(--foreground);
+  -webkit-font-smoothing: antialiased;
+}
