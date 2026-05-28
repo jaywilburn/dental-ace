@@ -6,15 +6,16 @@
 //
 // RLS policies are managed separately as raw-SQL migrations in /sql-migrations
 // (Prisma doesn't manage RLS). The Supabase MCP applies them via apply_migration.
+//
+// Column naming: snake_case at the DB layer (Postgres convention; lets RLS SQL
+// use unquoted identifiers), camelCase at the Prisma client layer via @map.
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider  = "postgresql"
-  url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
+  provider = "postgresql"
 }
 
 enum Role {
@@ -39,13 +40,13 @@ enum BillingTransactionType {
 }
 
 model User {
-  id        String   @id @default(uuid()) @db.Uuid
-  email     String   @unique
-  role      Role     @default(CUSTOMER)
-  companyId String?  @db.Uuid
-  company   Company? @relation(fields: [companyId], references: [id])
-  createdAt DateTime @default(now())
-  lastLogin DateTime?
+  id        String    @id @default(uuid()) @db.Uuid
+  email     String    @unique
+  role      Role      @default(CUSTOMER)
+  companyId String?   @map("company_id") @db.Uuid
+  company   Company?  @relation(fields: [companyId], references: [id])
+  createdAt DateTime  @default(now()) @map("created_at")
+  lastLogin DateTime? @map("last_login")
 
   reviewedApplications CourseApplication[] @relation("ReviewedBy")
 
@@ -53,42 +54,42 @@ model User {
 }
 
 model Company {
-  id                          String   @id @default(uuid()) @db.Uuid
+  id                          String    @id @default(uuid()) @db.Uuid
   name                        String
-  stripeCustomerId            String?  @unique
-  applicationCredits          Int      @default(0)
-  applicationCreditsExpiresAt DateTime?
-  certBalance                 Int      @default(0)
-  certAlertThreshold          Int      @default(25)
-  totalCertsIssued            Int      @default(0)
-  createdAt                   DateTime @default(now())
+  stripeCustomerId            String?   @unique @map("stripe_customer_id")
+  applicationCredits          Int       @default(0) @map("application_credits")
+  applicationCreditsExpiresAt DateTime? @map("application_credits_expires_at")
+  certBalance                 Int       @default(0) @map("cert_balance")
+  certAlertThreshold          Int       @default(25) @map("cert_alert_threshold")
+  totalCertsIssued            Int       @default(0) @map("total_certs_issued")
+  createdAt                   DateTime  @default(now()) @map("created_at")
 
-  users                User[]
-  applications         CourseApplication[]
-  accreditedCourses    AccreditedCourse[]
-  issuedCertificates   IssuedCertificate[]
-  billingTransactions  BillingTransaction[]
+  users               User[]
+  applications        CourseApplication[]
+  accreditedCourses   AccreditedCourse[]
+  issuedCertificates  IssuedCertificate[]
+  billingTransactions BillingTransaction[]
 
   @@map("companies")
 }
 
 model CourseApplication {
   id              String            @id @default(uuid()) @db.Uuid
-  companyId       String            @db.Uuid
+  companyId       String            @map("company_id") @db.Uuid
   company         Company           @relation(fields: [companyId], references: [id])
   status          ApplicationStatus @default(DRAFT)
-  courseTitle     String?
-  ceHours         Decimal?          @db.Decimal(5, 2)
-  courseType      String?
-  deliveryMethod  String?
-  applicationData Json              // all 34 fields per SOW
-  isExpedited     Boolean           @default(false)
-  submittedAt     DateTime?
-  reviewedById    String?           @db.Uuid
+  courseTitle     String?           @map("course_title")
+  ceHours         Decimal?          @map("ce_hours") @db.Decimal(5, 2)
+  courseType      String?           @map("course_type")
+  deliveryMethod  String?           @map("delivery_method")
+  applicationData Json              @map("application_data") // all 34 fields per SOW
+  isExpedited     Boolean           @default(false) @map("is_expedited")
+  submittedAt     DateTime?         @map("submitted_at")
+  reviewedById    String?           @map("reviewed_by_id") @db.Uuid
   reviewedBy      User?             @relation("ReviewedBy", fields: [reviewedById], references: [id])
-  reviewerNotes   String?
-  reviewedAt      DateTime?
-  createdAt       DateTime          @default(now())
+  reviewerNotes   String?           @map("reviewer_notes")
+  reviewedAt      DateTime?         @map("reviewed_at")
+  createdAt       DateTime          @default(now()) @map("created_at")
 
   accreditedCourse AccreditedCourse?
 
@@ -98,20 +99,20 @@ model CourseApplication {
 }
 
 model AccreditedCourse {
-  id                   String            @id @default(uuid()) @db.Uuid
-  applicationId        String            @unique @db.Uuid
-  application          CourseApplication @relation(fields: [applicationId], references: [id])
-  companyId            String            @db.Uuid
-  company              Company           @relation(fields: [companyId], references: [id])
-  courseIdNumber       String            @unique // ACE-YYYY-#####
-  approvedAt           DateTime
-  expiresAt            DateTime          // approvedAt + 3 years
-  attendeeLinkToken    String            @unique @default(uuid()) @db.Uuid
-  qrCodeUrl            String?
-  approvalLetterUrl    String?
-  quizQuestions        Json              // 5-question quiz
-  certsIssuedCount     Int               @default(0)
-  createdAt            DateTime          @default(now())
+  id                String            @id @default(uuid()) @db.Uuid
+  applicationId     String            @unique @map("application_id") @db.Uuid
+  application       CourseApplication @relation(fields: [applicationId], references: [id])
+  companyId         String            @map("company_id") @db.Uuid
+  company           Company           @relation(fields: [companyId], references: [id])
+  courseIdNumber    String            @unique @map("course_id_number") // ACE-YYYY-#####
+  approvedAt        DateTime          @map("approved_at")
+  expiresAt         DateTime          @map("expires_at") // approvedAt + 3 years
+  attendeeLinkToken String            @unique @default(uuid()) @map("attendee_link_token") @db.Uuid
+  qrCodeUrl         String?           @map("qr_code_url")
+  approvalLetterUrl String?           @map("approval_letter_url")
+  quizQuestions     Json              @map("quiz_questions") // 5-question quiz
+  certsIssuedCount  Int               @default(0) @map("certs_issued_count")
+  createdAt         DateTime          @default(now()) @map("created_at")
 
   issuedCertificates IssuedCertificate[]
 
@@ -121,23 +122,23 @@ model AccreditedCourse {
 }
 
 model IssuedCertificate {
-  id              String           @id @default(uuid()) @db.Uuid
-  courseId        String           @db.Uuid
-  course          AccreditedCourse @relation(fields: [courseId], references: [id])
-  companyId       String           @db.Uuid
-  company         Company          @relation(fields: [companyId], references: [id])
-  attendeeName    String
-  attendeeEmail   String
-  licenseNumber   String?
-  licenseType     String?
-  licenseStates   String[]         // 2-char codes
-  deliveryMethod  String?
-  courseType      String?
-  quizResponses   Json
-  score           Int
-  passed          Boolean
-  certPdfUrl      String?
-  issuedAt        DateTime         @default(now())
+  id             String           @id @default(uuid()) @db.Uuid
+  courseId       String           @map("course_id") @db.Uuid
+  course         AccreditedCourse @relation(fields: [courseId], references: [id])
+  companyId      String           @map("company_id") @db.Uuid
+  company        Company          @relation(fields: [companyId], references: [id])
+  attendeeName   String           @map("attendee_name")
+  attendeeEmail  String           @map("attendee_email")
+  licenseNumber  String?          @map("license_number")
+  licenseType    String?          @map("license_type")
+  licenseStates  String[]         @map("license_states") // 2-char codes
+  deliveryMethod String?          @map("delivery_method")
+  courseType     String?          @map("course_type")
+  quizResponses  Json             @map("quiz_responses")
+  score          Int
+  passed         Boolean
+  certPdfUrl     String?          @map("cert_pdf_url")
+  issuedAt       DateTime         @default(now()) @map("issued_at")
 
   @@index([companyId, issuedAt])
   @@index([courseId])
@@ -147,16 +148,16 @@ model IssuedCertificate {
 
 model BillingTransaction {
   id              String                 @id @default(uuid()) @db.Uuid
-  companyId       String                 @db.Uuid
+  companyId       String                 @map("company_id") @db.Uuid
   company         Company                @relation(fields: [companyId], references: [id])
   type            BillingTransactionType
   quantity        Int                    @default(1)
-  amountCents     Int
-  stripePaymentId String?
-  stripeEventId   String?                @unique // webhook idempotency key
-  isExpedited     Boolean                @default(false)
-  performedById   String?                @db.Uuid // for ADMIN_OVERRIDE
-  createdAt       DateTime               @default(now())
+  amountCents     Int                    @map("amount_cents")
+  stripePaymentId String?                @map("stripe_payment_id")
+  stripeEventId   String?                @unique @map("stripe_event_id") // webhook idempotency key
+  isExpedited     Boolean                @default(false) @map("is_expedited")
+  performedById   String?                @map("performed_by_id") @db.Uuid // for ADMIN_OVERRIDE
+  createdAt       DateTime               @default(now()) @map("created_at")
 
   @@index([companyId, createdAt])
   @@map("billing_transactions")

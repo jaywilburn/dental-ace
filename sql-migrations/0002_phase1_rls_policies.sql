@@ -1,22 +1,26 @@
 -- Phase 1 RLS policies for Dental ACE.
--- Apply AFTER prisma migrate dev creates the tables.
--- Run via Supabase MCP apply_migration so it lands in the project's migration history.
+-- Applied to the live Supabase project via the MCP apply_migration tool — this
+-- file is the canonical source of truth on disk; the Supabase project keeps the
+-- authoritative migration log.
 --
 -- Model:
 --   - CUSTOMER  : sees only their own company's data
 --   - REVIEWER  : sees all PENDING applications + own historical reviews
 --   - ADMIN     : full access
---   - service_role bypasses RLS (used by webhooks, cron, cert generation)
+--   - service_role bypasses RLS (used by webhook handlers, cron jobs, cert generation)
 --
--- Role is read from the JWT custom claim "role" (mirrored from public.users by an
--- auth hook). auth.uid() returns the Supabase auth user id, which equals public.users.id.
+-- Role is read from the JWT custom claim app_metadata.role (mirrored from
+-- public.users by a Supabase Auth hook — wired up in Week 2). auth.uid()
+-- returns the Supabase auth user id, which equals public.users.id.
+--
+-- NOTE: helper functions are named current_user_role / current_user_company_id
+-- (not current_role) to avoid shadowing Postgres's built-in current_role keyword.
 
 -- ============================================================================
 -- Helper functions
 -- ============================================================================
 
--- Resolve the current user's role from JWT claims, falling back to the users table.
-create or replace function public.current_role()
+create or replace function public.current_user_role()
 returns text
 language sql
 stable
@@ -27,8 +31,7 @@ as $$
   );
 $$;
 
--- Resolve the current user's companyId.
-create or replace function public.current_company_id()
+create or replace function public.current_user_company_id()
 returns uuid
 language sql
 stable
@@ -37,7 +40,7 @@ as $$
 $$;
 
 -- ============================================================================
--- Enable RLS on all Phase 1 tables (Supabase default is on, but be explicit).
+-- Enable RLS on all Phase 1 tables (Supabase default is on; be explicit)
 -- ============================================================================
 
 alter table public.users                 enable row level security;
@@ -51,90 +54,81 @@ alter table public.billing_transactions  enable row level security;
 -- users
 -- ============================================================================
 
--- Any authenticated user can read their own row.
 create policy "users_select_own"
 on public.users for select
 to authenticated
 using (id = auth.uid());
 
--- Admin can read all users.
 create policy "users_admin_all"
 on public.users for all
 to authenticated
-using (public.current_role() = 'ADMIN')
-with check (public.current_role() = 'ADMIN');
+using (public.current_user_role() = 'ADMIN')
+with check (public.current_user_role() = 'ADMIN');
 
 -- ============================================================================
 -- companies
 -- ============================================================================
 
--- Customer can read their own company; admin reads all.
 create policy "companies_select"
 on public.companies for select
 to authenticated
 using (
-  id = public.current_company_id()
-  or public.current_role() = 'ADMIN'
+  id = public.current_user_company_id()
+  or public.current_user_role() = 'ADMIN'
 );
 
--- Admin can write companies.
 create policy "companies_admin_write"
 on public.companies for all
 to authenticated
-using (public.current_role() = 'ADMIN')
-with check (public.current_role() = 'ADMIN');
+using (public.current_user_role() = 'ADMIN')
+with check (public.current_user_role() = 'ADMIN');
 
 -- ============================================================================
 -- course_applications
 -- ============================================================================
 
--- Customer reads only their company's applications.
 create policy "course_applications_customer_read"
 on public.course_applications for select
 to authenticated
 using (
-  company_id = public.current_company_id()
-  and public.current_role() = 'CUSTOMER'
+  company_id = public.current_user_company_id()
+  and public.current_user_role() = 'CUSTOMER'
 );
 
--- Customer can create/update their company's drafts.
 create policy "course_applications_customer_write"
 on public.course_applications for all
 to authenticated
 using (
-  company_id = public.current_company_id()
-  and public.current_role() = 'CUSTOMER'
+  company_id = public.current_user_company_id()
+  and public.current_user_role() = 'CUSTOMER'
 )
 with check (
-  company_id = public.current_company_id()
-  and public.current_role() = 'CUSTOMER'
+  company_id = public.current_user_company_id()
+  and public.current_user_role() = 'CUSTOMER'
 );
 
--- Reviewer reads all PENDING + their own historical reviews.
 create policy "course_applications_reviewer_read"
 on public.course_applications for select
 to authenticated
 using (
-  public.current_role() = 'REVIEWER'
+  public.current_user_role() = 'REVIEWER'
   and (status = 'PENDING' or reviewed_by_id = auth.uid())
 );
 
--- Reviewer can update applications they review.
 create policy "course_applications_reviewer_update"
 on public.course_applications for update
 to authenticated
 using (
-  public.current_role() = 'REVIEWER'
+  public.current_user_role() = 'REVIEWER'
   and (status = 'PENDING' or reviewed_by_id = auth.uid())
 )
-with check (public.current_role() = 'REVIEWER');
+with check (public.current_user_role() = 'REVIEWER');
 
--- Admin full access.
 create policy "course_applications_admin_all"
 on public.course_applications for all
 to authenticated
-using (public.current_role() = 'ADMIN')
-with check (public.current_role() = 'ADMIN');
+using (public.current_user_role() = 'ADMIN')
+with check (public.current_user_role() = 'ADMIN');
 
 -- ============================================================================
 -- accredited_courses
@@ -143,21 +137,21 @@ with check (public.current_role() = 'ADMIN');
 create policy "accredited_courses_customer_read"
 on public.accredited_courses for select
 to authenticated
-using (company_id = public.current_company_id());
+using (company_id = public.current_user_company_id());
 
 create policy "accredited_courses_reviewer_read"
 on public.accredited_courses for select
 to authenticated
-using (public.current_role() = 'REVIEWER');
+using (public.current_user_role() = 'REVIEWER');
 
 create policy "accredited_courses_admin_all"
 on public.accredited_courses for all
 to authenticated
-using (public.current_role() = 'ADMIN')
-with check (public.current_role() = 'ADMIN');
+using (public.current_user_role() = 'ADMIN')
+with check (public.current_user_role() = 'ADMIN');
 
 -- Public attendee access happens via the service-role client when validating
--- attendeeLinkToken in the /attend/[token] route; no RLS policy needed for that.
+-- attendee_link_token in the /attend/[token] route; no RLS policy needed.
 
 -- ============================================================================
 -- issued_certificates
@@ -166,13 +160,13 @@ with check (public.current_role() = 'ADMIN');
 create policy "issued_certificates_customer_read"
 on public.issued_certificates for select
 to authenticated
-using (company_id = public.current_company_id());
+using (company_id = public.current_user_company_id());
 
 create policy "issued_certificates_admin_all"
 on public.issued_certificates for all
 to authenticated
-using (public.current_role() = 'ADMIN')
-with check (public.current_role() = 'ADMIN');
+using (public.current_user_role() = 'ADMIN')
+with check (public.current_user_role() = 'ADMIN');
 
 -- ============================================================================
 -- billing_transactions
@@ -181,10 +175,10 @@ with check (public.current_role() = 'ADMIN');
 create policy "billing_transactions_customer_read"
 on public.billing_transactions for select
 to authenticated
-using (company_id = public.current_company_id());
+using (company_id = public.current_user_company_id());
 
 create policy "billing_transactions_admin_all"
 on public.billing_transactions for all
 to authenticated
-using (public.current_role() = 'ADMIN')
-with check (public.current_role() = 'ADMIN');
+using (public.current_user_role() = 'ADMIN')
+with check (public.current_user_role() = 'ADMIN');
