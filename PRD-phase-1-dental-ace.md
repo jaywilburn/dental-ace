@@ -51,7 +51,7 @@ The week-by-week breakdown mirrors the SOW phase cards (Weeks 1–8) but reframe
 ### Weeks 5–6 — Attendee Form, Certificate Engine, Company Dashboard
 - Public attendee form at `/attend/[token]` — 4 mobile-optimized steps. Reads the course record by token, fails closed if the course is expired or the company's certificate balance is exhausted.
 - Quiz: dynamically loaded from the course's `quizQuestions` JSON. Scoring: 3 out of 5 to pass. One retake on fail; after failed retake, correct answers are shown.
-- Certificate submission API: validates token, scores quiz, atomically decrements `companies.certBalance`, generates the certificate PDF (Puppeteer + @sparticuz/chromium matching `ACE_Certificate.pdf` design), uploads to the `certificates` bucket, and emails the attendee via Resend with the PDF attached.
+- Certificate submission API: validates token, scores quiz, atomically decrements `companies.cert_balance`, generates the certificate PDF (Puppeteer + @sparticuz/chromium matching `ACE_Certificate.pdf` design), uploads to the `certificates` bucket, and emails the attendee via Resend with the PDF attached.
 - Company dashboard: stat cards (active courses, certs issued this month, balance), cert-balance widget, activity feed, course list.
 - Certificate log page: paginated, search, signed-URL PDF download links.
 - Buy Certificates page: all 6 bundle tiers (50/100/200/300/500/750 — Section 6).
@@ -82,7 +82,7 @@ The week-by-week breakdown mirrors the SOW phase cards (Weeks 1–8) but reframe
 ### Flow A — Customer onboards and submits a course application
 1. Customer logs in to `/(customer)`.
 2. If no application credits, redirected to "Buy Credits" page — picks a tier (1, 2–4, 5–9, 10–15), optionally adds expedite.
-3. Stripe Checkout → webhook fires → `billing_transactions` row created → `companies.applicationCredits` incremented → `applicationCreditsExpiresAt` set to +1 year.
+3. Stripe Checkout → webhook fires → `billing_transactions` row created → `companies.application_credits` incremented → `application_credits_expires_at` set to +1 year.
 4. Customer clicks "New Application" → 5-step form. Each step auto-saves to a `DRAFT` `course_applications` row.
 5. On final submit: API validates remaining credit, atomically decrements credit, sets `status = PENDING`, sends reviewer-notification email to all addresses in `REVIEWER_NOTIFICATION_EMAILS`.
 
@@ -92,46 +92,48 @@ The week-by-week breakdown mirrors the SOW phase cards (Weeks 1–8) but reframe
 3. Clicks an application → slide-in panel renders all 34 fields read-only.
 4. Reviewer clicks Approve → server action runs in a transaction:
    - Generate Course ID `ACE-YYYY-#####` (year + zero-padded counter scoped to year).
-   - Generate attendee-link UUID, persist to `accredited_courses.attendeeLinkToken`.
-   - Generate QR code PNG → upload to `uploads/qrcodes/{courseId}.png`.
-   - Generate approval letter PDF (PDFKit) → upload to `uploads/approval-letters/{courseId}.pdf`.
-   - Create `accredited_courses` row with `expiresAt = now + 3 years`.
+   - Generate attendee-link UUID, persist to `accredited_courses.attendee_link_token`.
+   - Generate QR code PNG → upload to `uploads/qrcodes/{course_id}.png`.
+   - Generate approval letter PDF (PDFKit) → upload to `uploads/approval-letters/{course_id}.pdf`.
+   - Create `accredited_courses` row with `expires_at = now + 3 years`.
    - Send approval email (Resend) to customer with approval letter PDF attached.
 
 ### Flow C — Attendee takes a course and receives a certificate
 1. Attendee scans QR or follows public link → `/attend/{token}`.
 2. Mobile form: 4 steps — identity (name, email, license number/type/state), attendance affirmation, quiz (5 questions), review/submit.
-3. On submit: API validates token + course is active + `companies.certBalance > 0` → scores quiz.
-4. If pass (3/5+): atomically decrement `companies.certBalance`, render certificate PDF (Puppeteer) matching the existing `ACE_Certificate.pdf` template with dynamic fields populated, upload to `certificates/{cert_uuid}.pdf`, send email with the PDF attached.
+3. On submit: API validates token + course is active + `companies.cert_balance > 0` → scores quiz.
+4. If pass (3/5+): atomically decrement `companies.cert_balance`, render certificate PDF (Puppeteer) matching the existing `ACE_Certificate.pdf` template with dynamic fields populated, upload to `certificates/{cert_uuid}.pdf`, send email with the PDF attached.
 5. If fail: show wrong answers and "retake" CTA. Retake only allowed once. After failed retake, the attendee is locked out from this course.
 
 ### Flow D — Company buys a certificate bundle
 1. Customer clicks "Buy Certificates" → picks a bundle (50/100/200/300/500/750).
-2. Stripe Checkout → webhook → `billing_transactions` row → `companies.certBalance` incremented by the bundle quantity → confirmation email.
+2. Stripe Checkout → webhook → `billing_transactions` row → `companies.cert_balance` incremented by the bundle quantity → confirmation email.
 
 ### Flow E — Low-balance alerting
-- Daily cron checks `companies` where `certBalance ≤ certAlertThreshold` and an alert hasn't been sent in the last 7 days → send email + show dashboard banner until the company tops up.
+- Daily cron checks `companies` where `cert_balance ≤ cert_alert_threshold` and an alert hasn't been sent in the last 7 days → send email + show dashboard banner until the company tops up.
 
 ### Flow F — Admin override
 - Admin selects a company → can grant application credits or adjust cert balance.
-- Each override creates a `billing_transactions` row with `type = ADMIN_OVERRIDE` and the admin's userId attached. Append-only — no edit/delete.
+- Each override creates a `billing_transactions` row with `type = ADMIN_OVERRIDE` and the admin's `performed_by_id` set. Append-only — no edit/delete.
 
 ## 4. Phase 1 Data Model
 
 Six tables. Phase 2/3 tables (`licensees`, `state_requirements`, `pro_subscriptions`, `pending_licensees`, `state_boards`, `audit_batches`, `audit_selections`, `deficiency_notices`) are **not** created in Phase 1 — they'll be added by their own migrations in Weeks 9 and 17.
 
+> **Naming convention:** columns are `snake_case` in Postgres (the source of truth listed below), and Prisma's `@map` exposes them as `camelCase` on the generated client. So `course_applications.reviewed_by_id` in SQL/RLS is `courseApplication.reviewedById` in TypeScript. The fields listed below are the DB names — translate to camelCase when writing app code.
+
 | Table | Key Fields |
 |-------|-----------|
-| **users** | `id`, `email` (unique), `role` (`CUSTOMER` \| `REVIEWER` \| `ADMIN` — `LICENSEE`/`BOARD` added later), `companyId` (FK, nullable), `createdAt`, `lastLogin` |
-| **companies** | `id`, `name`, `stripeCustomerId`, `applicationCredits`, `applicationCreditsExpiresAt`, `certBalance`, `certAlertThreshold`, `totalCertsIssued` |
-| **course_applications** | `id`, `companyId`, `status` (`DRAFT` \| `PENDING` \| `APPROVED` \| `REJECTED`), `courseTitle`, `ceHours`, `courseType`, `deliveryMethod`, `applicationData` (JSON — all 34 fields), `isExpedited`, `submittedAt`, `reviewedBy`, `reviewerNotes`, `reviewedAt` |
-| **accredited_courses** | `id`, `applicationId`, `companyId`, `courseIdNumber` (`ACE-YYYY-#####`), `approvedAt`, `expiresAt` (+3y), `attendeeLinkToken` (UUID), `qrCodeUrl`, `approvalLetterUrl`, `quizQuestions` (JSON), `certsIssuedCount` |
-| **issued_certificates** | `id`, `courseId`, `companyId`, `attendeeName`, `attendeeEmail`, `licenseNumber`, `licenseType`, `licenseStates` (array), `deliveryMethod`, `courseType`, `quizResponses` (JSON), `score`, `passed`, `certPdfUrl`, `issuedAt` |
-| **billing_transactions** | `id`, `companyId`, `type` (`APP_CREDIT` \| `CERT_BUNDLE` \| `EXPEDITE` \| `ADMIN_OVERRIDE`), `quantity`, `amountCents`, `stripePaymentId` (nullable for admin overrides), `stripeEventId` (unique — idempotency), `isExpedited`, `createdAt` |
+| **users** | `id`, `email` (unique), `role` (`CUSTOMER` \| `REVIEWER` \| `ADMIN` — `LICENSEE`/`BOARD` added later), `company_id` (FK, nullable), `created_at`, `last_login` |
+| **companies** | `id`, `name`, `stripe_customer_id`, `application_credits`, `application_credits_expires_at`, `cert_balance`, `cert_alert_threshold`, `total_certs_issued`, `created_at` |
+| **course_applications** | `id`, `company_id`, `status` (`DRAFT` \| `PENDING` \| `APPROVED` \| `REJECTED`), `course_title`, `ce_hours`, `course_type`, `delivery_method`, `application_data` (JSON — all 34 fields), `is_expedited`, `submitted_at`, `reviewed_by_id`, `reviewer_notes`, `reviewed_at`, `created_at` |
+| **accredited_courses** | `id`, `application_id`, `company_id`, `course_id_number` (`ACE-YYYY-#####`), `approved_at`, `expires_at` (+3y), `attendee_link_token` (UUID), `qr_code_url`, `approval_letter_url`, `quiz_questions` (JSON), `certs_issued_count`, `created_at` |
+| **issued_certificates** | `id`, `course_id`, `company_id`, `attendee_name`, `attendee_email`, `license_number`, `license_type`, `license_states` (array), `delivery_method`, `course_type`, `quiz_responses` (JSON), `score`, `passed`, `cert_pdf_url`, `issued_at` |
+| **billing_transactions** | `id`, `company_id`, `type` (`APP_CREDIT` \| `CERT_BUNDLE` \| `EXPEDITE` \| `ADMIN_OVERRIDE`), `quantity`, `amount_cents`, `stripe_payment_id` (nullable for admin overrides), `stripe_event_id` (unique — idempotency), `is_expedited`, `performed_by_id` (nullable; set for `ADMIN_OVERRIDE`), `created_at` |
 
 ### Schema notes
 - All money stored as integer cents.
-- `stripeEventId` is the idempotency key: webhook handler upserts on this column to be safe against Stripe retries.
+- `stripe_event_id` is the idempotency key: webhook handler upserts on this column to be safe against Stripe retries.
 - All credit/balance decrements run inside a transaction with a row-level lock on the `companies` row.
 - Phase 2 will add `LICENSEE` to the `users.role` enum and a `licensees` table; design the enum and FK to make that additive, not a breaking change.
 
@@ -141,7 +143,7 @@ Six tables. Phase 2/3 tables (`licensees`, `state_requirements`, `pro_subscripti
 
 ### Role model
 - Three private roles in Phase 1: `CUSTOMER`, `REVIEWER`, `ADMIN`.
-- Public ATTENDEE access is via `attendeeLinkToken` only — never authenticated.
+- Public ATTENDEE access is via `attendee_link_token` only — never authenticated.
 - Role is the single source of truth on `users.role`. A Supabase Auth Hook (or DB trigger) mirrors it into JWT custom claims so server components can read it without a DB roundtrip on every request.
 
 ### Route protection (Next 16, no middleware.ts)
