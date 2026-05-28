@@ -1,16 +1,8 @@
 {
   "mcpServers": {
     "supabase": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "@supabase/mcp-server-supabase@latest",
-        "--project-ref=qvfibdvqbsioyixvwbgq",
-        "--features=database,storage,functions,docs,debugging"
-      ],
-      "env": {
-        "SUPABASE_ACCESS_TOKEN": "${SUPABASE_ACCESS_TOKEN}"
-      }
+      "command": "bash",
+      "args": ["scripts/run-supabase-mcp.sh"]
     }
   }
 }
