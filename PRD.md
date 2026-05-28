@@ -1,10 +1,10 @@
-# AADB Platform Suite — Product Requirements Document
+# DentalACE One — Product Requirements Document
 
 **Suite-level PRD** · v0.1 · May 2026
 Prepared for: John & Christy Stamper · AADB · CE Exchange
 Domain: `dentalace.org`
 
-> This is the framing document for the entire AADB Platform Suite. For the detailed Phase 1 build (Dental ACE, Weeks 1–8), see [`PRD-phase-1-dental-ace.md`](./PRD-phase-1-dental-ace.md). The contractual source of truth for scope, pricing, and schema is the SOW at [`logic/aadb-master-sow-v1.1.html`](./logic/aadb-master-sow-v1.1.html).
+> This is the framing document for the entire DentalACE One. For the detailed Phase 1 build (DentalACE, Weeks 1–8), see [`PRD-phase-1-dental-ace.md`](./PRD-phase-1-dental-ace.md). The contractual source of truth for scope, pricing, and schema is the SOW at [`logic/aadb-master-sow-v1.1.html`](./logic/aadb-master-sow-v1.1.html).
 
 ---
 
@@ -12,49 +12,49 @@ Domain: `dentalace.org`
 
 The American Association of Dental Boards (AADB) administers continuing-education accreditation, licensee tracking, and state-board compliance audits for the U.S. dental industry. Today these workflows are stitched together from WordPress forms, Typeform, Zapier, Google Sheets, and Anvil — with manual paper-based audits at the state-board level. The seams cost time, introduce errors, and make adoption hard for both course providers and dental boards.
 
-The AADB Platform Suite replaces that stack with three integrated products on a single codebase, delivered over a 24-week build:
+DentalACE One replaces that stack with three integrated products on a single codebase, delivered over a 24-week build:
 
-- **Dental ACE** — CE course accreditation and certificate distribution for course providers.
-- **Dental Track** — Personal CE dashboard for the ~50-state population of dentists, hygienists, and dental assistants.
-- **Dental Audit** — Random-sample CE compliance auditing for state dental boards.
+- **DentalACE** — CE course accreditation and certificate distribution for course providers.
+- **ProTrack** — Personal CE dashboard for the ~50-state population of dentists, hygienists, and dental assistants.
+- **Verify** — Random-sample CE compliance auditing for state dental boards.
 
-Each product creates value on its own; together they form a flywheel: courses accredited in ACE auto-sync into Track, which feeds compliance data into Audit. The same dataset serves the course provider, the licensee, and the regulator.
+Each product creates value on its own; together they form a flywheel: courses accredited in DentalACE auto-sync into ProTrack, which feeds compliance data into Verify. The same dataset serves the course provider, the licensee, and the regulator.
 
 ## 2. The Three Products
 
-### Dental ACE — Accreditation
+### DentalACE — Accreditation
 **Serves:** CE course providers (Customer role), AADB reviewers, and state-board observers.
 **Replaces:** WordPress + Typeform + Zapier + Google Sheets + Anvil.
 **Core flow:** Provider buys application credits → submits 34-field course application → AADB reviews → approved course gets a Course ID (`ACE-YYYY-#####`), QR code, and attendee form → attendees take a 5-question quiz → certificates issued by email.
 **Revenue:** Per-application credits ($85–$99 depending on tier, plus optional expedite add-on) and certificate bundles ($4–$10 per cert depending on bundle size).
 **Launch:** Week 8.
 
-### Dental Track — CE Tracking
+### ProTrack — CE Tracking
 **Serves:** Dentists (DDS/DMD), hygienists (RDH), and dental assistants (DA) in all 50 states.
 **Replaces:** Spreadsheets, shoeboxes of paper certs, board-renewal anxiety.
 **Core flow:** Licensee registers (self-serve or via board invite code) → ACE-issued certificates auto-sync to their dashboard → upload other CE certificates (ADA CERP, AGD PACE, Other Accredited) → see real-time progress against their state's CE requirements → optional Pro tier unlocks audit-ready PDF export, renewal reminders, and multi-state licensure.
-**Revenue:** Free forever (baseline) + Dental Track Pro at $7/mo or $79/yr.
+**Revenue:** Free forever (baseline) + ProTrack Pro at $7/mo or $79/yr.
 **Launch:** Week 16.
 
-### Dental Audit — Board Auditing
+### Verify — Board Auditing
 **Serves:** State dental boards (Board role), provisioned by AADB after contract signing.
 **Replaces:** Manual paper-based random audit processes administered by board staff.
-**Core flow:** Board logs in → configures a random audit (sample %, license type filter, renewal cycle) → one click generates a sample → live compliance data pulled from Dental Track → board sends bulk deficiency notices via Resend → deficiencies auto-resolve when licensees upload missing hours → board exports a signed audit report PDF.
+**Core flow:** Board logs in → configures a random audit (sample %, license type filter, renewal cycle) → one click generates a sample → live compliance data pulled from ProTrack → board sends bulk deficiency notices via Resend → deficiencies auto-resolve when licensees upload missing hours → board exports a signed audit report PDF.
 **Revenue:** Annual board license — $500 (small board, <3K licensees) / $1,000 (mid, 3K–10K) / $1,500 (large, 10K+).
 **Launch:** Week 24.
 
 ## 3. Users & Roles
 
-| Role | Portal | Access | Product |
-|------|--------|--------|---------|
-| **CUSTOMER** | `/(customer)` | Submit applications, manage courses, buy and track certificates, billing history | ACE |
-| **REVIEWER** | `/(reviewer)` | Review queued applications, approve/reject, view accreditation history | ACE |
-| **ADMIN** | `/(admin)` | Full platform access — all companies, overrides, analytics, board provisioning | All |
-| **ATTENDEE** | `/attend/[token]` | Public, no login. QR or link access only. Quiz + certificate issuance. | ACE |
-| **LICENSEE** | `/(licensee)` | CE dashboard, certificate upload, state requirements, Pro features | Track |
-| **BOARD** | `/(board)` | Compliance dashboard, random audit tool, deficiency notices, reports | Audit |
+| Role | URL | Access | Product |
+|------|-----|--------|---------|
+| **CUSTOMER** | `/company` | Submit applications, manage courses, buy and track certificates, billing history | DentalACE |
+| **REVIEWER** | `/reviewer` | Review queued applications, approve/reject, view accreditation history | DentalACE |
+| **ADMIN** | `/admin` | Full platform access (all companies, overrides, analytics, board provisioning) | All |
+| **ATTENDEE** | `/attend/[token]` | Public, no login. QR or link access only. Quiz + certificate issuance. | DentalACE |
+| **LICENSEE** | `/protrack` | CE dashboard, certificate upload, state requirements, Pro features | ProTrack |
+| **BOARD** | `/verify` | Compliance dashboard, random audit tool, deficiency notices, reports | Verify |
 
-Six roles share one auth system. Portal isolation is enforced at the database layer (RLS) and at the route-group layout layer in Next.js.
+Six roles share one auth system. Login is unified at `/login`; role determines redirect destination. Portal isolation is enforced at the database layer (RLS) and at the server-component layout layer in Next.js.
 
 ## 4. Shared Tech Stack
 
@@ -75,7 +75,7 @@ Six roles share one auth system. Portal isolation is enforced at the database la
 
 Three of the SOW's stack choices were updated when this PRD was drafted. They are intentional — not mistakes to fix.
 
-1. **Next.js 16+ (not 14).** Removes `middleware.ts` and the Pages Router from the architecture. Route protection lives in server-component layouts (`app/(customer)/layout.tsx`, `app/(reviewer)/layout.tsx`, `app/(admin)/layout.tsx`, etc.), not edge middleware.
+1. **Next.js 16+ (not 14).** Removes `middleware.ts` and the Pages Router from the architecture. Route protection lives in server-component layouts (`app/company/layout.tsx`, `app/reviewer/layout.tsx`, `app/admin/layout.tsx`, etc.), not edge middleware.
 2. **Supabase Auth (not NextAuth.js v5).** Native integration with Supabase RLS, one fewer service to wire up, JWT-claim-based roles. The SOW's 4-role auth model (CUSTOMER, REVIEWER, ADMIN + public ATTENDEE token) is unchanged — just the implementation.
 3. **Supabase Storage (not AWS S3).** Two buckets replace the two S3 buckets. Drops the AWS account entirely. Signed URLs replace S3 pre-signed URLs.
 
@@ -85,11 +85,11 @@ All other SOW decisions stand: Prisma, Stripe Connect with 14 products in Phase 
 
 | Phase | Weeks | Product | Milestone |
 |-------|-------|---------|-----------|
-| **Phase 1** | 1–8 | Dental ACE | `dentalace.org` live; first paying customer; first cert issued |
-| **Phase 2** | 9–16 | Dental Track | Free + Pro live; ~3K legacy ACE records claimable |
-| **Phase 3** | 17–24 | Dental Audit | First state board provisioned; full E2E audit cycle works |
+| **Phase 1** | 1–8 | DentalACE | `dentalace.org` live; first paying customer; first cert issued |
+| **Phase 2** | 9–16 | ProTrack | Free + Pro live; ~3K legacy ACE records claimable |
+| **Phase 3** | 17–24 | Verify | First state board provisioned; full E2E audit cycle works |
 
-Each phase starts in a fresh Claude Code session with the latest [`CLAUDE.md`](./CLAUDE.md) loaded. Out-of-phase work (e.g., touching Track during Phase 1) is explicitly out of scope unless promoted to the v1.1 backlog.
+Each phase starts in a fresh Claude Code session with the latest [`CLAUDE.md`](./CLAUDE.md) loaded. Out-of-phase work (e.g., touching ProTrack during Phase 1) is explicitly out of scope unless promoted to the v1.1 backlog.
 
 ## 6. Revenue Model
 
@@ -115,7 +115,7 @@ These are architecturally anticipated (the data model supports them) but not bui
 - Multi-language support — English only → v2.0
 - State Board Dashboards v2 (renewal forecasting, deficiency heat maps) → Weeks 25–28
 - CE Course Recommendations in Track Pro → Weeks 29–32
-- National Dental Audit Rollout (15+ boards) → Year 2
+- National Verify Rollout (15+ boards) → Year 2
 - Camera-free audio-only quiz path → v1.1
 - 30-day proof dashboard for companies → v1.1
 
@@ -123,7 +123,7 @@ These are architecturally anticipated (the data model supports them) but not bui
 
 | Risk | Mitigation |
 |------|-----------|
-| **Cross-state data leakage in Dental Audit** | Two-layer defense: Prisma query filters + Supabase RLS policies scoped to `state` on `licensees`. Pen-test before any real board goes live. |
+| **Cross-state data leakage in Verify** | Two-layer defense: Prisma query filters + Supabase RLS policies scoped to `state` on `licensees`. Pen-test before any real board goes live. |
 | **Puppeteer on Vercel serverless** (affects ACE Week 5, Track Pro Week 13, Audit Week 22) | `@sparticuz/chromium`, Vercel function size 50MB, budget 1–2 extra days per product. |
 | **Email deliverability** — certificates landing in spam | SPF + DKIM + DMARC on `dentalace.org` before Week 5. Test against Gmail, Outlook, Yahoo. |
 | **Stripe webhook timing** — credits not added after payment | Idempotency keys on every webhook handler. Log event to DB before processing. Stripe CLI for local testing. |

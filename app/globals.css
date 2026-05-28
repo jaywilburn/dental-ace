@@ -1,9 +1,12 @@
 @import "tailwindcss";
 
 /*
-  AADB Platform Suite — design tokens.
-  Single source of truth for color + typography. Extracted from the brand
-  prototypes in /logic (kept locally, not in repo).
+  DentalACE One — design tokens.
+  Single source of truth for color + typography. Extracted from the landing-page
+  handoff (logic/dentalace-landing-page-handoff.md) and the brand prototypes.
+
+  Product accent families: --ace (DentalACE, gold), --pro (ProTrack, teal),
+  --ver (Verify, blue). Internal app UI defaults to --ace for primary accent.
 */
 :root {
   /* Neutrals */
@@ -18,18 +21,19 @@
   --text-mid: #344E6E;
   --text-muted: #6B87A8;
 
-  /* Brand — gold (primary accent across all three products) */
-  --gold: #C8971A;
-  --gold-light: #E4C060;
-  --gold-bg: #FEF9EC;
-  --gold-dark: #854F0B;
+  /* DentalACE — gold (primary brand accent) */
+  --ace: #C8971A;
+  --ace-light: #E4C060;
+  --ace-bg: #FEF9EC;
+  --ace-dark: #854F0B;
 
-  /* Landing-page product accents */
+  /* ProTrack — teal */
   --pro: #0D9488;
   --pro-light: #5DCAA5;
   --pro-bg: #E1F5EE;
   --pro-dark: #085041;
 
+  /* Verify — blue */
   --ver: #2B6CB0;
   --ver-light: #85B7EB;
   --ver-bg: #EFF6FF;
@@ -50,7 +54,8 @@
   --purple: #7C3AED;
   --purple-bg: #F5F3FF;
 
-  /* ShadCN-compatible aliases — components render with the AADB palette out of the box. */
+  /* ShadCN-compatible aliases. Components render with the DentalACE One
+     palette out of the box; gold drives --secondary, --accent, --ring. */
   --background: var(--white);
   --foreground: var(--text);
   --card: var(--white);
@@ -59,21 +64,21 @@
   --popover-foreground: var(--text);
   --primary: var(--navy);
   --primary-foreground: var(--white);
-  --secondary: var(--gold);
+  --secondary: var(--ace);
   --secondary-foreground: var(--navy);
   --muted: var(--surface);
   --muted-foreground: var(--text-muted);
-  --accent: var(--gold-bg);
-  --accent-foreground: var(--gold-dark);
+  --accent: var(--ace-bg);
+  --accent-foreground: var(--ace-dark);
   --destructive: var(--red);
   --destructive-foreground: var(--white);
   --input: var(--border);
-  --ring: var(--gold);
+  --ring: var(--ace);
   --radius: 0.5rem;
 }
 
 @theme inline {
-  /* Map brand tokens to Tailwind utility classes (bg-navy, text-gold, etc.) */
+  /* Brand tokens as Tailwind utility classes (bg-navy, text-ace, etc.) */
   --color-navy: var(--navy);
   --color-surface: var(--surface);
   --color-surface-2: var(--surface-2);
@@ -83,10 +88,10 @@
   --color-text-mid: var(--text-mid);
   --color-text-muted: var(--text-muted);
 
-  --color-gold: var(--gold);
-  --color-gold-light: var(--gold-light);
-  --color-gold-bg: var(--gold-bg);
-  --color-gold-dark: var(--gold-dark);
+  --color-ace: var(--ace);
+  --color-ace-light: var(--ace-light);
+  --color-ace-bg: var(--ace-bg);
+  --color-ace-dark: var(--ace-dark);
 
   --color-pro: var(--pro);
   --color-pro-light: var(--pro-light);

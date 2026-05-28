@@ -1,4 +1,4 @@
-# Dental ACE — Phase 1 PRD
+# DentalACE — Phase 1 PRD
 
 **Phase 1 of 3** · Weeks 1–8 · v0.1 · May 2026
 Domain: `dentalace.org`
@@ -8,14 +8,14 @@ Parent doc: [`PRD.md`](./PRD.md) · Source of truth: [`logic/aadb-master-sow-v1.
 
 ## 1. Phase 1 Goal & Success Criteria
 
-Ship the Dental ACE accreditation platform to production at `dentalace.org` by the end of Week 8. Success means:
+Ship the DentalACE accreditation platform to production at `dentalace.org` by the end of Week 8. Success means:
 
 - A real CE course provider can buy application credits, submit a real 34-field course application, have it reviewed and approved by an AADB reviewer in production, and have the resulting QR code scanned by a real attendee whose certificate PDF lands in their inbox — all without manual intervention.
 - The pre-launch checklist (Section 11) passes top to bottom on production, not staging.
 - AADB reviewer accounts and ADMIN accounts for John and Christy are live.
 - The first paying customer is onboarded.
 
-What's explicitly **not** in Phase 1: any LICENSEE or BOARD functionality, Pro subscriptions, multi-state licensure, the audit tool, the state-board v2 dashboard, the 50-state requirements seeding, the legacy ~3K-record import. The state-board portal in Phase 1 is read-only visibility only — a precursor to Dental Audit.
+What's explicitly **not** in Phase 1: any LICENSEE or BOARD functionality, Pro subscriptions, multi-state licensure, the audit tool, the state-board v2 dashboard, the 50-state requirements seeding, the legacy ~3K-record import. The state-board portal in Phase 1 is read-only visibility only — a precursor to Verify.
 
 ## 2. In-Scope Features by Week
 
@@ -32,7 +32,7 @@ The week-by-week breakdown mirrors the SOW phase cards (Weeks 1–8) but reframe
 - Supabase Auth with email/password. Sign-up disabled for CUSTOMER/REVIEWER/ADMIN roles (those are provisioned by ADMIN, not self-serve). Public attendee flow has no login.
 - Role stored on `users` row and mirrored in JWT claims via a Supabase auth hook or trigger.
 - Login page at `/login` styled with the navy/gold ACE branding from the prototypes.
-- Route-group layouts at `app/(customer)/layout.tsx`, `app/(reviewer)/layout.tsx`, `app/(admin)/layout.tsx`, each server-rendered with a role guard that redirects to `/login` on mismatch.
+- Portal layouts at `app/company/layout.tsx`, `app/reviewer/layout.tsx`, `app/admin/layout.tsx`, each server-rendered with a role guard that redirects to `/login` on mismatch.
 - Sidebar navigation per role.
 - Seed: 1 test company, 1 test reviewer user, 1 test admin user.
 
@@ -60,7 +60,7 @@ The week-by-week breakdown mirrors the SOW phase cards (Weeks 1–8) but reframe
 
 ### Weeks 7–8 — Admin, State Board Read-Only, QA, Launch
 - Super admin dashboard: all companies, override tools (manual credit grants, manual cert balance adjustments — every override logged to `billing_transactions` with `type = ADMIN_OVERRIDE`), platform analytics.
-- State board visibility dashboard (Phase 1 precursor to Dental Audit): read-only, filterable by state / license type / delivery format. No audit tools yet.
+- State board visibility dashboard (Phase 1 precursor to Verify): read-only, filterable by state / license type / delivery format. No audit tools yet.
 - Vercel cron jobs:
   - Daily — courses expiring in 60 days → reminder email to customer.
   - Daily — courses expiring in 30 days → second reminder.
@@ -80,14 +80,14 @@ The week-by-week breakdown mirrors the SOW phase cards (Weeks 1–8) but reframe
 ## 3. User Flows (Critical Paths)
 
 ### Flow A — Customer onboards and submits a course application
-1. Customer logs in to `/(customer)`.
+1. Customer logs in via `/login` and lands on `/company`.
 2. If no application credits, redirected to "Buy Credits" page — picks a tier (1, 2–4, 5–9, 10–15), optionally adds expedite.
 3. Stripe Checkout → webhook fires → `billing_transactions` row created → `companies.application_credits` incremented → `application_credits_expires_at` set to +1 year.
 4. Customer clicks "New Application" → 5-step form. Each step auto-saves to a `DRAFT` `course_applications` row.
 5. On final submit: API validates remaining credit, atomically decrements credit, sets `status = PENDING`, sends reviewer-notification email to all addresses in `REVIEWER_NOTIFICATION_EMAILS`.
 
 ### Flow B — Reviewer approves an application
-1. Reviewer logs in to `/(reviewer)`.
+1. Reviewer logs in via `/login` and lands on `/reviewer`.
 2. Queue shows pending applications, with expedite-flagged ones at the top.
 3. Clicks an application → slide-in panel renders all 34 fields read-only.
 4. Reviewer clicks Approve → server action runs in a transaction:
@@ -147,17 +147,17 @@ Six tables. Phase 2/3 tables (`licensees`, `state_requirements`, `pro_subscripti
 - Role is the single source of truth on `users.role`. A Supabase Auth Hook (or DB trigger) mirrors it into JWT custom claims so server components can read it without a DB roundtrip on every request.
 
 ### Route protection (Next 16, no middleware.ts)
-Each portal route group has a server-component `layout.tsx` that:
+Each portal has a server-component `layout.tsx` that:
 1. Reads the Supabase session on the server.
 2. Loads the role from JWT claims (or falls back to a `users` lookup).
 3. Redirects to `/login` if no session, or `/403` if the role doesn't match.
 
 Layouts:
-- `app/(customer)/layout.tsx` — requires `CUSTOMER`.
-- `app/(reviewer)/layout.tsx` — requires `REVIEWER`.
-- `app/(admin)/layout.tsx` — requires `ADMIN`.
-- `app/attend/[token]/page.tsx` — public; access controlled by token + course-active check.
-- `app/(auth)/login/page.tsx` — public.
+- `app/company/layout.tsx` requires `CUSTOMER`.
+- `app/reviewer/layout.tsx` requires `REVIEWER`.
+- `app/admin/layout.tsx` requires `ADMIN`.
+- `app/attend/[token]/page.tsx` is public; access controlled by token + course-active check.
+- `app/login/page.tsx` is public; sign-in form for all three private roles.
 
 ### RLS as the floor
 Even if a route handler is misconfigured, Supabase RLS policies enforce:
@@ -324,11 +324,11 @@ Differences from the SOW: dropped 4 AWS vars and 2 NextAuth vars; added 5 Supaba
 
 Anything referenced in the SOW that this PRD intentionally defers:
 
-- LICENSEE role and Dental Track portal → Phase 2 (Weeks 9–16).
-- BOARD role and Dental Audit portal → Phase 3 (Weeks 17–24).
+- LICENSEE role and ProTrack portal → Phase 2 (Weeks 9–16).
+- BOARD role and Verify portal → Phase 3 (Weeks 17–24).
 - `licensees`, `ce_certificates`, `state_requirements`, `pro_subscriptions`, `pending_licensees`, `state_boards`, `audit_batches`, `audit_selections`, `deficiency_notices` tables.
 - ACE → Track auto-sync hook (added in Phase 2 once `licensees` exists).
-- Dental Track Pro Stripe subscriptions.
+- ProTrack Pro Stripe subscriptions.
 - Multi-state licensure.
 - 50-state CE requirements data.
 - ~3,000 legacy ACE attendee record import.

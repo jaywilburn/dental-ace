@@ -1,4 +1,4 @@
-# CLAUDE.md — AADB Platform Suite
+# CLAUDE.md — DentalACE One
 
 Project memory for Claude Code. Load this at the start of every session.
 
@@ -6,14 +6,14 @@ Project memory for Claude Code. Load this at the start of every session.
 
 ## Project Identity
 
-- **Suite:** AADB Platform Suite — three products on one codebase for the American Association of Dental Boards.
-- **Products:** Dental ACE (accreditation), Dental Track (licensee CE dashboard), Dental Audit (state-board random audits).
+- **Suite:** DentalACE One — three products on one codebase for the American Association of Dental Boards.
+- **Products:** DentalACE (accreditation), ProTrack (licensee CE dashboard), Verify (state-board random audits).
 - **Domain:** `dentalace.org`.
-- **Current phase:** Phase 1 — Dental ACE (Phase 0 scaffolding complete; Week 2 auth + portals up next).
+- **Current phase:** Phase 1 — DentalACE (Phase 0 scaffolding complete; Week 2 auth + portals up next).
 - **Repo:** `github.com/jaywilburn/dental-ace` (private; transfers to client at launch).
 - **Installed versions:** Next.js 16.2.6, React 19.2.4, Tailwind v4, Prisma 6+, @supabase/ssr.
 - **See also:** [`AGENTS.md`](./AGENTS.md) — auto-generated reminder that Next 16 has breaking changes from training data; check `node_modules/next/dist/docs/` when conventions feel uncertain.
-- **Timeline:** 24-week, 3-phase build. Weeks 1–8 ACE → 9–16 Track → 17–24 Audit.
+- **Timeline:** 24-week, 3-phase build. Weeks 1–8 DentalACE → 9–16 ProTrack → 17–24 Verify.
 - **Source of truth (scope/pricing/schema):** [`logic/aadb-master-sow-v1.1.html`](./logic/aadb-master-sow-v1.1.html)
 - **Suite framing:** [`PRD.md`](./PRD.md)
 - **Phase 1 detail:** [`PRD-phase-1-dental-ace.md`](./PRD-phase-1-dental-ace.md)
@@ -26,11 +26,28 @@ The SOW (v1.1, May 2026) is the contract document, but three stack choices were 
 
 | SOW says | We use | Why |
 |----------|--------|-----|
-| Next.js 14 | **Next.js 16+ (App Router only)** | No `middleware.ts`, no `pages/`. Route protection lives in route-group server-component layouts. |
+| Next.js 14 | **Next.js 16+ (App Router only)** | No `middleware.ts`, no `pages/`. Route protection lives in server-component portal layouts. |
 | NextAuth.js v5 | **Supabase Auth** | Native RLS integration; one fewer service. Roles via JWT claims + `users.role`. |
 | AWS S3 (two buckets) | **Supabase Storage (two buckets)** | Drops the AWS account. Same two-bucket split: `certificates` + `uploads`. Private; signed URLs only. |
 
 Everything else from the SOW stands: Prisma + Postgres, Stripe + Stripe Connect, Resend, Vercel, Puppeteer + `@sparticuz/chromium`, qrcode, ShadCN + Tailwind themed.
+
+---
+
+## Brand Rules
+
+The SOW pre-dates the brand refresh. **The landing-page handoff (`logic/dentalace-landing-page-handoff.md`) is the brand source of truth.** Internal table/column names, enums, and code identifiers can keep their original short forms (CUSTOMER, REVIEWER, BOARD, etc.) but everything user-facing follows these rules:
+
+- **Suite name: DentalACE One.** Never "AADB Platform Suite" (that was the working title before the brand was set).
+- **Product names:**
+  - **DentalACE** (one word, no space, ACE always uppercase). Never "Dental ACE" or "DentalAce."
+  - **ProTrack** (one word, capital P and T). Never "Dental Track" or "Pro Track."
+  - **Verify** (initial capital). Never "Dental Audit."
+- **No em dashes (`—`)** in user-facing copy. Use commas, parentheses, or restructure the sentence. Page titles, button labels, marketing copy, in-app strings, email templates: all em-dash-free.
+- **Brand mark rendering:** "Dental" in white on dark / navy on light. "ACE" in gold (`--ace` token).
+- **Tagline:** "An AADB Program · Powered by CE Exchange."
+- **Public email:** `info@dentalace.org`.
+- **Product accent colors:** DentalACE = gold (`--ace`), ProTrack = teal (`--pro`), Verify = blue (`--ver`). Use these only when product-color semantics matter (landing page, marketing). Internal app UI defaults to `--ace` for primary accent regardless of product.
 
 ---
 
@@ -39,10 +56,11 @@ Everything else from the SOW stands: Prisma + Postgres, Stripe + Stripe Connect,
 These rules are how we avoid context drift. If you violate one, the user will tell you to add a new rule below — do it immediately.
 
 ### Routing & auth
-- **Never create a `middleware.ts` file.** Next 16 doesn't use it. Route protection goes in `app/(routeGroup)/layout.tsx` as a server component that reads the Supabase session and redirects on role mismatch.
+- **Never create a `middleware.ts` file.** Next 16 doesn't use it. Route protection goes in each portal's `layout.tsx` (e.g. `app/company/layout.tsx`) as a server component that reads the Supabase session and redirects on role mismatch.
+- **Public URLs follow the handoff:** `/login` (unified sign-in), `/company` (CUSTOMER), `/reviewer` (REVIEWER), `/admin` (ADMIN), `/attend/[token]` (public attendee), `/protrack` and `/protrack/register` (LICENSEE, Phase 2), `/verify` and `/verify/contact` (BOARD, Phase 3).
 - **Never use the Pages Router.** The whole app is App Router under `app/`.
 - **Roles** live on `users.role` and are mirrored into JWT custom claims via a Supabase Auth hook or DB trigger. Read from the JWT on the server when possible; fall back to a `users` lookup only when needed.
-- **Supabase SSR cookie refresh** happens inside route-group layouts (`app/(customer)/layout.tsx` etc.) via `supabase.auth.getUser()`, not in `middleware.ts`. The server client's `setAll` swallows errors inside RSC reads — refresh writes only succeed in server actions and route handlers.
+- **Supabase SSR cookie refresh** happens inside portal layouts (`app/company/layout.tsx`, `app/reviewer/layout.tsx`, `app/admin/layout.tsx`) via `supabase.auth.getUser()`, not in `middleware.ts`. The server client's `setAll` swallows errors inside RSC reads; refresh writes only succeed in server actions and route handlers.
 
 ### Database
 - **Prisma** for application reads/writes.
@@ -116,7 +134,7 @@ stripe listen --forward-to localhost:3000/api/webhooks/stripe
   - Don't create Phase 2 or Phase 3 tables in Phase 1.
   - Don't seed the 50-state CE requirements until John provides the authoritative requirements file (Phase 2).
   - Don't import the legacy ~3K ACE-attendee records until the cleaned CSV is delivered (Phase 2).
-  - Don't convert the Track or Audit HTML prototypes until their phases start.
+  - Don't convert the ProTrack or Verify HTML prototypes until their phases start.
 - **Scope creep goes to v1.1**, not into the current phase.
 
 ---
@@ -126,15 +144,14 @@ stripe listen --forward-to localhost:3000/api/webhooks/stripe
 ```
 /                                       # project root
 ├── app/                                # Next.js App Router
-│   ├── (auth)/login/page.tsx           # ← Week 2
-│   ├── (customer)/...                  # CUSTOMER portal (← Week 2)
-│   ├── (reviewer)/...                  # REVIEWER portal (← Week 2)
-│   ├── (admin)/...                     # ADMIN portal (← Week 2)
+│   ├── login/page.tsx                  # ← Week 2 — unified sign-in for all roles
+│   ├── company/...                     # CUSTOMER portal (← Week 2)
+│   ├── reviewer/...                    # REVIEWER portal (← Week 2)
+│   ├── admin/...                       # ADMIN portal (← Week 2)
 │   ├── attend/[token]/page.tsx         # public attendee form (← Weeks 5-6)
 │   ├── api/
 │   │   ├── webhooks/stripe/route.ts    # ← Weeks 3-4
 │   │   └── ...
-│   ├── fonts.ts                        # (optional — currently inline in layout.tsx)
 │   ├── globals.css                     # ✅ AADB theme tokens + ShadCN aliases
 │   ├── layout.tsx                      # ✅ Cormorant + DM Sans + JetBrains Mono
 │   └── page.tsx                        # 🟡 Phase 0 brand-verification page (temp)

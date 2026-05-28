@@ -24,9 +24,9 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Dental ACE — AADB Platform Suite",
+  title: "DentalACE One",
   description:
-    "CE accreditation, licensee tracking, and state board auditing for the American Association of Dental Boards.",
+    "CE accreditation, licensee tracking, and state board auditing for the American Association of Dental Boards. An AADB Program, powered by CE Exchange.",
 };
 
 export default function RootLayout({

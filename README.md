@@ -1,12 +1,12 @@
-# AADB Platform Suite
+# DentalACE One
 
 Three-product suite for the American Association of Dental Boards. Production domain: [dentalace.org](https://dentalace.org).
 
-- **Dental ACE** — CE course accreditation, certificate issuance, state board compliance reporting. Replaces WordPress + Typeform + Zapier + Sheets + Anvil.
-- **Dental Track** — Personal CE dashboard for dentists, hygienists, dental assistants. All 50 states.
-- **Dental Audit** — Random-sample CE compliance audit tool for state dental boards.
+- **DentalACE** — CE course accreditation, certificate issuance, state board compliance reporting. Replaces WordPress + Typeform + Zapier + Sheets + Anvil.
+- **ProTrack** — Personal CE dashboard for dentists, hygienists, dental assistants. All 50 states.
+- **Verify** — Random-sample CE compliance audit tool for state dental boards.
 
-**Current phase:** Phase 1 — Dental ACE (Weeks 1–8). See [`PRD-phase-1-dental-ace.md`](./PRD-phase-1-dental-ace.md).
+**Current phase:** Phase 1 — DentalACE (Weeks 1–8). See [`PRD-phase-1-dental-ace.md`](./PRD-phase-1-dental-ace.md).
 
 ## Documentation
 

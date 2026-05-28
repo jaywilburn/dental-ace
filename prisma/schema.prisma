@@ -1,8 +1,8 @@
-// AADB Platform Suite — Prisma schema
+// DentalACE One — Prisma schema
 //
-// Phase 1 (Dental ACE) — 6 tables in this file. Phase 2 and 3 tables are added
-// when their phases start. See PRD-phase-1-dental-ace.md §4 for the full data
-// model and the rationale behind each column.
+// Phase 1 (DentalACE) — 6 tables in this file. Phase 2 (ProTrack) and Phase 3
+// (Verify) tables are added when their phases start. See PRD-phase-1-dental-ace.md
+// §4 for the full data model and the rationale behind each column.
 //
 // RLS policies are managed separately as raw-SQL migrations in /sql-migrations
 // (Prisma doesn't manage RLS). The Supabase MCP applies them via apply_migration.
