@@ -40,7 +40,7 @@ The SOW pre-dates the brand refresh. **The landing-page handoff (`logic/dentalac
 
 - **Suite name: DentalACE One.** Never "AADB Platform Suite" (that was the working title before the brand was set).
 - **Product names:**
-  - **DentalACE** (one word, no space, ACE always uppercase). Never "Dental ACE" or "DentalAce."
+  - **Dental ACE** (two words, "ACE" always uppercase). Never "DentalAce" or "Dental Ace." The landing-page v3 brand uses the spaced form; only the suite name is one word.
   - **ProTrack** (one word, capital P and T). Never "Dental Track" or "Pro Track."
   - **Verify** (initial capital). Never "Dental Audit."
 - **No em dashes (`—`)** in user-facing copy. Use commas, parentheses, or restructure the sentence. Page titles, button labels, marketing copy, in-app strings, email templates: all em-dash-free.

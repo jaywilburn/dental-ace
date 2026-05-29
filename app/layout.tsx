@@ -24,9 +24,28 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "DentalACE One",
+  metadataBase: new URL("https://dentalace.org"),
+  title: {
+    default: "Dental ACE · The Complete Dental CE Platform",
+    template: "%s · Dental ACE",
+  },
   description:
-    "CE accreditation, licensee tracking, and state board auditing for the American Association of Dental Boards. An AADB Program, powered by CE Exchange.",
+    "The complete dental continuing education platform. CE accreditation, license tracking, and state board auditing from the American Association of Dental Boards. An AADB Program, powered by CE Exchange.",
+  applicationName: "DentalACE One",
+  openGraph: {
+    type: "website",
+    url: "https://dentalace.org",
+    siteName: "DentalACE One",
+    title: "Dental ACE · The Complete Dental CE Platform",
+    description:
+      "Three connected tools, one platform: Dental ACE accreditation, ProTrack CE dashboards, and Verify board auditing. Built with the AADB.",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Dental ACE · The Complete Dental CE Platform",
+    description:
+      "Three connected tools, one platform: Dental ACE accreditation, ProTrack CE dashboards, and Verify board auditing. Built with the AADB.",
+  },
 };
 
 export default function RootLayout({

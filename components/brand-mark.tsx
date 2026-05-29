@@ -1,7 +1,7 @@
 import { cn } from "@/lib/utils";
 
 /*
-  DentalACE brand mark. "Dental" inherits the surrounding text color; "ACE" is
+  Dental ACE brand mark. "Dental" inherits the surrounding text color; "ACE" is
   always rendered in --ace-light. Use on navy backgrounds (sidebar, login).
   For light surfaces, override the parent text color to navy via className.
 */
@@ -28,7 +28,7 @@ export function BrandMark({
         </span>
       ) : null}
       <span className={cn("font-serif font-bold leading-none", sizeClass)}>
-        Dental<span className="text-ace-light">ACE</span>
+        Dental <span className="text-ace-light">ACE</span>
       </span>
     </div>
   );

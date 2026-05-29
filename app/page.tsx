@@ -1,81 +1,141 @@
+import { LandingNav } from "@/components/landing/landing-nav";
+import { LandingHero } from "@/components/landing/landing-hero";
+import { HowItWorks } from "@/components/landing/how-it-works";
+import { SuiteTitleBar } from "@/components/landing/suite-title-bar";
+import { ProductDetail } from "@/components/landing/product-detail";
+import { MockupAce } from "@/components/landing/mockup-ace";
+import { MockupProTrack } from "@/components/landing/mockup-protrack";
+import { MockupVerify } from "@/components/landing/mockup-verify";
+import { TrustSection } from "@/components/landing/trust-section";
+import { CtaBanner } from "@/components/landing/cta-banner";
+import { LandingFooter } from "@/components/landing/landing-footer";
+
 /*
-  Phase 0 brand-verification page. Renders a representative slice of the
-  DentalACE One design system so we can visually confirm the tokens match the
-  prototypes before any real UI work. Replaced when the real landing page is
-  built (Phase 1, Weeks 7-8).
+  Public landing page. Faithful Next.js 16 port of logic/aadb-landing-page-v3.html.
+  All sections are server components. Hover transitions are CSS only, wrapped
+  in motion-safe. No client-side state.
 */
-export default function Home() {
+export default function LandingPage() {
   return (
-    <main className="min-h-screen bg-navy text-white">
-      <div className="mx-auto max-w-5xl px-8 py-20">
-        <p className="font-mono text-xs uppercase tracking-[0.25em] text-ace-light">
-          AADB · Phase 0
-        </p>
-        <h1 className="mt-3 font-serif text-5xl font-bold leading-tight">
-          Dental<span className="text-ace-light">ACE</span> One
-        </h1>
-        <p className="mt-4 max-w-xl text-sm text-white/60">
-          Brand-verification page. If the navy, gold accent, serif heading, and
-          mono eyebrow all look right, the design system is wired up correctly.
-        </p>
+    <>
+      <LandingNav />
+      <main>
+        <LandingHero />
+        <HowItWorks />
+        <SuiteTitleBar />
 
-        <div className="mt-10 grid gap-4 sm:grid-cols-3">
-          <div className="rounded-lg border border-ace/30 bg-navy p-5">
-            <p className="font-mono text-[10px] uppercase tracking-[2px] text-ace-light">
-              Product 01
-            </p>
-            <p className="mt-2 font-serif text-2xl font-bold">
-              Dental<span className="text-ace-light">ACE</span>
-            </p>
-            <p className="mt-1 text-xs text-white/50">
-              CE accreditation, certificates, state board reporting
-            </p>
-          </div>
-          <div className="rounded-lg border border-pro/30 bg-navy p-5">
-            <p className="font-mono text-[10px] uppercase tracking-[2px] text-pro-light">
-              Product 02
-            </p>
-            <p className="mt-2 font-serif text-2xl font-bold">ProTrack</p>
-            <p className="mt-1 text-xs text-white/50">
-              50-state CE dashboard, Free + Pro
-            </p>
-          </div>
-          <div className="rounded-lg border border-ver/30 bg-navy p-5">
-            <p className="font-mono text-[10px] uppercase tracking-[2px] text-ver-light">
-              Product 03
-            </p>
-            <p className="mt-2 font-serif text-2xl font-bold">Verify</p>
-            <p className="mt-1 text-xs text-white/50">
-              Random sample audits for state boards
-            </p>
-          </div>
-        </div>
+        <ProductDetail
+          id="ace"
+          color="ace"
+          label="Product 01 · Accreditation"
+          name={
+            <>
+              Dental <span className="text-ace">ACE</span>
+            </>
+          }
+          audience="For CE course providers and dental educators"
+          description="The AADB Accredited Continuing Education program, fully digitized. Submit applications, manage course assets, issue QR-coded certificates, and track attendee completions all in one place. Replaces WordPress, Typeform, Zapier, and manual spreadsheets."
+          features={[
+            {
+              lead: "Get Your CE Courses AADB-Accredited Fast.",
+              body: "Submit your course application through a guided 5-step online process. Upload your materials, build your quiz, and get in front of an AADB reviewer without the paperwork bottleneck. Approved courses receive an official Course ID, an approval letter, and a scannable QR code so your accreditation is verifiable the moment it is issued.",
+            },
+            {
+              lead: "Deliver Certificates Automatically at Scale.",
+              body: "Once your course is approved, attendees complete it, pass the quiz, and receive a branded, board-recognized CE certificate as a PDF, delivered by email the moment they finish. No manual processing. No chasing paperwork. You issue certificates in volume without adding a single administrative step.",
+            },
+            {
+              lead: "A Single Dashboard to Manage Everything.",
+              body: "Track your active courses, certificate balance, application credits, and every certificate issued, all from one portal. Real-time activity logs show you exactly where your program stands. When your cert balance gets low, the system alerts you automatically so you never interrupt service to attendees.",
+            },
+            {
+              lead: "Your Courses Feed Directly Into ProTrack.",
+              body: "Every certificate issued through Dental ACE syncs automatically to ProTrack, the CE compliance tool used by dentists, hygienists, and dental assistants across all 50 states. That means your course credit lands in your attendees' license trackers without any action on their part. More value delivered. More reasons to choose your courses.",
+            },
+            {
+              lead: "Built for the Way Dental Education Actually Works.",
+              body: "Dental ACE handles in-person, online, and hybrid delivery formats. Courses support multiple presenters, co-creators, and full commercial disclosure documentation, matching the standards dental companies and associations already operate under. Whether you are a regional association running live events or a company offering on-demand online content, the platform is built to fit your workflow.",
+            },
+          ]}
+          ctaLabel="Start your accreditation"
+          ctaHref="/company"
+          mockup={<MockupAce />}
+        />
 
-        <div className="mt-12 flex flex-wrap items-center gap-3">
-          <button className="rounded-md bg-ace px-5 py-2.5 text-sm font-semibold text-navy transition hover:bg-ace-light">
-            Primary action
-          </button>
-          <button className="rounded-md border border-white/20 bg-transparent px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-white/5">
-            Secondary
-          </button>
-          <span className="rounded-full bg-ace/15 px-3 py-1 font-mono text-[10px] uppercase tracking-[1.5px] text-ace-light">
-            Status badge
-          </span>
-        </div>
+        <ProductDetail
+          id="protrack"
+          color="pro"
+          bg="alt"
+          reverse
+          label="Product 02 · CE Tracking"
+          name="ProTrack"
+          audience="For dentists, hygienists & dental assistants"
+          description="Your personal CE dashboard, free forever. Track hours against your state's exact requirements across all categories. Upload certificates from any provider. Stay audit-ready from the moment you log in."
+          features={[
+            {
+              lead: "Your CE Hours. One Dashboard. Always Current.",
+              body: "ProTrack gives dentists, hygienists, and dental assistants a single place to see exactly where they stand on CE requirements for their state. Hours are broken down by required category, progress bars update in real time, and the system tells you not just how many hours you have, but which specific categories still need work and how much time you have left.",
+            },
+            {
+              lead: "Dental ACE Certificates Sync Automatically. No Upload Needed.",
+              body: "Every time you complete a course through an AADB-accredited provider, that certificate lands in your ProTrack record automatically, matched by license number. No manual entry, no uploading PDFs, no chasing paper. You take the course, the hours appear. For any certificate outside of Dental ACE, upload it once and ProTrack maps it to the right category.",
+            },
+            {
+              lead: "Built for All 50 States, All Three License Types.",
+              body: "ProTrack knows the CE requirements for every state and every license type, whether you are a DDS, RDH, or DA. It tracks your primary state by default and supports multiple state licenses at the same time, each with its own progress tracker, renewal date, and compliance status.",
+            },
+            {
+              lead: "Automated Reminders So a Deadline Never Catches You Off Guard.",
+              body: "ProTrack sends renewal reminders at 90, 60, 30, and 7 days out. It also fires category gap alerts when a required category has zero hours with six months left, and in-person-only alerts for requirements like sedation and medical emergencies that cannot be completed online. You set it and the system watches the clock for you.",
+            },
+            {
+              lead: "Export an Audit-Ready Report in One Click.",
+              body: "If your state board ever calls, ProTrack generates a formatted CE compliance PDF in one click. It includes your licensee information, your full certificate log, category breakdown, hours completed versus required, and any gaps, exactly what a dental board auditor needs to see. Your records are always organized and always ready.",
+            },
+          ]}
+          ctaLabel="Create free account"
+          ctaHref="/protrack/register"
+          mockup={<MockupProTrack />}
+        />
 
-        <div className="mt-12 rounded-lg bg-white p-6 text-text">
-          <p className="font-mono text-[10px] uppercase tracking-[2px] text-text-muted">
-            Light surface
-          </p>
-          <p className="mt-2 font-serif text-2xl font-semibold text-navy">
-            Body content on a light card
-          </p>
-          <p className="mt-1 text-sm text-text-mid">
-            Tests the inverse palette: navy text on white, gold accents, and the
-            muted neutrals used throughout the customer-portal screens.
-          </p>
-        </div>
-      </div>
-    </main>
+        <ProductDetail
+          id="verify"
+          color="ver"
+          label="Product 03 · Board Auditing"
+          name="Verify"
+          audience="For state dental boards, provisioned by AADB"
+          description="Replace your paper-based CE audit process entirely. Run a random audit on any percentage of your licensees with one click. Deficiencies surface instantly, notices go out in bulk, and every audit is fully documented for your records."
+          features={[
+            {
+              lead: "Run a Randomized CE Audit in Seconds, Not Weeks.",
+              body: "Verify gives state dental boards a one-click audit trigger that randomly selects a percentage of active licensees, pulls their live CE records directly from ProTrack, and returns full compliance results instantly. No spreadsheets, no manual record requests, no paper. A board with 8,400 active licensees can audit a 10% random sample and have deficiency results in hand before the end of the day.",
+            },
+            {
+              lead: "See Every Licensee's CE Status in One Place.",
+              body: "The Verify dashboard shows every active licensee in the board's state, broken down by compliance status, license type, and deficiency category. Boards can see at a glance how many licensees are fully compliant, in progress, or deficient, and drill into any individual record to see exactly which hours and categories are missing, backed by verified certificates pulled directly from ProTrack.",
+            },
+            {
+              lead: "Send Personalized Deficiency Notices in Bulk, Automatically.",
+              body: "When an audit surfaces deficiencies, boards send notices to every deficient licensee in one action. Each notice is personalized with the licensee's specific missing hours, missing categories, and response deadline. Follow-up reminders fire automatically at 30 days and a final warning goes out at 7 days, all without any additional action from the board.",
+            },
+            {
+              lead: "Deficiencies Resolve Themselves. The Board Just Watches.",
+              body: "When a deficient licensee uploads their missing certificates to ProTrack, Verify detects the resolution automatically through a daily sync and closes the deficiency without the board lifting a finger. Each morning, the board receives a summary showing how many deficiencies resolved overnight, how many are still pending, and how many days remain until the deadline.",
+            },
+            {
+              lead: "Export a Complete Audit Record for Any Batch or Licensee.",
+              body: "Verify generates formatted PDF reports for any audit batch or individual licensee record, including compliance status, certificate log, missing hours, notice history, and resolution timeline. Every notice sent is logged with a timestamp, batch ID, and notice type, giving boards a full, defensible audit trail if a licensing decision is ever challenged.",
+            },
+          ]}
+          ctaLabel="Request board access"
+          ctaHref="/verify/contact"
+          mockup={<MockupVerify />}
+        />
+
+        <TrustSection />
+        <CtaBanner />
+      </main>
+      <LandingFooter />
+    </>
   );
 }
