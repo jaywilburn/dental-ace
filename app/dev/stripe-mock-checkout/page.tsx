@@ -1,9 +1,9 @@
 import { redirect } from "next/navigation";
-import { headers } from "next/headers";
 import { randomUUID } from "node:crypto";
 import { getCurrentUser } from "@/lib/auth/session";
 import { isMockMode } from "@/lib/billing/checkout-mode";
 import { CATALOG, formatPrice, getSku, type SkuId } from "@/lib/billing/catalog";
+import { handleCheckoutCompleted } from "@/lib/billing/webhook-core";
 import { BrandMark } from "@/components/brand-mark";
 
 /*
@@ -30,7 +30,6 @@ export default async function StripeMockCheckoutPage({
 
   const grants = formatGrants(sku.id);
   const stripeEventId = `evt_mock_${randomUUID()}`;
-  const origin = await currentOrigin();
 
   return (
     <main className="min-h-screen bg-navy text-white">
@@ -72,7 +71,6 @@ export default async function StripeMockCheckoutPage({
           >
             <input type="hidden" name="skuId" value={sku.id} />
             <input type="hidden" name="stripeEventId" value={stripeEventId} />
-            <input type="hidden" name="origin" value={origin} />
             <button
               type="submit"
               className="w-full rounded-md bg-ace py-3 text-sm font-bold text-navy transition-colors hover:bg-ace-light"
@@ -113,32 +111,36 @@ function formatGrants(skuId: SkuId): string {
   return "";
 }
 
-async function currentOrigin(): Promise<string> {
-  const h = await headers();
-  const host = h.get("x-forwarded-host") ?? h.get("host") ?? "localhost:3000";
-  const proto = h.get("x-forwarded-proto") ?? "http";
-  return `${proto}://${host}`;
-}
-
 async function completeMockCheckout(formData: FormData) {
-  const skuId = String(formData.get("skuId") ?? "");
-  const stripeEventId = String(formData.get("stripeEventId") ?? "");
-  const origin = String(formData.get("origin") ?? "");
+  // Gates duplicated from /api/dev/mock-stripe-webhook so this server action
+  // can't mint credits in production / for the wrong company even if someone
+  // wires the form to a different company id.
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("Mock checkout disabled in production");
+  }
+  if (!isMockMode()) {
+    throw new Error("Mock checkout disabled when STRIPE_SECRET_KEY is configured");
+  }
 
   const user = await getCurrentUser();
-  if (!user || !user.companyId) redirect("/login");
+  if (!user || user.role !== "CUSTOMER" || !user.companyId) redirect("/login");
 
-  const res = await fetch(`${origin}/api/dev/mock-stripe-webhook`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      skuId,
-      stripeEventId,
-      companyId: user.companyId,
-    }),
+  const skuId = String(formData.get("skuId") ?? "");
+  const stripeEventId = String(formData.get("stripeEventId") ?? "");
+
+  // Call the shared handler directly. The webhook route stays in place for
+  // any real Stripe-style POSTs from external testing tools; for our
+  // in-app mock-checkout button, in-process is simpler and avoids the
+  // server-to-server fetch + cookie-forwarding problem.
+  const outcome = await handleCheckoutCompleted({
+    skuId,
+    stripeEventId,
+    companyId: user.companyId,
+    stripePaymentId: `mock_${stripeEventId}`,
   });
-  if (!res.ok) {
-    throw new Error(`Mock webhook returned ${res.status}: ${await res.text()}`);
+  if (!outcome.ok) {
+    throw new Error(`Mock checkout failed: ${outcome.status}`);
   }
+
   redirect("/company/billing?just=success");
 }
