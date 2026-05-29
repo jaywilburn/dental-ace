@@ -32,12 +32,13 @@ export async function getCurrentUser(): Promise<SessionUser | null> {
   console.info(`[getCurrentUser] sb-cookies-on-request=[${incomingSb.join(", ") || "(none)"}]`);
 
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { data, error } = await supabase.auth.getUser();
+  const user = data?.user ?? null;
 
   if (!user) {
-    console.warn(`[getCurrentUser] getUser returned null despite ${incomingSb.length} sb-* cookies`);
+    console.warn(
+      `[getCurrentUser] getUser returned null despite ${incomingSb.length} sb-* cookies; error=${error ? `${error.name}: ${error.message}` : "(none)"}`,
+    );
     return null;
   }
 
