@@ -37,7 +37,7 @@ The week-by-week breakdown mirrors the SOW phase cards (Weeks 1–8) but reframe
 - Seed: 1 test company, 1 test reviewer user, 1 test admin user.
 
 ### Weeks 3–4 — Application Form, Stripe Billing, Reviewer Dashboard
-- Stripe Checkout flows for all 14 products. Webhook handler at `/api/webhooks/stripe` with idempotency keys (using Stripe's `event.id` as the dedup key on `billing_transactions`).
+- Stripe Checkout flows for all 10 products. Webhook handler at `/api/webhooks/stripe` with idempotency keys (using Stripe's `event.id` as the dedup key on `billing_transactions`). A mock-mode handler at `/api/dev/mock-stripe-webhook` runs the same code path when no Stripe account is wired up yet.
 - Application credit purchases with tier-based pricing (1, 2–4, 5–9, 10–15 — Section 6). Expedite add-on applied per checkout. Credit expiry: 1 year from purchase date, enforced on submission (not at purchase).
 - Customer billing-history page; application-credits-remaining widget.
 - Multi-step course application form — 5 steps spanning all 34 fields including the quiz builder (Q1–Q2 true/false, Q3–Q5 multiple choice). Draft auto-save to `course_applications` with `status = DRAFT`.
@@ -167,35 +167,32 @@ Even if a route handler is misconfigured, Supabase RLS policies enforce:
 
 Server-side privileged operations (webhook handlers, cron jobs) use the service-role key — **never exposed client-side**.
 
-## 6. Stripe Products (14)
+## 6. Stripe Products (10)
 
-All 14 created in test mode in Week 1, switched to live in Week 8.
+Updated May 2026 to match the v3 marketing mockup. Was 14 products (4 app + 4 expedite + 6 cert); now 10 (4 app with expedite bundled into a single $219 SKU + 6 cert). The single source of truth in code is `lib/billing/catalog.ts`.
+
+All 10 created in Stripe test mode when a Stripe account is provisioned, switched to live before Week 8. Until then the mock checkout flow at `/dev/stripe-mock-checkout` exercises the same webhook handler.
 
 ### Application credits (4 products)
-| Product | Price | Env Var |
-|---------|-------|---------|
-| 1 Course Application | $99.00 | `STRIPE_PRICE_ID_APP_1` |
-| 2–4 Course Applications | $95.00/each | `STRIPE_PRICE_ID_APP_2_4` |
-| 5–9 Course Applications | $90.00/each | `STRIPE_PRICE_ID_APP_5_9` |
-| 10–15 Course Applications | $85.00/each | `STRIPE_PRICE_ID_APP_10_15` |
-
-### Expedite add-ons (4 products, flat fee on top of an app purchase)
-| Product | Price | Env Var |
-|---------|-------|---------|
-| Expedite — 1 app | +$75.00 | `STRIPE_PRICE_ID_EXP_1` |
-| Expedite — 2–4 apps | +$150.00 | `STRIPE_PRICE_ID_EXP_2_4` |
-| Expedite — 5–9 apps | +$250.00 | `STRIPE_PRICE_ID_EXP_5_9` |
-| Expedite — 10–15 apps | +$350.00 | `STRIPE_PRICE_ID_EXP_10_15` |
+| SKU id | Product | Price | Grants | Env Var |
+|--------|---------|-------|--------|---------|
+| `app_1` | 1 Application | $129.00 | +1 standard credit | `STRIPE_PRICE_ID_APP_1` |
+| `app_1_exp` | 1 Application + Expedited | $219.00 | +1 expedited credit | `STRIPE_PRICE_ID_APP_1_EXP` |
+| `app_3` | 3 Applications | $349.00 | +3 standard credits | `STRIPE_PRICE_ID_APP_3` |
+| `app_5` | 5 Applications | $549.00 | +5 standard credits | `STRIPE_PRICE_ID_APP_5` |
 
 ### Certificate bundles (6 products)
-| Product | Price | Env Var |
-|---------|-------|---------|
-| 50 Certificate Bundle | $500.00 ($10/cert) | `STRIPE_PRICE_ID_CERT_50` |
-| 100 Certificate Bundle | $900.00 ($9/cert) | `STRIPE_PRICE_ID_CERT_100` |
-| 200 Certificate Bundle | $1,400.00 ($7/cert) | `STRIPE_PRICE_ID_CERT_200` |
-| 300 Certificate Bundle | $1,800.00 ($6/cert) | `STRIPE_PRICE_ID_CERT_300` |
-| 500 Certificate Bundle | $2,500.00 ($5/cert) | `STRIPE_PRICE_ID_CERT_500` |
-| 750 Certificate Bundle | $3,000.00 ($4/cert) | `STRIPE_PRICE_ID_CERT_750` |
+| SKU id | Product | Price | Grants | Env Var |
+|--------|---------|-------|--------|---------|
+| `cert_50`  | 50 Certificates  | $500.00   | +50 certs  | `STRIPE_PRICE_ID_CERT_50`  |
+| `cert_100` | 100 Certificates | $900.00   | +100 certs | `STRIPE_PRICE_ID_CERT_100` |
+| `cert_200` | 200 Certificates | $1,400.00 | +200 certs | `STRIPE_PRICE_ID_CERT_200` |
+| `cert_300` | 300 Certificates | $1,800.00 | +300 certs | `STRIPE_PRICE_ID_CERT_300` |
+| `cert_500` | 500 Certificates | $2,500.00 | +500 certs | `STRIPE_PRICE_ID_CERT_500` |
+| `cert_750` | 750 Certificates | $3,000.00 | +750 certs | `STRIPE_PRICE_ID_CERT_750` |
+
+### Expedited credits semantics
+The expedited variant is only sold via `app_1_exp` ($219). Bulk tiers (`app_3`, `app_5`) are always standard. The `companies.expedited_credits` column is separate from `applications_credits`; on submit, the customer picks which pool to spend if both have balance.
 
 ### Stripe Connect
 AADB is the master Stripe account holder. CE Exchange is the connected recipient. Phase 1 split is fixed 75/25 (CE Exchange / AADB) per the Services Agreement — implemented as automatic transfers via Stripe Connect, not manual journal entries.

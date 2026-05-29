@@ -74,10 +74,16 @@ These rules are how we avoid context drift. If you violate one, the user will te
 - **Never expose the service-role key client-side.** Client uploads use server-issued signed-upload URLs. Reads use short-lived signed download URLs.
 
 ### Stripe
-- **Idempotency** — every webhook handler dedupes on `event.id`, persisted as `billing_transactions.stripeEventId` (unique).
-- **Log the event to the DB *before* processing.** Replay must be safe.
-- **Local testing** — `stripe listen --forward-to localhost:3000/api/webhooks/stripe`.
+- **10 SKUs**, not 14. Catalog is the single source of truth at `lib/billing/catalog.ts`. PRD §6 updated May 2026; do not regenerate the 14-SKU table.
+- **Idempotency** — every webhook handler dedupes on `event.id`, persisted as `billing_transactions.stripeEventId` (unique). `INSERT ... ON CONFLICT DO NOTHING` is the idempotency check; the balance increment only runs if the insert succeeded.
+- **Mock mode** — when `STRIPE_SECRET_KEY` is absent (or `STRIPE_MOCK_MODE=true`), `lib/billing/checkout-mode.ts` reports mock mode. The Buy pages route to `/dev/stripe-mock-checkout`, which POSTs to `/api/dev/mock-stripe-webhook`. Both routes call into the same `handleCheckoutCompleted` in `lib/billing/webhook-core.ts` that the real `/api/webhooks/stripe` will. When a real Stripe account lands, only env vars + the session-creation function change.
+- **Local testing (real mode)** — `stripe listen --forward-to localhost:3000/api/webhooks/stripe`.
 - **Stripe Connect** — AADB is the master account, CE Exchange is the connected recipient. Phase 1 split is a fixed 75/25 (CE Exchange / AADB) automated via transfers.
+
+### Events (multi-session Live Event)
+- **Event Setup** is reachable from `/company/events` only when at least one approved course has `combinedCert=true` + `submitSessionsSeparately=true` on its `application_data`.
+- An event holds N approved courses via `event_sessions`. The event itself has an `attendee_link_token` for the combined certificate.
+- **The combined-certificate PDF render is Weeks 5-6 work**, not Weeks 3-4. Weeks 3-4 only persists the event + sessions and reserves the URL.
 
 ### UI
 - **ShadCN + Tailwind, always heavily customized.** Default ShadCN look is never shipped. Theme matches the navy/gold AADB brand from the prototypes.

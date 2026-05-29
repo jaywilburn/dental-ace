@@ -1,11 +1,12 @@
 import type { Role } from "@prisma/client";
 
 /*
-  Sidebar navigation per portal. Most items are placeholders pointing to "#"
-  for Week 2; their real routes land in Weeks 3 to 7 as the features ship.
+  Sidebar navigation per portal. Hrefs reflect the real Phase 1 routes that
+  exist or are wired up in Weeks 3-4. Items that need conditional visibility
+  (e.g. Events when the company has at least one live-event course) get
+  rendered or hidden in the layout, not removed from the catalog here.
 
-  Keep this in sync with the mockup in logic/dentalace-dev-mockup-suite-v3.html
-  - sections + ordering match each portal's sidebar there.
+  Mirror the mockup ordering in logic/dentalace-dev-mockup-suite-v3.html.
 */
 
 export type NavItem = {
@@ -25,25 +26,27 @@ export const portalNav: Record<"CUSTOMER" | "REVIEWER" | "ADMIN", NavSection[]> 
       label: "My Account",
       items: [
         { label: "Dashboard", href: "/company", icon: "📊" },
-        { label: "New Application", href: "#", icon: "📝" },
-        { label: "My Courses", href: "#", icon: "🎓" },
-        { label: "Certificate Log", href: "#", icon: "📜" },
+        { label: "New Application", href: "/company/applications/new", icon: "📝" },
+        { label: "My Courses", href: "/company/courses", icon: "🎓" },
+        { label: "Certificate Log", href: "/company/certificates", icon: "📜" },
+        { label: "Events", href: "/company/events", icon: "⭐" },
       ],
     },
     {
       label: "Billing",
       items: [
-        { label: "Buy App Credits", href: "#", icon: "🪙" },
-        { label: "Buy Cert Bundles", href: "#", icon: "🛒" },
-        { label: "Billing History", href: "#", icon: "💳" },
+        { label: "Buy App Credits", href: "/company/buy/credits", icon: "🪙" },
+        { label: "Buy Cert Bundles", href: "/company/buy/certs", icon: "🛒" },
+        { label: "Billing History", href: "/company/billing", icon: "💳" },
       ],
     },
   ],
   REVIEWER: [
     {
       items: [
-        { label: "Application Queue", href: "/reviewer", icon: "📥" },
-        { label: "Review History", href: "#", icon: "📚" },
+        { label: "Review Queue", href: "/reviewer", icon: "📋" },
+        { label: "Approved Courses", href: "/reviewer/approved", icon: "✅" },
+        { label: "Rejected", href: "/reviewer/rejected", icon: "❌" },
       ],
     },
   ],
