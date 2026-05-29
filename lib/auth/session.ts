@@ -1,5 +1,6 @@
 import "server-only";
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import type { Role } from "@prisma/client";
 import { createClient } from "@/lib/supabase/server";
 
@@ -22,23 +23,21 @@ export type SessionUser = {
 };
 
 export async function getCurrentUser(): Promise<SessionUser | null> {
+  // Always log incoming sb-* cookies so we can see what /company is actually receiving.
+  const cookieStore = await cookies();
+  const incomingSb = cookieStore
+    .getAll()
+    .filter((c) => c.name.startsWith("sb-"))
+    .map((c) => `${c.name}(len=${c.value.length})`);
+  console.info(`[getCurrentUser] sb-cookies-on-request=[${incomingSb.join(", ") || "(none)"}]`);
+
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
   if (!user) {
-    if (process.env.NODE_ENV === "development") {
-      const { cookies } = await import("next/headers");
-      const cookieStore = await cookies();
-      const sbCookies = cookieStore
-        .getAll()
-        .filter((c) => c.name.startsWith("sb-"))
-        .map((c) => `${c.name}(len=${c.value.length})`);
-      console.warn(
-        `[getCurrentUser] supabase.auth.getUser returned null. Request sb-* cookies: [${sbCookies.join(", ") || "(none)"}]`,
-      );
-    }
+    console.warn(`[getCurrentUser] getUser returned null despite ${incomingSb.length} sb-* cookies`);
     return null;
   }
 
