@@ -1,4 +1,3 @@
-import { signOut } from "@/lib/auth/actions";
 import { BrandMark } from "@/components/brand-mark";
 
 export default function ForbiddenPage() {
@@ -24,7 +23,7 @@ export default function ForbiddenPage() {
           .
         </p>
 
-        <form action={signOut} className="mt-6">
+        <form action="/api/auth/signout" method="POST" className="mt-6">
           <button
             type="submit"
             className="w-full rounded-md bg-ace py-2.5 text-sm font-bold text-navy transition hover:bg-ace-light"

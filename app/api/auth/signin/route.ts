@@ -1,15 +1,25 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { cookies } from "next/headers";
-import { createServerClient } from "@supabase/ssr";
+import { createClient } from "@supabase/supabase-js";
 import { prisma } from "@/lib/prisma";
 import { homePathFor } from "@/lib/auth/session";
+import {
+  signSession,
+  SESSION_COOKIE_NAME,
+  SESSION_COOKIE_OPTIONS,
+  SESSION_MAX_AGE_SECONDS,
+} from "@/lib/auth/session-cookie";
 
 /*
   POST /api/auth/signin
-  Route-handler sign-in. Uses the next/headers cookies() store so writes
-  flow through Next's official cookie API. Diagnostic logs print every
-  cookie the SDK tries to set + the final Set-Cookie header on the
-  response.
+
+  1. Validate credentials via supabase.auth.signInWithPassword.
+  2. Look up the user's role via Prisma.
+  3. Mint our own HMAC-signed session cookie.
+  4. Redirect to the role's home portal with the cookie attached.
+
+  Direct @supabase/supabase-js, not @supabase/ssr. The Supabase session is
+  thrown away after credential validation; our cookie is the source of
+  session truth from here on.
 */
 
 export const runtime = "nodejs";
@@ -25,30 +35,14 @@ export async function POST(request: NextRequest) {
 
   if (!email || !password) return redirectTo("/login?error=missing");
 
-  const cookieStore = await cookies();
-  let setAllCalls = 0;
-  const setNames: string[] = [];
-
-  const supabase = createServerClient(
+  const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll: () => cookieStore.getAll(),
-        setAll(cookiesToSet) {
-          setAllCalls += 1;
-          for (const { name, value, options } of cookiesToSet) {
-            setNames.push(name);
-            cookieStore.set(name, value, options);
-          }
-        },
-      },
-    },
+    { auth: { autoRefreshToken: false, persistSession: false } },
   );
 
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
   if (error || !data?.user) {
-    console.error("[signin] signInWithPassword failed", error?.message);
     return redirectTo("/login?error=invalid");
   }
 
@@ -56,19 +50,14 @@ export async function POST(request: NextRequest) {
     where: { id: data.user.id },
     select: { role: true },
   });
-  if (!row?.role) {
-    console.warn(`[signin] no role for ${data.user.id}`);
-    return redirectTo("/login?error=norole");
-  }
+  if (!row?.role) return redirectTo("/login?error=norole");
 
-  const target = homePathFor(row.role);
-  const sbCookies = cookieStore
-    .getAll()
-    .filter((c) => c.name.startsWith("sb-"))
-    .map((c) => c.name);
-  console.info(
-    `[signin] role=${row.role} setAll_calls=${setAllCalls} set_names=[${setNames.join(",")}] store_now=[${sbCookies.join(",")}] -> ${target}`,
-  );
-
-  return redirectTo(target);
+  const response = redirectTo(homePathFor(row.role));
+  response.cookies.set({
+    name: SESSION_COOKIE_NAME,
+    value: signSession({ userId: data.user.id, role: row.role }),
+    maxAge: SESSION_MAX_AGE_SECONDS,
+    ...SESSION_COOKIE_OPTIONS,
+  });
+  return response;
 }

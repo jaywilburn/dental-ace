@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { BrandMark } from "@/components/brand-mark";
-import { signOut } from "@/lib/auth/actions";
 import { cn } from "@/lib/utils";
 import type { NavSection } from "@/lib/nav/portal-nav";
 
@@ -73,7 +72,11 @@ export function PortalShell({
           ))}
         </nav>
 
-        <form action={signOut} className="border-t border-white/[0.07] p-4">
+        <form
+          action="/api/auth/signout"
+          method="POST"
+          className="border-t border-white/[0.07] p-4"
+        >
           <button
             type="submit"
             className="w-full rounded-md border border-white/15 bg-transparent px-3 py-2 text-[11px] font-semibold text-white/70 transition hover:border-white/30 hover:text-white"

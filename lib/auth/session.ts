@@ -2,17 +2,17 @@ import "server-only";
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import type { Role } from "@prisma/client";
-import { createClient } from "@/lib/supabase/server";
+import { prisma } from "@/lib/prisma";
+import { SESSION_COOKIE_NAME, verifySession } from "@/lib/auth/session-cookie";
 
 /*
-  Resolve the current user's session + role.
+  Read the current user from our HMAC-signed session cookie + a Prisma lookup
+  for the bits we don't put in the cookie (email, companyId). Returns null if:
+   - cookie missing, malformed, or expired
+   - role on disk has drifted from the role baked into the cookie
+   - the user record was deleted
 
-  Reads role from the JWT (app_metadata.role) first - that's the fast path,
-  populated by the Custom Access Token Hook in sql-migrations/0005. If the hook
-  isn't enabled yet (or the user was just created and their JWT hasn't been
-  refreshed), falls back to a SELECT on public.users.
-
-  Returns null if the user isn't signed in.
+  Layouts use requireRole(...) to bounce unauthenticated/role-mismatched users.
 */
 
 export type SessionUser = {
@@ -23,77 +23,35 @@ export type SessionUser = {
 };
 
 export async function getCurrentUser(): Promise<SessionUser | null> {
-  // Always log incoming sb-* cookies so we can see what /company is actually receiving.
   const cookieStore = await cookies();
-  const incomingSb = cookieStore
-    .getAll()
-    .filter((c) => c.name.startsWith("sb-"))
-    .map((c) => `${c.name}(len=${c.value.length})`);
-  console.info(`[getCurrentUser] sb-cookies-on-request=[${incomingSb.join(", ") || "(none)"}]`);
+  const raw = cookieStore.get(SESSION_COOKIE_NAME);
+  if (!raw) return null;
 
-  const supabase = await createClient();
-  const { data, error } = await supabase.auth.getUser();
-  const user = data?.user ?? null;
+  const payload = verifySession(raw.value);
+  if (!payload) return null;
 
-  if (!user) {
-    console.warn(
-      `[getCurrentUser] getUser returned null despite ${incomingSb.length} sb-* cookies; error=${error ? `${error.name}: ${error.message}` : "(none)"}`,
-    );
-    return null;
-  }
-
-  const jwtRole = user.app_metadata?.role as Role | undefined;
-  const jwtCompanyId = user.app_metadata?.company_id as string | null | undefined;
-
-  if (jwtRole) {
-    return {
-      id: user.id,
-      email: user.email ?? "",
-      role: jwtRole,
-      companyId: jwtCompanyId ?? null,
-    };
-  }
-
-  // Fallback: hook not enabled yet, look it up.
-  const { data: row } = await supabase
-    .from("users")
-    .select("role, company_id")
-    .eq("id", user.id)
-    .single();
-
-  if (!row?.role) return null;
+  const user = await prisma.user.findUnique({
+    where: { id: payload.userId },
+    select: { email: true, role: true, companyId: true },
+  });
+  if (!user) return null;
+  if (user.role !== payload.role) return null;
 
   return {
-    id: user.id,
-    email: user.email ?? "",
-    role: row.role as Role,
-    companyId: row.company_id ?? null,
+    id: payload.userId,
+    email: user.email,
+    role: user.role,
+    companyId: user.companyId,
   };
 }
 
-/*
-  Guard helper for portal layouts. Redirects to /login if no session, /403 if
-  the role doesn't match. Returns the session user when allowed.
-*/
 export async function requireRole(role: Role): Promise<SessionUser> {
   const user = await getCurrentUser();
-  if (!user) {
-    console.warn(`[requireRole:${role}] no session — redirecting to /login`);
-    redirect("/login");
-  }
-  if (user.role !== role) {
-    console.warn(
-      `[requireRole:${role}] mismatched role=${user.role} — redirecting to /403`,
-    );
-    redirect("/403");
-  }
+  if (!user) redirect("/login");
+  if (user.role !== role) redirect("/403");
   return user;
 }
 
-/*
-  Where each role's landing page lives. Used by the login flow and any
-  redirect-after-auth helpers.
-*/
 export function homePathFor(role: Role): string {
   switch (role) {
     case "CUSTOMER":
