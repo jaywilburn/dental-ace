@@ -59,6 +59,10 @@ export async function signIn(formData: FormData) {
       select: { role: true },
     });
 
+    console.info(
+      `[signIn] user=${data.user.id} email=${email} role=${row?.role ?? "(none)"} cookies=${sbCookies.length} -> ${row?.role ? homePathFor(row.role) : "/login?error=norole"}`,
+    );
+
     if (!row?.role) {
       redirect("/login?error=norole");
     }

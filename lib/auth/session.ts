@@ -64,8 +64,16 @@ export async function getCurrentUser(): Promise<SessionUser | null> {
 */
 export async function requireRole(role: Role): Promise<SessionUser> {
   const user = await getCurrentUser();
-  if (!user) redirect("/login");
-  if (user.role !== role) redirect("/403");
+  if (!user) {
+    console.warn(`[requireRole:${role}] no session — redirecting to /login`);
+    redirect("/login");
+  }
+  if (user.role !== role) {
+    console.warn(
+      `[requireRole:${role}] mismatched role=${user.role} — redirecting to /403`,
+    );
+    redirect("/403");
+  }
   return user;
 }
 

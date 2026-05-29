@@ -1,6 +1,5 @@
 import { redirect } from "next/navigation";
 import { BrandMark } from "@/components/brand-mark";
-import { signIn } from "@/lib/auth/actions";
 import { getCurrentUser, homePathFor } from "@/lib/auth/session";
 
 /*
@@ -26,7 +25,8 @@ export default async function LoginPage({
     <main className="flex min-h-screen items-center justify-center bg-navy p-8">
       <div className="w-full max-w-[380px]">
         <form
-          action={signIn}
+          action="/api/auth/signin"
+          method="POST"
           className="rounded-xl border border-white/10 bg-white/[0.05] p-7"
         >
           <div className="flex flex-col items-center gap-1">
