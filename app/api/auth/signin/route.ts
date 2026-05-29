@@ -1,26 +1,15 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 import { prisma } from "@/lib/prisma";
 import { homePathFor } from "@/lib/auth/session";
 
 /*
   POST /api/auth/signin
-
-  Route-handler sign-in. We use this instead of a server action because the
-  server-action + redirect path in Next 16 with Turbopack doesn't reliably
-  attach Set-Cookie headers from the @supabase/ssr setAll callback to the
-  303 response. Route handlers let us control the NextResponse cookies
-  directly, so the session always lands.
-
-  Flow:
-  1. Read email + password from form data.
-  2. Create a Supabase server client that writes auth cookies straight onto
-     this response.
-  3. signInWithPassword. If it fails, redirect back to /login?error=invalid.
-  4. Look up the public.users.role via Prisma (no RLS, fast).
-  5. Redirect to the role's home; the response already carries the auth
-     cookies, so the next request to /company / /reviewer / /admin reads
-     the session cleanly.
+  Route-handler sign-in. Uses the next/headers cookies() store so writes
+  flow through Next's official cookie API. Diagnostic logs print every
+  cookie the SDK tries to set + the final Set-Cookie header on the
+  response.
 */
 
 export const runtime = "nodejs";
@@ -31,25 +20,26 @@ export async function POST(request: NextRequest) {
   const email = String(form.get("email") ?? "").trim();
   const password = String(form.get("password") ?? "");
 
-  const redirectTo = (path: string) => NextResponse.redirect(`${origin}${path}`, 303);
+  const redirectTo = (path: string) =>
+    NextResponse.redirect(`${origin}${path}`, 303);
 
   if (!email || !password) return redirectTo("/login?error=missing");
 
-  // Start with a redirect to a placeholder; we'll rewrite the location below
-  // once we know where to send the user. NextResponse.redirect attaches the
-  // status + Location header. The Supabase SSR client below writes auth
-  // cookies straight onto `response.cookies`, which Set-Cookie's them.
-  const response = NextResponse.redirect(`${origin}/login`, 303);
+  const cookieStore = await cookies();
+  let setAllCalls = 0;
+  const setNames: string[] = [];
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        getAll: () => request.cookies.getAll(),
+        getAll: () => cookieStore.getAll(),
         setAll(cookiesToSet) {
+          setAllCalls += 1;
           for (const { name, value, options } of cookiesToSet) {
-            response.cookies.set({ name, value, ...options });
+            setNames.push(name);
+            cookieStore.set(name, value, options);
           }
         },
       },
@@ -58,6 +48,7 @@ export async function POST(request: NextRequest) {
 
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
   if (error || !data?.user) {
+    console.error("[signin] signInWithPassword failed", error?.message);
     return redirectTo("/login?error=invalid");
   }
 
@@ -66,10 +57,18 @@ export async function POST(request: NextRequest) {
     select: { role: true },
   });
   if (!row?.role) {
+    console.warn(`[signin] no role for ${data.user.id}`);
     return redirectTo("/login?error=norole");
   }
 
-  // Point the existing response (which carries the cookies) at the role's home.
-  response.headers.set("Location", `${origin}${homePathFor(row.role)}`);
-  return response;
+  const target = homePathFor(row.role);
+  const sbCookies = cookieStore
+    .getAll()
+    .filter((c) => c.name.startsWith("sb-"))
+    .map((c) => c.name);
+  console.info(
+    `[signin] role=${row.role} setAll_calls=${setAllCalls} set_names=[${setNames.join(",")}] store_now=[${sbCookies.join(",")}] -> ${target}`,
+  );
+
+  return redirectTo(target);
 }
