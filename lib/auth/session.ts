@@ -27,7 +27,20 @@ export async function getCurrentUser(): Promise<SessionUser | null> {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) return null;
+  if (!user) {
+    if (process.env.NODE_ENV === "development") {
+      const { cookies } = await import("next/headers");
+      const cookieStore = await cookies();
+      const sbCookies = cookieStore
+        .getAll()
+        .filter((c) => c.name.startsWith("sb-"))
+        .map((c) => `${c.name}(len=${c.value.length})`);
+      console.warn(
+        `[getCurrentUser] supabase.auth.getUser returned null. Request sb-* cookies: [${sbCookies.join(", ") || "(none)"}]`,
+      );
+    }
+    return null;
+  }
 
   const jwtRole = user.app_metadata?.role as Role | undefined;
   const jwtCompanyId = user.app_metadata?.company_id as string | null | undefined;
