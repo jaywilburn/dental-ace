@@ -127,7 +127,26 @@ pnpm exec prisma generate                                            # regenerat
 
 # Stripe (local webhook forwarding)
 stripe listen --forward-to localhost:3000/api/webhooks/stripe
+
+# Seed dev users (idempotent)
+pnpm seed
 ```
+
+---
+
+## Dev Test Credentials
+
+Seeded by `pnpm seed` against the live Supabase project. Use these to walk through end-to-end flows in local dev. **Dev-only. Rotate the admin password before any client demo and before transferring the repo.**
+
+| Role | Email | Password | Lands on |
+|------|-------|----------|----------|
+| ADMIN | `jay@wilburncreative.com` | `ChangeMeNow!2026` | `/admin` |
+| REVIEWER | `reviewer@dentalace.org` | `test1234` | `/reviewer` |
+| CUSTOMER | `customer@dentalace.org` | `test1234` | `/company` |
+
+The CUSTOMER seed is linked to **Texas Dental Association** (the test company), which is the company whose balance the mock-Stripe flow grants and whose applications populate the reviewer queue.
+
+If the admin password is rotated in Supabase Auth, update this table.
 
 ---
 
