@@ -37,7 +37,8 @@ export async function saveEventSessions(formData: FormData) {
   const eventId = String(formData.get("eventId") ?? "");
   if (!eventId) throw new Error("eventId required");
 
-  // Ownership check — RLS would also block but be explicit.
+  // Ownership check on the event. Prisma connects as the postgres role and
+  // bypasses RLS, so every cross-tenant guard has to live in app code.
   const event = await prisma.event.findFirst({
     where: { id: eventId, companyId },
     select: { id: true },
@@ -45,6 +46,18 @@ export async function saveEventSessions(formData: FormData) {
   if (!event) redirect("/company/events");
 
   const courseIds = formData.getAll("courseIds").map((v) => String(v));
+
+  // Verify every submitted courseId belongs to the caller's company before
+  // writing the join rows. The FK alone only checks existence, not ownership.
+  if (courseIds.length > 0) {
+    const owned = await prisma.accreditedCourse.count({
+      where: { id: { in: courseIds }, companyId },
+    });
+    if (owned !== courseIds.length) {
+      throw new Error("One or more courses do not belong to your company");
+    }
+  }
+
   await prisma.$transaction(async (tx) => {
     await tx.eventSession.deleteMany({ where: { eventId } });
     if (courseIds.length > 0) {

@@ -3,6 +3,7 @@
 import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { Prisma } from "@prisma/client";
 import { getCurrentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { uploadToStorage } from "@/lib/storage";
@@ -33,9 +34,19 @@ async function requireReviewer() {
   return user;
 }
 
-async function nextCourseIdNumber(year: number): Promise<string> {
+/**
+ * Compute the next ACE-YYYY-##### course id. MUST be called from inside a
+ * transaction that has already acquired a year-scoped advisory lock
+ * (pg_advisory_xact_lock(year)) — otherwise two concurrent approvals can
+ * compute the same number and collide on the unique constraint after
+ * external IO (PDF render + Storage upload) has happened.
+ */
+async function nextCourseIdNumber(
+  tx: Prisma.TransactionClient,
+  year: number,
+): Promise<string> {
   const prefix = `ACE-${year}-`;
-  const last = await prisma.accreditedCourse.findFirst({
+  const last = await tx.accreditedCourse.findFirst({
     where: { courseIdNumber: { startsWith: prefix } },
     orderBy: { courseIdNumber: "desc" },
     select: { courseIdNumber: true },
@@ -68,13 +79,59 @@ export async function approveApplication(formData: FormData) {
   const expiresAt = new Date(approvedAt);
   expiresAt.setFullYear(expiresAt.getFullYear() + 3);
   const year = approvedAt.getFullYear();
-
-  const courseIdNumber = await nextCourseIdNumber(year);
   const attendeeLinkToken = randomUUID();
   const appBase = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
-  const attendeeUrl = `${appBase}/attend/${attendeeLinkToken}`;
 
-  // Render assets first (outside the DB transaction, since these are external IO).
+  // Storage paths are keyed by applicationId, not Course ID — that way a
+  // retried approval or a race between two reviewers on different applications
+  // can never clobber each other's QR/PDF (upsert:true is idempotent at the
+  // applicationId level).
+  const qrStoragePath = `qrcodes/${application.id}.png`;
+  const pdfStoragePath = `approval-letters/${application.id}.pdf`;
+
+  // 1) Commit the DB transition first, with the Course ID generated UNDER a
+  //    year-scoped advisory lock so two reviewers can't compute the same id.
+  //    The application's PENDING status is also re-asserted via updateMany.
+  const courseIdNumber = await prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`select pg_advisory_xact_lock(${year})`;
+
+    const id = await nextCourseIdNumber(tx, year);
+
+    await tx.accreditedCourse.create({
+      data: {
+        applicationId: application.id,
+        companyId: application.companyId,
+        courseIdNumber: id,
+        approvedAt,
+        expiresAt,
+        attendeeLinkToken,
+        qrCodeUrl: qrStoragePath,
+        approvalLetterUrl: pdfStoragePath,
+        quizQuestions: data.quiz as unknown as object,
+      },
+    });
+
+    const updated = await tx.courseApplication.updateMany({
+      where: { id: application.id, status: "PENDING" },
+      data: {
+        status: "APPROVED",
+        reviewedById: reviewer.id,
+        reviewedAt: approvedAt,
+        reviewerNotes,
+      },
+    });
+    if (updated.count !== 1) {
+      throw new Error("Application status changed during approval");
+    }
+
+    return id;
+  });
+
+  // 2) Render and upload assets AFTER the row is committed. Using deterministic
+  //    paths means an upload failure is fully retryable — a follow-up approval
+  //    of the same applicationId is blocked (unique constraint), so the only
+  //    retry path is a maintenance job that re-renders for this applicationId.
+  const attendeeUrl = `${appBase}/attend/${attendeeLinkToken}`;
   const [qrPng, letterPdf] = await Promise.all([
     renderQrPng(attendeeUrl),
     renderApprovalLetterPdf({
@@ -88,47 +145,20 @@ export async function approveApplication(formData: FormData) {
     }),
   ]);
 
-  // Upload to Supabase Storage uploads bucket.
-  const [qrUpload, pdfUpload] = await Promise.all([
+  await Promise.all([
     uploadToStorage({
       kind: "uploads",
-      path: `qrcodes/${courseIdNumber}.png`,
+      path: qrStoragePath,
       body: qrPng,
       contentType: "image/png",
     }),
     uploadToStorage({
       kind: "uploads",
-      path: `approval-letters/${courseIdNumber}.pdf`,
+      path: pdfStoragePath,
       body: letterPdf,
       contentType: "application/pdf",
     }),
   ]);
-
-  // Persist accredited_courses + transition application status in a single transaction.
-  await prisma.$transaction(async (tx) => {
-    await tx.accreditedCourse.create({
-      data: {
-        applicationId: application.id,
-        companyId: application.companyId,
-        courseIdNumber,
-        approvedAt,
-        expiresAt,
-        attendeeLinkToken,
-        qrCodeUrl: qrUpload.storagePath,
-        approvalLetterUrl: pdfUpload.storagePath,
-        quizQuestions: data.quiz as unknown as object,
-      },
-    });
-    await tx.courseApplication.update({
-      where: { id: application.id },
-      data: {
-        status: "APPROVED",
-        reviewedById: reviewer.id,
-        reviewedAt: approvedAt,
-        reviewerNotes,
-      },
-    });
-  });
 
   // Approval email — log mode unless Resend is configured.
   const customerEmail = application.company.users[0]?.email;

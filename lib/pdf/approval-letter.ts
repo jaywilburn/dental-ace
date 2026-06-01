@@ -48,10 +48,11 @@ export async function renderApprovalLetterPdf(
         .fillColor("#E4C060")
         .text("ACE");
       doc
-        .fillColor("rgba(255,255,255,0.55)")
+        .fillColor("#FFFFFF", 0.55)
         .font("Helvetica")
         .fontSize(10)
-        .text("AADB Accredited Continuing Education Program", 56, 70);
+        .text("AADB Accredited Continuing Education Program", 56, 70)
+        .fillOpacity(1);
 
       doc.moveDown(2);
 
@@ -100,9 +101,13 @@ export async function renderApprovalLetterPdf(
           { lineGap: 4 },
         );
 
-      // Course detail box
-      doc.moveDown(1).rect(56, doc.y, doc.page.width - 112, 96).fill("#F4F7FB");
-      const boxTop = doc.y - 96;
+      // Course detail box.
+      // PDFKit's .rect().fill() does NOT advance doc.y, so capture the rect's
+      // top BEFORE drawing it and place subsequent text relative to that anchor.
+      doc.moveDown(1);
+      const boxTop = doc.y;
+      const boxHeight = 96;
+      doc.rect(56, boxTop, doc.page.width - 112, boxHeight).fill("#F4F7FB");
       doc
         .fillColor(NAVY)
         .font("Helvetica-Bold")
@@ -114,7 +119,6 @@ export async function renderApprovalLetterPdf(
         .fillColor(NAVY)
         .text(input.courseTitle, 72, boxTop + 30, { width: doc.page.width - 144 });
       doc
-        .moveDown(0.4)
         .fontSize(10)
         .fillColor(TEXT_MUTED)
         .text(`Course ID:  ${input.courseIdNumber}`, 72, boxTop + 56)
@@ -122,6 +126,8 @@ export async function renderApprovalLetterPdf(
         .text(
           `Valid from ${formatDate(input.approvedAt)} through ${formatDate(input.expiresAt)}`,
         );
+      // Advance the cursor past the box so subsequent moveDown() lands below it.
+      doc.y = boxTop + boxHeight + 12;
 
       doc
         .moveDown(2)

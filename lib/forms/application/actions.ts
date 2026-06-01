@@ -212,6 +212,9 @@ export async function submitApplication(formData: FormData) {
   const fullData = applicationDataSchema.parse(draft.applicationData);
 
   const submittedAt = new Date();
+  // Tracks whether the expedited pool actually paid; emails + downstream logs
+  // should reflect what the DB committed, not what the form requested.
+  let appliedExpedited = false;
 
   // Atomic credit consumption + status transition.
   await prisma.$transaction(async (tx) => {
@@ -223,6 +226,7 @@ export async function submitApplication(formData: FormData) {
     });
 
     if (useExpedited && company.expeditedCredits > 0) {
+      appliedExpedited = true;
       await tx.company.update({
         where: { id: companyId },
         data: { expeditedCredits: { decrement: 1 } },
@@ -236,18 +240,25 @@ export async function submitApplication(formData: FormData) {
       throw new Error("No application credits available");
     }
 
-    await tx.courseApplication.update({
-      where: { id: applicationId },
+    // updateMany so we can scope by status — protects against a concurrent
+    // second submit (rapid double-click, retried tab) sneaking past the
+    // pre-tx findFirst and double-spending a credit. The companyId scope is
+    // belt-and-braces; the pre-tx find already enforced it.
+    const updated = await tx.courseApplication.updateMany({
+      where: { id: applicationId, companyId, status: "DRAFT" },
       data: {
         status: "PENDING",
         courseTitle: fullData.courseTitle,
         ceHours: fullData.ceCreditHours,
         courseType: fullData.subjectMatter,
         deliveryMethod: fullData.deliveryFormat,
-        isExpedited: useExpedited && company.expeditedCredits > 0,
+        isExpedited: appliedExpedited,
         submittedAt,
       },
     });
+    if (updated.count !== 1) {
+      throw new Error("Application was already submitted");
+    }
   });
 
   // Fire reviewer notification email (log mode until Resend domain is verified).
@@ -267,7 +278,7 @@ export async function submitApplication(formData: FormData) {
           ceHours: fullData.ceCreditHours,
           deliveryFormat: fullData.deliveryFormat,
           submittedAt: submittedAt.toLocaleString(),
-          isExpedited: useExpedited,
+          isExpedited: appliedExpedited,
           reviewUrl: `${process.env.NEXT_PUBLIC_APP_URL ?? ""}/reviewer/${applicationId}`,
         }),
         react: ApplicationSubmittedEmail({
@@ -277,7 +288,7 @@ export async function submitApplication(formData: FormData) {
           ceHours: fullData.ceCreditHours,
           deliveryFormat: fullData.deliveryFormat,
           submittedAt: submittedAt.toLocaleString(),
-          isExpedited: useExpedited,
+          isExpedited: appliedExpedited,
           reviewUrl: `${process.env.NEXT_PUBLIC_APP_URL ?? ""}/reviewer/${applicationId}`,
         }),
       });
