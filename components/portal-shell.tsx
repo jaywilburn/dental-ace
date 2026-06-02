@@ -1,6 +1,7 @@
+import Link from "next/link";
 import { BrandMark } from "@/components/brand-mark";
 import { SidebarNav } from "@/components/sidebar-nav";
-import type { NavSection } from "@/lib/nav/portal-nav";
+import type { NavItem, NavSection } from "@/lib/nav/portal-nav";
 
 /*
   Two-column portal shell: navy sidebar + light main area.
@@ -10,6 +11,8 @@ import type { NavSection } from "@/lib/nav/portal-nav";
     SidebarNav highlights the active item from the current path
   - `product` switches the brand wordmark (ace / pro / ver)
   - `userInitials` renders the gold avatar; `userName`/`userRole` go below it
+  - `switchLinks` / `homeHref` render a footer above Sign Out (product portals
+    only): links to the account's other products, then "Back to Home"
 */
 export function PortalShell({
   nav,
@@ -17,6 +20,8 @@ export function PortalShell({
   userInitials,
   userName,
   userRole,
+  switchLinks,
+  homeHref,
   children,
 }: {
   nav: NavSection[];
@@ -24,6 +29,8 @@ export function PortalShell({
   userInitials: string;
   userName: string;
   userRole: string;
+  switchLinks?: NavItem[];
+  homeHref?: string;
   children: React.ReactNode;
 }) {
   return (
@@ -44,6 +51,37 @@ export function PortalShell({
         </div>
 
         <SidebarNav nav={nav} />
+
+        {(switchLinks?.length || homeHref) && (
+          <div className="border-t border-white/[0.07] px-2 py-2">
+            {switchLinks?.length ? (
+              <>
+                <div className="px-2 pb-1 pt-1 font-mono text-[9px] uppercase tracking-[2px] text-white/20">
+                  Switch product
+                </div>
+                {switchLinks.map((link) => (
+                  <Link
+                    key={link.href}
+                    href={link.href}
+                    className="flex items-center gap-2 rounded-md px-2 py-1.5 text-[11px] font-medium text-white/50 transition hover:bg-white/[0.04] hover:text-white"
+                  >
+                    <span className="text-sm">{link.icon}</span>
+                    {link.label}
+                  </Link>
+                ))}
+              </>
+            ) : null}
+            {homeHref ? (
+              <Link
+                href={homeHref}
+                className="mt-0.5 flex items-center gap-2 rounded-md px-2 py-1.5 text-[11px] font-medium text-white/50 transition hover:bg-white/[0.04] hover:text-white"
+              >
+                <span className="text-sm">←</span>
+                Back to Home
+              </Link>
+            ) : null}
+          </div>
+        )}
 
         <form
           action="/api/auth/signout"

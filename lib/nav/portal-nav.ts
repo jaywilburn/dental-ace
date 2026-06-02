@@ -94,3 +94,47 @@ export const portalNav: Record<PortalArea, NavSection[]> = {
 export function navFor(area: PortalArea): NavSection[] {
   return portalNav[area];
 }
+
+/*
+  Cross-product switching shown in the sidebar footer (above Sign Out) on the
+  product portals. There are three products — DentalACE, ProTrack, Verify — and
+  an account can hold more than one. From inside one product we surface links to
+  the OTHER products the account is entitled to, plus a "Back to Home" link to
+  the hub. Staff areas (Reviewer, Admin) are not products and don't appear here.
+*/
+export type ProductKey = "dentalace" | "protrack" | "verify";
+
+type ProductEntry = NavItem & { key: ProductKey };
+
+const PRODUCTS: ProductEntry[] = [
+  { key: "dentalace", label: "DentalACE", href: "/company", icon: "🎓" },
+  { key: "protrack", label: "ProTrack", href: "/protrack", icon: "📊" },
+  { key: "verify", label: "Verify", href: "/verify", icon: "🏛" },
+];
+
+/** The home hub. Lives above Sign Out on every product portal. */
+export const BACK_TO_HOME: NavItem = { label: "Back to Home", href: "/home", icon: "←" };
+
+/**
+ * The OTHER products this account can open, excluding the one it's currently in.
+ * Entitlements: DentalACE needs a company, ProTrack is the baseline every
+ * account has, Verify is the admin-granted entitlement (its route ships in
+ * Phase 3, so this stays empty until both the grant and the route exist).
+ */
+export function otherProductLinks(
+  user: { companyId: string | null; verifyAccess: boolean },
+  current: ProductKey,
+): NavItem[] {
+  return PRODUCTS.filter((p) => p.key !== current)
+    .filter((p) => {
+      switch (p.key) {
+        case "dentalace":
+          return user.companyId != null;
+        case "protrack":
+          return true;
+        case "verify":
+          return user.verifyAccess;
+      }
+    })
+    .map(({ label, href, icon }) => ({ label, href, icon }));
+}

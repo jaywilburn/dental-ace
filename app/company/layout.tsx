@@ -1,5 +1,5 @@
 import { PortalShell } from "@/components/portal-shell";
-import { navFor } from "@/lib/nav/portal-nav";
+import { navFor, otherProductLinks, BACK_TO_HOME } from "@/lib/nav/portal-nav";
 import { requireDentalAce } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 
@@ -23,6 +23,8 @@ export default async function CompanyLayout({
       userInitials={initialsFromName(company?.name ?? user.email)}
       userName={company?.name ?? user.email}
       userRole="CE Provider"
+      switchLinks={otherProductLinks(user, "dentalace")}
+      homeHref={BACK_TO_HOME.href}
     >
       {children}
     </PortalShell>

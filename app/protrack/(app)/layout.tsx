@@ -1,5 +1,5 @@
 import { PortalShell } from "@/components/portal-shell";
-import { navFor } from "@/lib/nav/portal-nav";
+import { navFor, otherProductLinks, BACK_TO_HOME } from "@/lib/nav/portal-nav";
 import { requireUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { licenseTypeShort, stateName } from "@/lib/protrack/reference";
@@ -39,6 +39,8 @@ export default async function ProtrackAppLayout({
       userInitials={initialsFromName(fullName)}
       userName={userName}
       userRole={userRole}
+      switchLinks={otherProductLinks(user, "protrack")}
+      homeHref={BACK_TO_HOME.href}
     >
       {children}
     </PortalShell>
