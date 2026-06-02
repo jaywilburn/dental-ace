@@ -17,6 +17,7 @@ import {
 } from "@/lib/forms/application/schemas";
 import { sendEmail } from "@/lib/email/send";
 import ApplicationSubmittedEmail from "@/emails/application-submitted";
+import { chooseCreditPool } from "@/lib/billing/credit-pool";
 
 /*
   Server actions for the multi-step course application form.
@@ -225,13 +226,18 @@ export async function submitApplication(formData: FormData) {
       select: { applicationCredits: true, expeditedCredits: true },
     });
 
-    if (useExpedited && company.expeditedCredits > 0) {
+    const pool = chooseCreditPool({
+      useExpedited,
+      applicationCredits: company.applicationCredits,
+      expeditedCredits: company.expeditedCredits,
+    });
+    if (pool === "expedited") {
       appliedExpedited = true;
       await tx.company.update({
         where: { id: companyId },
         data: { expeditedCredits: { decrement: 1 } },
       });
-    } else if (company.applicationCredits > 0) {
+    } else if (pool === "standard") {
       await tx.company.update({
         where: { id: companyId },
         data: { applicationCredits: { decrement: 1 } },
