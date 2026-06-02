@@ -1,35 +1,83 @@
+import Link from "next/link";
 import { PageHeader } from "@/components/portal-shell";
 import { requireDentalAce } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
+import { createSignedUrl } from "@/lib/storage";
+import { Prisma } from "@prisma/client";
 
 /*
-  Certificate Log — Phase 1 placeholder. Once the cert engine ships in
-  Weeks 5-6, this page lists every issued_certificates row for the company.
-  For now we just show a friendly "no certs yet" + total count if any exist.
+  Certificate Log — real listing of issued (passed) certificates for the
+  company, searchable by attendee name/email, paginated, with short-lived
+  signed-URL PDF downloads. Failed quiz attempts (passed=false) are excluded.
 */
 
-export default async function CertificateLogPage() {
-  const user = await requireDentalAce();
+const PAGE_SIZE = 25;
 
-  const certs = user.companyId
-    ? await prisma.issuedCertificate.findMany({
-        where: { companyId: user.companyId },
-        orderBy: { issuedAt: "desc" },
-        take: 100,
-      })
-    : [];
+export default async function CertificateLogPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string; page?: string }>;
+}) {
+  const user = await requireDentalAce();
+  const { q, page } = await searchParams;
+  const pageNum = Math.max(1, Number(page ?? "1") || 1);
+  const query = (q ?? "").trim();
+
+  const where: Prisma.IssuedCertificateWhereInput = {
+    companyId: user.companyId ?? "",
+    passed: true,
+    ...(query
+      ? {
+          OR: [
+            { attendeeName: { contains: query, mode: "insensitive" } },
+            { attendeeEmail: { contains: query, mode: "insensitive" } },
+          ],
+        }
+      : {}),
+  };
+
+  const [total, certs] = await Promise.all([
+    prisma.issuedCertificate.count({ where }),
+    prisma.issuedCertificate.findMany({
+      where,
+      orderBy: { issuedAt: "desc" },
+      skip: (pageNum - 1) * PAGE_SIZE,
+      take: PAGE_SIZE,
+    }),
+  ]);
+
+  const rows = await Promise.all(
+    certs.map(async (cert) => ({
+      cert,
+      downloadUrl: cert.certPdfUrl
+        ? await createSignedUrl("certs", cert.certPdfUrl).catch(() => null)
+        : null,
+    })),
+  );
+
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   return (
     <>
       <PageHeader
         title="Certificate Log"
-        subtitle={`${certs.length} certificate${certs.length === 1 ? "" : "s"} issued · Full search lands when the cert engine ships in Weeks 5-6.`}
+        subtitle={`${total} certificate${total === 1 ? "" : "s"} issued`}
       />
+
+      <form className="mb-4" action="/company/certificates" method="get">
+        <input
+          type="search"
+          name="q"
+          defaultValue={query}
+          placeholder="Search attendee name or email"
+          className="w-full max-w-sm rounded-md border border-border px-3 py-2 text-[13px]"
+        />
+      </form>
+
       <div className="overflow-hidden rounded-lg border border-border bg-white">
-        {certs.length === 0 ? (
+        {rows.length === 0 ? (
           <p className="px-4 py-10 text-center text-[12px] text-text-muted">
-            No certificates issued yet. Once an attendee completes one of your
-            accredited courses, they&apos;ll appear here.
+            {query ? "No certificates match your search." : "No certificates issued yet."}
           </p>
         ) : (
           <table className="w-full text-[12px]">
@@ -37,29 +85,30 @@ export default async function CertificateLogPage() {
               <tr className="border-b border-border bg-surface text-left text-[10px] uppercase tracking-wide text-text-muted">
                 <th className="px-4 py-2 font-semibold">Issued</th>
                 <th className="px-4 py-2 font-semibold">Attendee</th>
-                <th className="px-4 py-2 font-semibold">Course</th>
+                <th className="px-4 py-2 font-semibold">Email</th>
                 <th className="px-4 py-2 font-semibold">License</th>
-                <th className="px-4 py-2 font-semibold">PDF</th>
+                <th className="px-4 py-2 font-semibold">Certificate</th>
               </tr>
             </thead>
             <tbody>
-              {certs.map((cert) => (
+              {rows.map(({ cert, downloadUrl }) => (
                 <tr key={cert.id} className="border-b border-border last:border-b-0">
                   <td className="px-4 py-2 text-text-muted">
-                    {cert.issuedAt.toLocaleDateString("en-US", {
-                      month: "short",
-                      day: "numeric",
-                    })}
+                    {cert.issuedAt.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
                   </td>
                   <td className="px-4 py-2 font-medium text-navy">{cert.attendeeName}</td>
-                  <td className="px-4 py-2 text-text-mid">
-                    {cert.courseType ?? "—"}
-                  </td>
+                  <td className="px-4 py-2 text-text-mid">{cert.attendeeEmail}</td>
                   <td className="px-4 py-2 text-text-muted">
-                    {cert.licenseType} · {cert.licenseNumber}
+                    {cert.licenseType ?? ""} {cert.licenseNumber ?? ""}
                   </td>
-                  <td className="px-4 py-2 text-text-muted">
-                    {cert.certPdfUrl ? "✓ Stored" : "—"}
+                  <td className="px-4 py-2">
+                    {downloadUrl ? (
+                      <a href={downloadUrl} className="text-ace underline" target="_blank" rel="noopener noreferrer">
+                        Download PDF
+                      </a>
+                    ) : (
+                      <span className="text-text-muted">Processing</span>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -67,6 +116,24 @@ export default async function CertificateLogPage() {
           </table>
         )}
       </div>
+
+      {totalPages > 1 && (
+        <div className="mt-4 flex items-center justify-between text-[12px] text-text-muted">
+          <span>Page {pageNum} of {totalPages}</span>
+          <div className="flex gap-2">
+            {pageNum > 1 && (
+              <Link className="rounded-md border border-border px-3 py-1" href={`/company/certificates?${new URLSearchParams({ ...(query ? { q: query } : {}), page: String(pageNum - 1) })}`}>
+                Previous
+              </Link>
+            )}
+            {pageNum < totalPages && (
+              <Link className="rounded-md border border-border px-3 py-1" href={`/company/certificates?${new URLSearchParams({ ...(query ? { q: query } : {}), page: String(pageNum + 1) })}`}>
+                Next
+              </Link>
+            )}
+          </div>
+        </div>
+      )}
     </>
   );
 }
