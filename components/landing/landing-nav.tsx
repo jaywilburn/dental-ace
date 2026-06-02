@@ -24,6 +24,9 @@ const navLinks: { label: string; href: string; color?: "ace" | "pro" | "ver" }[]
 export function LandingNav() {
   return (
     <nav className="sticky top-0 z-50 flex h-16 items-center justify-between border-b border-white/[0.07] bg-navy/95 px-5 backdrop-blur md:px-10">
+      {/* Links are absolutely centered on the viewport so the unequal widths of
+          the brand mark (left) and Sign In button (right) don't pull them off
+          center, which justify-between alone would do. */}
       <div className="flex items-center gap-3">
         <span className="font-serif text-xl font-bold text-white">
           Dental<span className="text-ace-light">ACE</span> One
@@ -33,7 +36,7 @@ export function LandingNav() {
         </span>
       </div>
 
-      <div className="hidden items-center gap-1 md:flex">
+      <div className="absolute left-1/2 top-1/2 hidden -translate-x-1/2 -translate-y-1/2 items-center gap-1 md:flex">
         {navLinks.map((link) => (
           <a
             key={link.href}
