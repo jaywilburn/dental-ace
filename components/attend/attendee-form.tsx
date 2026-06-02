@@ -50,7 +50,7 @@ export function AttendeeForm({ token, quiz }: { token: string; quiz: PublicQuizQ
   }
 
   if (result) {
-    return <ResultView result={result} onRetake={() => { setResult(null); setStep(2); setAnswers(quiz.map(() => null)); }} />;
+    return <ResultView result={result} quiz={quiz} onRetake={() => { setResult(null); setStep(2); setAnswers(quiz.map(() => null)); }} />;
   }
 
   const allAnswered = answers.every(Boolean);
@@ -126,7 +126,7 @@ export function AttendeeForm({ token, quiz }: { token: string; quiz: PublicQuizQ
   );
 }
 
-function ResultView({ result, onRetake }: { result: AttendResult; onRetake: () => void }) {
+function ResultView({ result, quiz, onRetake }: { result: AttendResult; quiz: PublicQuizQuestion[]; onRetake: () => void }) {
   switch (result.status) {
     case "passed":
       return <Banner tone="ok" title="You passed!" body="Your certificate is on its way by email." />;
@@ -135,7 +135,16 @@ function ResultView({ result, onRetake }: { result: AttendResult; onRetake: () =
         <div className="space-y-4">
           <Banner tone="warn" title="Not passed yet" body={result.canRetake ? "You can retake the quiz once." : "You have used all attempts for this course."} />
           {result.correctAnswers && (
-            <p className="text-sm text-slate-600">The correct answers have been recorded for your records.</p>
+            <div className="space-y-2 rounded-md border border-border bg-surface p-3">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-text-muted">Correct answers</p>
+              <ol className="space-y-1 text-sm text-slate-700">
+                {result.correctAnswers.map((ca, i) => (
+                  <li key={i}>
+                    {i + 1}. {ca.type === "TF" ? ca.correctAnswer : answerText(quiz[i], ca.correctIndex)}
+                  </li>
+                ))}
+              </ol>
+            </div>
           )}
           {result.canRetake && (
             <button onClick={onRetake} className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white">
@@ -157,6 +166,10 @@ function ResultView({ result, onRetake }: { result: AttendResult; onRetake: () =
     default:
       return <Banner tone="warn" title="Check your entries" body="Some details were missing or invalid." />;
   }
+}
+
+function answerText(question: PublicQuizQuestion | undefined, correctIndex: number): string {
+  return question?.type === "MC" ? (question.options[correctIndex] ?? "") : "";
 }
 
 function Field({ label, value, onChange, type = "text" }: { label: string; value: string; onChange: (v: string) => void; type?: string }) {
