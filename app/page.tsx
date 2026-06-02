@@ -34,27 +34,27 @@ export default function LandingPage() {
             </>
           }
           audience="For CE course providers and dental educators"
-          description="The AADB Accredited Continuing Education program, fully digitized. Submit applications, manage course assets, issue QR-coded certificates, and track attendee completions all in one place. Replaces WordPress, Typeform, Zapier, and manual spreadsheets."
+          description="The AADB Accredited Continuing Education program, fully digitized. Apply, get approved, issue QR-coded certificates, and track completions in one place. It replaces the WordPress, Typeform, Zapier, and spreadsheet stack you hold together by hand."
           features={[
             {
               lead: "Get Your CE Courses AADB-Accredited Fast.",
-              body: "Submit your course application through a guided 5-step online process. Upload your materials, build your quiz, and get in front of an AADB reviewer without the paperwork bottleneck. Approved courses receive an official Course ID, an approval letter, and a scannable QR code so your accreditation is verifiable the moment it is issued.",
+              body: "A guided 5-step application, no paperwork bottleneck. Approved courses get an official Course ID, an approval letter, and a scannable QR code the moment they are issued.",
             },
             {
               lead: "Deliver Certificates Automatically at Scale.",
-              body: "Once your course is approved, attendees complete it, pass the quiz, and receive a branded, board-recognized CE certificate as a PDF, delivered by email the moment they finish. No manual processing. No chasing paperwork. You issue certificates in volume without adding a single administrative step.",
+              body: "Attendees finish, pass the quiz, and receive a branded, board-recognized certificate by email instantly. You issue thousands without adding a single administrative step.",
             },
             {
               lead: "A Single Dashboard to Manage Everything.",
-              body: "Track your active courses, certificate balance, application credits, and every certificate issued, all from one portal. Real-time activity logs show you exactly where your program stands. When your cert balance gets low, the system alerts you automatically so you never interrupt service to attendees.",
+              body: "Track active courses, certificate balance, application credits, and every certificate issued from one portal. When your balance runs low, the system warns you before service to attendees is ever interrupted.",
             },
             {
               lead: "Your Courses Feed Directly Into ProTrack.",
-              body: "Every certificate issued through Dental ACE syncs automatically to ProTrack, the CE compliance tool used by dentists, hygienists, and dental assistants across all 50 states. That means your course credit lands in your attendees' license trackers without any action on their part. More value delivered. More reasons to choose your courses.",
+              body: "Every certificate you issue syncs automatically into ProTrack, the CE tracker used by dentists, hygienists, and assistants in all 50 states. Your credit lands in attendees' license records with zero effort on their part, one more reason to choose your courses.",
             },
             {
               lead: "Built for the Way Dental Education Actually Works.",
-              body: "Dental ACE handles in-person, online, and hybrid delivery formats. Courses support multiple presenters, co-creators, and full commercial disclosure documentation, matching the standards dental companies and associations already operate under. Whether you are a regional association running live events or a company offering on-demand online content, the platform is built to fit your workflow.",
+              body: "In-person, online, or hybrid, with multiple presenters, co-creators, and full commercial disclosure. Whether you run live regional events or on-demand content, the platform fits your workflow.",
             },
           ]}
           ctaLabel="Start your accreditation"
@@ -70,31 +70,31 @@ export default function LandingPage() {
           label="Product 02 · CE Tracking"
           name="ProTrack"
           audience="For dentists, hygienists & dental assistants"
-          description="Your personal CE dashboard, free forever. Track hours against your state's exact requirements across all categories. Upload certificates from any provider. Stay audit-ready from the moment you log in."
+          description="Your personal CE dashboard, free forever. Track hours against your state's exact requirements across every category, upload certificates from any provider, and stay audit-ready from the moment you log in."
           features={[
             {
               lead: "Your CE Hours. One Dashboard. Always Current.",
-              body: "ProTrack gives dentists, hygienists, and dental assistants a single place to see exactly where they stand on CE requirements for their state. Hours are broken down by required category, progress bars update in real time, and the system tells you not just how many hours you have, but which specific categories still need work and how much time you have left.",
+              body: "See exactly where you stand on your state's requirements. Hours break down by category, progress updates in real time, and ProTrack tells you which categories still need work and how long you have left.",
             },
             {
               lead: "Dental ACE Certificates Sync Automatically. No Upload Needed.",
-              body: "Every time you complete a course through an AADB-accredited provider, that certificate lands in your ProTrack record automatically, matched by license number. No manual entry, no uploading PDFs, no chasing paper. You take the course, the hours appear. For any certificate outside of Dental ACE, upload it once and ProTrack maps it to the right category.",
+              body: "Finish a course through any AADB-accredited provider and the certificate lands in your record automatically, matched by license number. For anything earned elsewhere, upload it once and ProTrack maps it to the right category.",
             },
             {
               lead: "Built for All 50 States, All Three License Types.",
-              body: "ProTrack knows the CE requirements for every state and every license type, whether you are a DDS, RDH, or DA. It tracks your primary state by default and supports multiple state licenses at the same time, each with its own progress tracker, renewal date, and compliance status.",
+              body: "DDS, RDH, or DA, ProTrack knows your state's requirements and tracks multiple license states at once, each with its own progress, renewal date, and compliance status.",
             },
             {
               lead: "Automated Reminders So a Deadline Never Catches You Off Guard.",
-              body: "ProTrack sends renewal reminders at 90, 60, 30, and 7 days out. It also fires category gap alerts when a required category has zero hours with six months left, and in-person-only alerts for requirements like sedation and medical emergencies that cannot be completed online. You set it and the system watches the clock for you.",
+              body: "Renewal reminders at 90, 60, 30, and 7 days. Category gap alerts when a required category is still empty with six months left. In-person-only alerts for requirements like sedation that cannot be met online.",
             },
             {
               lead: "Export an Audit-Ready Report in One Click.",
-              body: "If your state board ever calls, ProTrack generates a formatted CE compliance PDF in one click. It includes your licensee information, your full certificate log, category breakdown, hours completed versus required, and any gaps, exactly what a dental board auditor needs to see. Your records are always organized and always ready.",
+              body: "If your board ever calls, generate a formatted compliance PDF instantly: your information, full certificate log, category breakdown, hours completed versus required, and any gaps, exactly what an auditor needs to see.",
             },
           ]}
           ctaLabel="Create free account"
-          ctaHref="/protrack/register"
+          ctaHref="/signup"
           mockup={<MockupProTrack />}
         />
 
@@ -104,27 +104,27 @@ export default function LandingPage() {
           label="Product 03 · Board Auditing"
           name="Verify"
           audience="For state dental boards, provisioned by AADB"
-          description="Replace your paper-based CE audit process entirely. Run a random audit on any percentage of your licensees with one click. Deficiencies surface instantly, notices go out in bulk, and every audit is fully documented for your records."
+          description="Replace your paper-based CE audit process entirely. Run a random audit on any percentage of your licensees in one click. Deficiencies surface instantly, notices go out in bulk, and every audit is fully documented."
           features={[
             {
               lead: "Run a Randomized CE Audit in Seconds, Not Weeks.",
-              body: "Verify gives state dental boards a one-click audit trigger that randomly selects a percentage of active licensees, pulls their live CE records directly from ProTrack, and returns full compliance results instantly. No spreadsheets, no manual record requests, no paper. A board with 8,400 active licensees can audit a 10% random sample and have deficiency results in hand before the end of the day.",
+              body: "One click randomly selects a percentage of active licensees, pulls their live CE records from ProTrack, and returns full compliance results instantly. No spreadsheets, no record requests, no paper. Audit a 10% sample and have deficiency results in hand the same day.",
             },
             {
               lead: "See Every Licensee's CE Status in One Place.",
-              body: "The Verify dashboard shows every active licensee in the board's state, broken down by compliance status, license type, and deficiency category. Boards can see at a glance how many licensees are fully compliant, in progress, or deficient, and drill into any individual record to see exactly which hours and categories are missing, backed by verified certificates pulled directly from ProTrack.",
+              body: "The dashboard shows every active licensee by compliance status, license type, and deficiency category. Drill into any record to see exactly which hours and categories are missing, backed by verified certificates pulled straight from ProTrack.",
             },
             {
               lead: "Send Personalized Deficiency Notices in Bulk, Automatically.",
-              body: "When an audit surfaces deficiencies, boards send notices to every deficient licensee in one action. Each notice is personalized with the licensee's specific missing hours, missing categories, and response deadline. Follow-up reminders fire automatically at 30 days and a final warning goes out at 7 days, all without any additional action from the board.",
+              body: "Notify every deficient licensee in one action, each notice personalized with their specific missing hours, categories, and response deadline. Follow-up reminders fire at 30 days and a final warning at 7, with no further action from the board.",
             },
             {
               lead: "Deficiencies Resolve Themselves. The Board Just Watches.",
-              body: "When a deficient licensee uploads their missing certificates to ProTrack, Verify detects the resolution automatically through a daily sync and closes the deficiency without the board lifting a finger. Each morning, the board receives a summary showing how many deficiencies resolved overnight, how many are still pending, and how many days remain until the deadline.",
+              body: "When a licensee uploads their missing certificates to ProTrack, a daily sync detects it and closes the deficiency on its own. Each morning the board gets a summary: how many resolved overnight, how many are pending, and how many days remain.",
             },
             {
               lead: "Export a Complete Audit Record for Any Batch or Licensee.",
-              body: "Verify generates formatted PDF reports for any audit batch or individual licensee record, including compliance status, certificate log, missing hours, notice history, and resolution timeline. Every notice sent is logged with a timestamp, batch ID, and notice type, giving boards a full, defensible audit trail if a licensing decision is ever challenged.",
+              body: "Generate formatted PDF reports for any batch or licensee, with compliance status, certificate log, missing hours, notice history, and resolution timeline. Every notice is logged with a timestamp and batch ID, a defensible trail if a decision is ever challenged.",
             },
           ]}
           ctaLabel="Request board access"

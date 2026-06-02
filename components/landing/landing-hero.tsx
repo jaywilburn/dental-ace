@@ -37,24 +37,25 @@ export function LandingHero() {
       <p className="relative z-10 mb-5 font-mono text-[11px] uppercase tracking-[3px] text-ace-light">
         AADB · Dental CE Platform · dentalace.org
       </p>
-      <h1 className="relative z-10 mb-4 text-balance font-serif text-[38px] font-bold leading-[1.08] text-white md:text-[58px]">
-        The dental CE platform
+      <h1 className="relative z-10 mb-4 text-balance font-serif text-[clamp(1.875rem,6vw,3.625rem)] font-bold leading-[1.08] text-white">
+        Dental continuing education,
         <br />
-        built for <span className="text-ace-light">everyone in dentistry</span>
+        <span className="text-ace-light">accredited by the AADB</span>
       </h1>
-      <p className="relative z-10 mx-auto mb-12 max-w-[520px] text-pretty text-base font-light leading-relaxed text-white/45 md:text-lg">
-        From course accreditation to CE tracking to board compliance: three
-        connected tools, one platform, built with the AADB.
+      <p className="relative z-10 mx-auto mb-12 max-w-[520px] text-pretty text-base font-light leading-relaxed text-white/65 md:text-lg">
+        Accredit your courses, issue certificates automatically, and feed every
+        credit into your attendees' license records. One connected platform for
+        CE providers, clinicians, and state boards.
       </p>
 
       <p className="relative z-10 mb-1.5 text-base font-semibold text-white md:text-[17px]">
-        Who are you here for?
+        Where do you fit?
       </p>
-      <p className="relative z-10 mb-9 text-[13px] text-white/35">
-        Select your role below to get started
+      <p className="relative z-10 mb-9 text-[13px] text-white/55">
+        Choose your starting point below
       </p>
 
-      <div className="relative z-10 mx-auto grid max-w-[1100px] gap-4 px-0 md:grid-cols-3">
+      <div className="relative z-10 mx-auto grid max-w-[1100px] gap-5 px-0 md:grid-cols-3">
         <ProductCard
           color="ace"
           tag="Accreditation"
@@ -64,13 +65,11 @@ export function LandingHero() {
             </>
           }
           audience="For CE providers & educators"
-          description="Accredit your continuing education courses with the AADB. Submit applications, manage approvals, and issue QR-coded certificates to attendees online, end to end."
+          description="Accredit your CE courses with the AADB, then issue QR-coded certificates to attendees automatically. End to end, no spreadsheets or Zapier."
           features={[
-            "Get Your CE Courses AADB-Accredited Fast",
-            "Deliver Certificates Automatically at Scale",
-            "A Single Dashboard to Manage Everything",
-            "Your Courses Feed Directly Into ProTrack",
-            "Built for the Way Dental Education Actually Works",
+            "Guided application, reviewed by the AADB",
+            "Certificates issued automatically, at scale",
+            "Every credit syncs straight into ProTrack",
           ]}
           buttonLabel="Get my course accredited"
           href="/company"
@@ -80,13 +79,11 @@ export function LandingHero() {
           tag="CE Tracking"
           name="ProTrack"
           audience="For dentists, hygienists & dental assistants"
-          description="Your personal CE dashboard. Track hours against your state's exact requirements, upload certificates from any provider, and stay audit-ready before your board asks. Free forever."
+          description="Free forever. Track your hours against your state's exact requirements, upload certificates from any provider, and stay audit-ready before your board ever asks."
           features={[
-            "Your CE Hours. One Dashboard. Always Current.",
-            "Dental ACE Certificates Sync Automatically. No Upload Needed.",
-            "Built for All 50 States, All Three License Types.",
-            "Automated Reminders So a Deadline Never Catches You Off Guard.",
-            "Export an Audit-Ready Report in One Click.",
+            "Every category, every state, always current",
+            "AADB certificates log themselves, no upload",
+            "One-click, audit-ready compliance report",
           ]}
           buttonLabel="Track my CE hours"
           href="/protrack"
@@ -96,13 +93,11 @@ export function LandingHero() {
           tag="Board Auditing"
           name="Verify"
           audience="For state dental boards"
-          description="Run random CE compliance audits on your licensees with one click. Real-time compliance data, bulk deficiency notices, and full audit documentation, replacing your paper process entirely."
+          description="Run random CE compliance audits on your licensees in one click. Live compliance data, bulk deficiency notices, and a full audit trail, replacing paper entirely."
           features={[
-            "Run a Randomized CE Audit in Seconds, Not Weeks.",
-            "See Every Licensee's CE Status in One Place.",
-            "Send Personalized Deficiency Notices in Bulk, Automatically.",
-            "Deficiencies Resolve Themselves. The Board Just Watches.",
-            "Export a Complete Audit Record for Any Batch or Licensee.",
+            "Randomized audits in seconds, not weeks",
+            "Live CE status for every licensee",
+            "Deficiency notices and reminders, automatic",
           ]}
           buttonLabel="Access board portal"
           href="/verify"
