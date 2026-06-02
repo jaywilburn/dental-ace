@@ -24,6 +24,15 @@ import { quizQuestionSchema, type QuizQuestion } from "@/lib/forms/application/s
 
 const quizArraySchema = z.array(quizQuestionSchema).length(5);
 
+/** Thrown inside the issue tx when a passing cert already exists for this
+ *  (course, email) — the concurrent-double-submit guard. Maps to already_certified. */
+class AlreadyCertifiedError extends Error {
+  constructor() {
+    super("already certified");
+    this.name = "AlreadyCertifiedError";
+  }
+}
+
 export type AttendResult =
   | { status: "passed"; certificateId: string }
   | { status: "failed"; correct: boolean[]; canRetake: boolean; correctAnswers?: CorrectAnswer[] }
@@ -123,6 +132,20 @@ export async function submitAttendance(input: unknown): Promise<AttendResult> {
   try {
     certificateId = await prisma.$transaction(async (tx) => {
       await tx.$executeRaw`select id from public.companies where id = ${course.companyId}::uuid for update`;
+      // Re-assert single-issue UNDER the company row lock. The pre-tx eligibility
+      // read (above) races with a concurrent submit by the same attendee; because
+      // a course belongs to exactly one company, both submits serialize on this
+      // FOR UPDATE lock, so the loser sees the winner's committed passing row here
+      // and aborts instead of issuing a second cert + double-decrementing balance.
+      const alreadyPassed = await tx.issuedCertificate.findFirst({
+        where: {
+          courseId: course.id,
+          attendeeEmail: { equals: email, mode: "insensitive" },
+          passed: true,
+        },
+        select: { id: true },
+      });
+      if (alreadyPassed) throw new AlreadyCertifiedError();
       const cert = await issueCertificateTx(tx, {
         courseId: course.id,
         companyId: course.companyId,
@@ -139,6 +162,7 @@ export async function submitAttendance(input: unknown): Promise<AttendResult> {
       return cert.id;
     });
   } catch (err) {
+    if (err instanceof AlreadyCertifiedError) return { status: "already_certified" };
     if (err instanceof CertBalanceExhaustedError) return { status: "balance_exhausted" };
     throw err;
   }
