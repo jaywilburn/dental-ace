@@ -4,8 +4,7 @@ import { BrandMark } from "@/components/brand-mark";
 /*
   Platform home/hub. A logged-in account lands here (homePathFor → /home) and
   picks a feature it has access to. Features are derived from entitlements:
-  ProTrack is always available; DentalACE/staff areas appear per entitlement.
-  (Verify card is added in Phase 3 once the /verify route exists.)
+  ProTrack is always available; DentalACE/staff/Verify areas appear per entitlement.
 */
 type Feature = { href: string; title: string; desc: string; tag?: string };
 
@@ -26,6 +25,13 @@ export default async function HomeHub() {
       href: "/company",
       title: "DentalACE",
       desc: "Submit courses for accreditation and issue certificates.",
+    });
+  }
+  if (user.verifyAccess) {
+    features.push({
+      href: "/board",
+      title: "Verify",
+      desc: "Run random audits, send deficiency notices, and track resolution.",
     });
   }
   if (user.staffRole === "REVIEWER" || user.staffRole === "ADMIN") {

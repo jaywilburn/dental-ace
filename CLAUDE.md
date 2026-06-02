@@ -57,7 +57,7 @@ These rules are how we avoid context drift. If you violate one, the user will te
 
 ### Routing & auth
 - **Never create a `middleware.ts` file.** Next 16 doesn't use it. Route protection goes in each feature area's `layout.tsx` (e.g. `app/company/layout.tsx`) as a server component that reads the session and redirects when the required entitlement is missing.
-- **Public URLs:** `/login` (unified sign-in), `/signup` (public sign-up → account + ProTrack Free), `/home` (post-login hub), `/company` (DentalACE), `/reviewer` (staff), `/admin` (staff), `/attend/[token]` (public attendee), `/protrack` (ProTrack), `/verify` and `/verify/contact` (Verify, Phase 3).
+- **Public URLs:** `/login` (unified sign-in), `/signup` (public sign-up → account + ProTrack Free), `/signup/board` (Verify self-register for state boards), `/home` (post-login hub), `/company` (DentalACE), `/reviewer` (staff), `/admin` (staff), `/attend/[token]` (public attendee), `/protrack` (ProTrack), `/board` (Verify portal — board users), `/verify` and `/verify/contact` (public cert lookup + sales lead).
 - **Never use the Pages Router.** The whole app is App Router under `app/`.
 - **Supabase SSR cookie refresh** happens inside feature-area layouts via `supabase.auth.getUser()`, not in `middleware.ts`. The server client's `setAll` swallows errors inside RSC reads; refresh writes only succeed in server actions and route handlers.
 
@@ -69,7 +69,7 @@ DentalACE One is **one platform**; features are gated by **per-user entitlements
 | `staff_role` | `NONE`/`REVIEWER`/`ADMIN` | `/reviewer`, `/admin` (admin-provisioned; ADMIN is a superset) |
 | `company_id` | FK → companies | DentalACE (`/company`); the company holds prepaid credits/billing |
 | `protrack_tier` | `FREE`/`PRO` | ProTrack (`/protrack`); every account is `FREE`, `PRO` is the upgrade |
-| `verify_access` | boolean | Verify (`/verify`); admin-granted |
+| `verify_access` | boolean | Verify (`/board` portal); self-registered at `/signup/board` (no admin gate per Phase 3 plan) |
 
 - **Guards** (`lib/auth/session.ts`): `requireUser()` (any account → ProTrack floor), `requireDentalAce()` (`company_id`), `requireStaff("REVIEWER"|"ADMIN")`, `requireVerify()`; ProTrack Pro pages use `requireProtrackPro()` (`lib/protrack/require-pro.ts`). A missing entitlement redirects to `/home`, never `/403`.
 - **One public sign-up** (`/signup` → `/api/auth/register`) creates an account + ProTrack Free (license fields optional). Login lands on the **`/home` hub**, which shows the account's available features. ATTENDEE stays a public token flow (no account).
@@ -160,10 +160,13 @@ Seeded by `pnpm seed` against the live Supabase project. Every account signs in 
 | Reviewer | `reviewer@dentalace.org` | `test1234` | `staff_role = REVIEWER` |
 | DentalACE | `customer@dentalace.org` | `test1234` | `company_id` → Texas Dental Association |
 | ProTrack | `sarah.mitchell@example.com` | `test1234` | `protrack_tier = FREE` |
+| Verify | `board@dentalace.org` | `test1234` | `verify_access = true`, `board_id` → Texas |
 
 The DentalACE seed is linked to **Texas Dental Association** (the test company), whose balance the mock-Stripe flow grants and whose applications populate the reviewer queue.
 
 The ProTrack seed (Sarah Mitchell, RDH, TX, license TX-RDH-91043) ships with six CE certificates on a Free plan, tracked against the provisional Texas RDH requirements. Provisional state requirements (TX/CA/FL) are seeded by `pnpm seed`; replace them with John's authoritative 50-state file when it lands.
+
+The Verify seed is created by `pnpm seed:verify` (separate from `pnpm seed`). It upserts the Texas Board row + the board admin user, then creates ~100 in-state licensees with mixed CE compliance for the audit demo. Set `VERIFY_SEED_COUNT=500` in env to ship the larger sample.
 
 If the admin password is rotated in Supabase Auth, update this table.
 

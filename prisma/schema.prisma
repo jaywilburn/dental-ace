@@ -94,6 +94,34 @@ enum RequirementStatus {
   CONFIRMED // matches John's authoritative file
 }
 
+// ── Phase 3 (Verify) enums ──────────────────────────────────────────────────
+
+enum BatchStatus {
+  ACTIVE
+  CLOSED
+}
+
+enum ComplianceStatus {
+  COMPLIANT
+  IN_PROGRESS // > 50% of required hours present
+  DEFICIENT
+  NO_UPLOAD
+}
+
+enum DeficiencyStatus {
+  PENDING
+  RESOLVED
+  ESCALATED // deadline passed; still deficient
+}
+
+enum NoticeType {
+  INITIAL
+  FOLLOWUP_30D
+  FINAL_7D
+  RESOLVED_CONFIRMATION
+  PROTRACK_INVITE
+}
+
 // One account per user. Access is read off this row:
 //   staff_role     -> internal staff areas (/reviewer, /admin)
 //   company_id     -> DentalACE (the company holds prepaid credits/billing)
@@ -111,15 +139,21 @@ model User {
   protrackTier     PlanTier  @default(FREE) @map("protrack_tier")
   proExpiresAt     DateTime? @map("pro_expires_at")
   verifyAccess     Boolean   @default(false) @map("verify_access")
+  // Set for users who registered through /signup/board. Multiple verify users for
+  // the same state share one board row (find-or-create on signup).
+  boardId          String?   @map("board_id") @db.Uuid
+  board            Board?    @relation(fields: [boardId], references: [id])
   reminderSettings Json      @default("{}") @map("reminder_settings") // {d90,d60,d30,d7,categoryGap}
   emailVerifiedAt  DateTime? @map("email_verified_at") // null until the signup email is confirmed
   createdAt        DateTime  @default(now()) @map("created_at")
   lastLogin        DateTime? @map("last_login")
 
-  reviewedApplications CourseApplication[] @relation("ReviewedBy")
-  licenses             UserLicense[]
-  certificates         CeCertificate[]
-  subscription         ProSubscription?
+  reviewedApplications  CourseApplication[] @relation("ReviewedBy")
+  licenses              UserLicense[]
+  certificates          CeCertificate[]
+  subscription          ProSubscription?
+  initiatedAuditBatches AuditBatch[]        @relation("InitiatedBy")
+  sentNotices           NoticeSent[]        @relation("SentBy")
 
   @@map("users")
 }
@@ -284,6 +318,9 @@ model UserLicense {
   isPrimary     Boolean     @default(false) @map("is_primary")
   createdAt     DateTime    @default(now()) @map("created_at")
 
+  auditSelections AuditSelection[]
+  deficiencies    Deficiency[]
+
   @@unique([licenseeId, state, licenseType])
   @@index([licenseeId])
   @@index([state, licenseType]) // join key into state_requirements
@@ -376,4 +413,109 @@ model ProtrackReminderLog {
 
   @@unique([licenseeId, licenseId, threshold, cycleRenewalDate])
   @@map("protrack_reminder_log")
+}
+
+// ── Phase 3 (Verify) models ─────────────────────────────────────────────────
+//
+// State-board portal. A board has one or more BOARD admin users (users.boardId)
+// and runs random audits against in-state licensees, sourcing CE state from the
+// ProTrack tables above (UserLicense, CeCertificate, StateRequirement).
+//
+// Owned by Phase 3. Schema is purely additive — no edits to Phase 1/2 models.
+
+// One row per state board. Multiple board users in the same state share this row.
+model Board {
+  id                String   @id @default(uuid()) @db.Uuid
+  state             String   @unique @db.Char(2)
+  name              String // "Texas State Board of Dental Examiners"
+  adminEmail        String?  @map("admin_email")
+  dailySummaryEmail String?  @map("daily_summary_email")
+  settings          Json     @default("{}") // { defaultSamplePercent, deficiencyResponseDays, autoFollowup30d, autoFinal7d, publicLookupEnabled, dailySummaryEnabled }
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  users        User[]
+  auditBatches AuditBatch[]
+
+  @@map("boards")
+}
+
+// One row per audit run. batch_code is the human-readable handle (TX-2026-003).
+model AuditBatch {
+  id             String       @id @default(uuid()) @db.Uuid
+  boardId        String       @map("board_id") @db.Uuid
+  board          Board        @relation(fields: [boardId], references: [id])
+  batchCode      String       @unique @map("batch_code")
+  name           String
+  samplePercent  Int          @map("sample_percent") // 10, 15, 20, 25
+  licenseType    LicenseType? @map("license_type") // null = all types
+  renewalCycle   String       @map("renewal_cycle") // "2024-2026"
+  selectedCount  Int          @map("selected_count")
+  deficientCount Int          @map("deficient_count")
+  status         BatchStatus  @default(ACTIVE)
+  initiatedById  String       @map("initiated_by_id") @db.Uuid
+  initiatedBy    User         @relation("InitiatedBy", fields: [initiatedById], references: [id])
+  createdAt      DateTime     @default(now()) @map("created_at")
+
+  selections   AuditSelection[]
+  deficiencies Deficiency[]
+
+  @@index([boardId, createdAt])
+  @@map("audit_batches")
+}
+
+// Snapshot of a licensee's CE state at audit time. One per licensee per batch.
+model AuditSelection {
+  id               String           @id @default(uuid()) @db.Uuid
+  batchId          String           @map("batch_id") @db.Uuid
+  batch            AuditBatch       @relation(fields: [batchId], references: [id])
+  userLicenseId    String           @map("user_license_id") @db.Uuid
+  userLicense      UserLicense      @relation(fields: [userLicenseId], references: [id])
+  ceHoursCompleted Decimal          @map("ce_hours_completed") @db.Decimal(5, 2)
+  ceHoursRequired  Decimal          @map("ce_hours_required") @db.Decimal(5, 2)
+  complianceStatus ComplianceStatus @map("compliance_status")
+  createdAt        DateTime         @default(now()) @map("created_at")
+
+  @@unique([batchId, userLicenseId])
+  @@index([batchId, complianceStatus])
+  @@map("audit_selections")
+}
+
+model Deficiency {
+  id                String           @id @default(uuid()) @db.Uuid
+  batchId           String           @map("batch_id") @db.Uuid
+  batch             AuditBatch       @relation(fields: [batchId], references: [id])
+  userLicenseId     String           @map("user_license_id") @db.Uuid
+  userLicense       UserLicense      @relation(fields: [userLicenseId], references: [id])
+  missingHours      Decimal          @map("missing_hours") @db.Decimal(5, 2)
+  missingCategories Json             @map("missing_categories") // ["Sedation","Infection Control"]
+  noticesSentCount  Int              @default(0) @map("notices_sent_count")
+  deadlineAt        DateTime?        @map("deadline_at") // set on first INITIAL notice
+  status            DeficiencyStatus @default(PENDING)
+  resolvedAt        DateTime?        @map("resolved_at")
+  createdAt         DateTime         @default(now()) @map("created_at")
+
+  notices NoticeSent[]
+
+  @@index([batchId, status])
+  @@index([status, deadlineAt])
+  @@map("deficiencies")
+}
+
+// Audit trail for board → licensee emails. resend_message_id backfilled after
+// the Resend call succeeds; null until then. Idempotency guard: insert-then-send,
+// drop the row if Resend rejects.
+model NoticeSent {
+  id              String     @id @default(uuid()) @db.Uuid
+  deficiencyId    String     @map("deficiency_id") @db.Uuid
+  deficiency      Deficiency @relation(fields: [deficiencyId], references: [id])
+  noticeType      NoticeType @map("notice_type")
+  recipientEmail  String     @map("recipient_email")
+  sentAt          DateTime   @default(now()) @map("sent_at")
+  sentById        String?    @map("sent_by_id") @db.Uuid // null for cron sends
+  sentBy          User?      @relation("SentBy", fields: [sentById], references: [id])
+  resendMessageId String?    @map("resend_message_id")
+
+  @@index([deficiencyId, sentAt])
+  @@map("notices_sent")
 }

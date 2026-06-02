@@ -27,6 +27,7 @@ export type SessionUser = {
   protrackTier: PlanTier;
   proExpiresAt: Date | null;
   verifyAccess: boolean;
+  boardId: string | null;
 };
 
 export async function getCurrentUser(): Promise<SessionUser | null> {
@@ -48,6 +49,7 @@ export async function getCurrentUser(): Promise<SessionUser | null> {
       protrackTier: true,
       proExpiresAt: true,
       verifyAccess: true,
+      boardId: true,
     },
   });
   if (!user) return null;

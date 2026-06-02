@@ -5,7 +5,7 @@
   layout, not removed from the catalog here.
 */
 
-export type PortalArea = "company" | "reviewer" | "admin" | "protrack";
+export type PortalArea = "company" | "reviewer" | "admin" | "protrack" | "board";
 
 export type NavItem = {
   label: string;
@@ -68,6 +68,33 @@ export const portalNav: Record<PortalArea, NavSection[]> = {
       ],
     },
   ],
+  // Verify (Phase 3 — state-board portal). Marketing/branding says "Verify"; the
+  // URL segment is /board to match the role-named convention of the other
+  // portals (/admin, /reviewer, /company).
+  board: [
+    {
+      label: "Audits",
+      items: [
+        { label: "Overview", href: "/board", icon: "📊" },
+        { label: "Licensees", href: "/board/licensees", icon: "👥" },
+        { label: "Audit History", href: "/board/audits", icon: "📋" },
+        { label: "Run Audit", href: "/board/audits/new", icon: "🎲" },
+      ],
+    },
+    {
+      label: "Compliance",
+      items: [
+        { label: "Deficiencies", href: "/board/deficiencies", icon: "⚠️" },
+        { label: "Notices", href: "/board/notices", icon: "✉️" },
+      ],
+    },
+    {
+      label: "Configure",
+      items: [
+        { label: "Settings", href: "/board/settings", icon: "⚙️" },
+      ],
+    },
+  ],
   // ProTrack. "Pro Features" items redirect FREE accounts to the upgrade page
   // server-side (lib/protrack/require-pro.ts); the lock treatment is cosmetic.
   protrack: [
@@ -109,7 +136,7 @@ type ProductEntry = NavItem & { key: ProductKey };
 const PRODUCTS: ProductEntry[] = [
   { key: "dentalace", label: "DentalACE", href: "/company", icon: "🎓" },
   { key: "protrack", label: "ProTrack", href: "/protrack", icon: "📊" },
-  { key: "verify", label: "Verify", href: "/verify", icon: "🏛" },
+  { key: "verify", label: "Verify", href: "/board", icon: "🏛" },
 ];
 
 /** The home hub. Lives above Sign Out on every product portal. */
@@ -118,8 +145,7 @@ export const BACK_TO_HOME: NavItem = { label: "Back to Home", href: "/home", ico
 /**
  * The OTHER products this account can open, excluding the one it's currently in.
  * Entitlements: DentalACE needs a company, ProTrack is the baseline every
- * account has, Verify is the admin-granted entitlement (its route ships in
- * Phase 3, so this stays empty until both the grant and the route exist).
+ * account has, Verify needs verify_access (granted at /signup/board or by admin).
  */
 export function otherProductLinks(
   user: { companyId: string | null; verifyAccess: boolean },
