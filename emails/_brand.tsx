@@ -38,12 +38,35 @@ const serifStack =
 export function BrandEmail({
   preview,
   subject,
+  product = "ace",
   children,
 }: {
   preview: string;
   subject: string;
+  product?: "suite" | "ace" | "pro";
   children: React.ReactNode;
 }) {
+  const wordmark =
+    product === "pro" ? (
+      <>
+        Pro<span style={{ color: colors.aceLight }}>Track</span>
+      </>
+    ) : product === "suite" ? (
+      <>
+        Dental<span style={{ color: colors.aceLight }}>ACE</span> One
+      </>
+    ) : (
+      <>
+        Dental<span style={{ color: colors.aceLight }}>ACE</span>
+      </>
+    );
+  const eyebrow =
+    product === "pro"
+      ? "CE Tracking for Dental Professionals"
+      : product === "suite"
+        ? "An AADB Program"
+        : "AADB Accredited Continuing Education";
+
   return (
     <Html>
       <Head />
@@ -83,7 +106,7 @@ export function BrandEmail({
                 color: colors.white,
               }}
             >
-              Dental <span style={{ color: colors.aceLight }}>ACE</span>
+              {wordmark}
             </Heading>
             <Text
               style={{
@@ -93,7 +116,7 @@ export function BrandEmail({
                 letterSpacing: 1,
               }}
             >
-              AADB Accredited Continuing Education
+              {eyebrow}
             </Text>
           </Section>
           <Section style={{ padding: "28px" }}>
@@ -121,7 +144,11 @@ export function BrandEmail({
                 lineHeight: 1.5,
               }}
             >
-              Dental ACE · AADB Continuing Education Program · dentalace.org
+              {product === "pro"
+                ? "ProTrack · An AADB Program · dentalace.org"
+                : product === "suite"
+                  ? "DentalACE One · An AADB Program · dentalace.org"
+                  : "DentalACE · AADB Continuing Education Program · dentalace.org"}
               <br />
               Questions? Contact{" "}
               <a

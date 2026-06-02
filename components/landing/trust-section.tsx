@@ -8,12 +8,12 @@ const cards = [
   {
     icon: "🏛",
     title: "AADB accreditation authority",
-    body: "Dental ACE is the official AADB accreditation program. That credential carries weight with state boards and attendees nationwide; no startup can replicate it.",
+    body: "DentalACE is the official AADB accreditation program. That credential carries weight with state boards and attendees nationwide; no startup can replicate it.",
   },
   {
     icon: "🔗",
     title: "Connected by design",
-    body: "Dental ACE, ProTrack, and Verify share one data layer. A Dental ACE certificate auto-appears in ProTrack. Verify reads compliance live from ProTrack. No duplicate entry anywhere.",
+    body: "DentalACE, ProTrack, and Verify share one data layer. A DentalACE certificate auto-appears in ProTrack. Verify reads compliance live from ProTrack. No duplicate entry anywhere.",
   },
   {
     icon: "📋",
@@ -26,7 +26,7 @@ export function TrustSection() {
   return (
     <section id="about" className="bg-white px-5 py-16 text-center md:px-10 md:py-20">
       <p className="mb-2.5 font-mono text-[10px] uppercase tracking-[2.5px] text-text-muted">
-        Why the Dental ACE platform
+        Why DentalACE One
       </p>
       <h2 className="mb-2 text-balance font-serif text-3xl font-bold text-navy md:text-[38px]">
         Built on institutional authority

@@ -3,7 +3,7 @@ import { cn } from "@/lib/utils";
 
 /*
   Hero product card. Three instances render side-by-side in the hero grid:
-  Dental ACE, ProTrack, Verify. Each is a clickable card linking to its
+  DentalACE, ProTrack, Verify. Each is a clickable card linking to its
   respective portal. Hover lifts the card with a transform + shadow (compositor
   props only, wrapped in motion-safe).
 */
@@ -66,12 +66,12 @@ export function ProductCard({
     <Link
       href={href}
       className={cn(
-        "group block overflow-hidden rounded-2xl border border-white/[0.08] bg-white text-left transition-transform duration-200 motion-safe:hover:-translate-y-1 motion-safe:hover:shadow-2xl",
+        "group flex h-full flex-col overflow-hidden rounded-2xl border border-white/[0.08] bg-white text-left transition-transform duration-200 motion-safe:hover:-translate-y-1 motion-safe:hover:shadow-2xl",
         focusRing,
       )}
     >
       <div className={cn("h-[5px]", stripeBg[color])} />
-      <div className="p-6 pb-5">
+      <div className="flex flex-1 flex-col p-6 pb-6">
         <span
           className={cn(
             "mb-3.5 inline-block rounded-[10px] px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-[1.5px]",
@@ -87,11 +87,11 @@ export function ProductCard({
         <p className="mb-5 text-pretty text-[13px] leading-relaxed text-text-mid">
           {description}
         </p>
-        <ul className="mb-5 flex flex-col gap-1.5">
+        <ul className="mb-6 flex flex-col gap-2">
           {features.map((feature) => (
             <li
               key={feature}
-              className="flex items-start gap-2 text-[12px] leading-snug text-text-mid"
+              className="flex items-start gap-2 text-[12.5px] leading-snug text-text-mid"
             >
               <span
                 className={cn("mt-1.5 size-1.5 shrink-0 rounded-full", dotColor[color])}
@@ -102,7 +102,7 @@ export function ProductCard({
         </ul>
         <span
           className={cn(
-            "flex w-full items-center justify-center gap-2 rounded-lg py-2.5 text-[13px] font-semibold transition-opacity",
+            "mt-auto flex w-full items-center justify-center gap-2 rounded-lg py-3 text-sm font-semibold transition-opacity",
             buttonStyles[color],
           )}
         >

@@ -59,7 +59,7 @@ export function MockupProTrack() {
       <div className="flex items-center gap-2 rounded-md border border-pro/20 bg-pro/10 px-3 py-2">
         <span aria-hidden>⭐</span>
         <p className="text-[11px] text-pro-light">
-          New Dental ACE cert auto-added · Modern Periodontal Techniques · 3.0
+          New DentalACE cert auto-added · Modern Periodontal Techniques · 3.0
           hrs
         </p>
       </div>

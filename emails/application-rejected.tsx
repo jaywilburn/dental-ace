@@ -96,4 +96,4 @@ export default function ApplicationRejectedEmail({
 }
 
 ApplicationRejectedEmail.subject = ({ courseTitle }: ApplicationRejectedProps) =>
-  `Application Update: ${courseTitle} — Dental ACE`;
+  `Application Update: ${courseTitle} · DentalACE`;

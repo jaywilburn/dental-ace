@@ -11,7 +11,7 @@ const node = (variant: "ace" | "pro" | "ver" | "step", label: string, key: strin
     ace: "bg-ace/15 text-ace-light",
     pro: "bg-pro/15 text-pro-light",
     ver: "bg-ver/15 text-ver-light",
-    step: "bg-white/[0.06] text-white/45",
+    step: "bg-white/[0.08] text-white/60",
   };
   return (
     <span
@@ -35,7 +35,7 @@ const arrow = (key: string) => (
 export function EcoStrip() {
   return (
     <div className="relative z-10 mt-8 flex flex-wrap items-center justify-center gap-2 border-t border-white/[0.06] bg-navy px-5 py-7 md:px-10">
-      {node("ace", "Dental ACE", "ace")}
+      {node("ace", "DentalACE", "ace")}
       {arrow("a1")}
       {node("step", "Course approved · QR issued", "s1")}
       {arrow("a2")}

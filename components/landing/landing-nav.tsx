@@ -11,12 +11,14 @@ import { cn } from "@/lib/utils";
 const focusRing =
   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ace-light focus-visible:ring-offset-2 focus-visible:ring-offset-navy";
 
+// Anchors are root-relative (/#ace) so the nav works from any page, not just
+// the landing page. On the homepage these still scroll to the section.
 const navLinks: { label: string; href: string; color?: "ace" | "pro" | "ver" }[] = [
-  { label: "Dental ACE", href: "#ace", color: "ace" },
-  { label: "ProTrack", href: "#protrack", color: "pro" },
-  { label: "Verify", href: "#verify", color: "ver" },
-  { label: "How it works", href: "#how" },
-  { label: "About", href: "#about" },
+  { label: "DentalACE", href: "/#ace", color: "ace" },
+  { label: "ProTrack", href: "/#protrack", color: "pro" },
+  { label: "Verify", href: "/#verify", color: "ver" },
+  { label: "How it works", href: "/how-it-works" },
+  { label: "About", href: "/about" },
 ];
 
 export function LandingNav() {
@@ -24,9 +26,9 @@ export function LandingNav() {
     <nav className="sticky top-0 z-50 flex h-16 items-center justify-between border-b border-white/[0.07] bg-navy/95 px-5 backdrop-blur md:px-10">
       <div className="flex items-center gap-3">
         <span className="font-serif text-xl font-bold text-white">
-          Dental <span className="text-ace-light">ACE</span>
+          Dental<span className="text-ace-light">ACE</span> One
         </span>
-        <span className="rounded border border-white/[0.12] px-2 py-0.5 font-mono text-[9px] uppercase tracking-[2px] text-white/30">
+        <span className="rounded border border-white/[0.15] px-2 py-0.5 font-mono text-[9px] uppercase tracking-[2px] text-white/45">
           AADB Program
         </span>
       </div>
@@ -41,7 +43,7 @@ export function LandingNav() {
               link.color === "ace" && "text-ace-light",
               link.color === "pro" && "text-pro-light",
               link.color === "ver" && "text-ver-light",
-              !link.color && "text-white/50",
+              !link.color && "text-white/65",
               focusRing,
             )}
           >

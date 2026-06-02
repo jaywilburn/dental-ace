@@ -1,16 +1,24 @@
 import { cn } from "@/lib/utils";
 
 /*
-  Dental ACE brand mark. "Dental" inherits the surrounding text color; "ACE" is
-  always rendered in --ace-light. Use on navy backgrounds (sidebar, login).
-  For light surfaces, override the parent text color to navy via className.
+  Brand mark. The first word inherits the surrounding text color; the accent
+  word is rendered in --ace-light (gold) regardless of product, matching the
+  prototypes and the "internal UI defaults to gold" brand rule. Use on navy
+  backgrounds (sidebar, login). For light surfaces, override the parent text
+  color to navy via className.
+
+  product (default "suite" → the whole platform):
+    "suite" → DentalACE One   "ace" → DentalACE
+    "pro" → ProTrack   "ver" → Verify
 */
 export function BrandMark({
   tag,
+  product = "suite",
   size = "md",
   className,
 }: {
   tag?: string;
+  product?: "suite" | "ace" | "pro" | "ver";
   size?: "sm" | "md" | "lg";
   className?: string;
 }) {
@@ -20,6 +28,25 @@ export function BrandMark({
     lg: "text-2xl",
   }[size];
 
+  const wordmark = {
+    suite: (
+      <>
+        Dental<span className="text-ace-light">ACE</span> One
+      </>
+    ),
+    ace: (
+      <>
+        Dental<span className="text-ace-light">ACE</span>
+      </>
+    ),
+    pro: (
+      <>
+        Pro<span className="text-ace-light">Track</span>
+      </>
+    ),
+    ver: <>Verify</>,
+  }[product];
+
   return (
     <div className={cn("flex flex-col gap-0.5", className)}>
       {tag ? (
@@ -28,7 +55,7 @@ export function BrandMark({
         </span>
       ) : null}
       <span className={cn("font-serif font-bold leading-none", sizeClass)}>
-        Dental <span className="text-ace-light">ACE</span>
+        {wordmark}
       </span>
     </div>
   );

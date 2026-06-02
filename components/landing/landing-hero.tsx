@@ -61,7 +61,7 @@ export function LandingHero() {
           tag="Accreditation"
           name={
             <>
-              Dental <span className="text-ace">ACE</span>
+              Dental<span className="text-ace">ACE</span>
             </>
           }
           audience="For CE providers & educators"

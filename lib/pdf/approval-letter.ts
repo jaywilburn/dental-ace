@@ -92,7 +92,7 @@ export async function renderApprovalLetterPdf(
         .fontSize(11)
         .fillColor(TEXT_MID)
         .text(
-          `Following review by the American Association of Dental Boards (AADB), we are pleased to confirm that your continuing-education course has been approved and is now accredited under the Dental ACE program.`,
+          `Following review by the American Association of Dental Boards (AADB), we are pleased to confirm that your continuing-education course has been approved and is now accredited under the DentalACE program.`,
           { align: "left", lineGap: 4 },
         )
         .moveDown(0.5)
@@ -155,7 +155,7 @@ export async function renderApprovalLetterPdf(
         .fontSize(9)
         .fillColor(TEXT_MUTED)
         .text(
-          "Dental ACE · AADB Continuing Education Program · dentalace.org · info@dentalace.org",
+          "DentalACE · AADB Continuing Education Program · dentalace.org · info@dentalace.org",
           56,
           doc.page.height - 64,
           { align: "center", width: doc.page.width - 112 },

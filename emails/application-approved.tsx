@@ -121,4 +121,4 @@ export default function ApplicationApprovedEmail({
 }
 
 ApplicationApprovedEmail.subject = ({ courseTitle }: ApplicationApprovedProps) =>
-  `Approved: ${courseTitle} — Dental ACE`;
+  `Approved: ${courseTitle} · DentalACE`;

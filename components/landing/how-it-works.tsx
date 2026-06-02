@@ -12,7 +12,7 @@ const steps: { color: "ace" | "pro" | "ver"; icon: string; title: string; desc: 
     color: "ace",
     icon: "🎓",
     title: "Course accredited",
-    desc: "CE provider submits via Dental ACE. AADB reviewer approves. Course ID and QR code generated automatically.",
+    desc: "CE provider submits via DentalACE. AADB reviewer approves. Course ID and QR code generated automatically.",
   },
   {
     color: "ace",

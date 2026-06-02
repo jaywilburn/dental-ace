@@ -1,7 +1,7 @@
 import { MockupChrome } from "@/components/landing/mockup-chrome";
 
 /*
-  Dental ACE provider-dashboard mockup. Three stat cards (active courses,
+  DentalACE provider-dashboard mockup. Three stat cards (active courses,
   certs issued, cert balance), three course rows with status badges, and a
   low-balance alert callout.
 */

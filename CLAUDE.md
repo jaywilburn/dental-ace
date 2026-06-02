@@ -6,16 +6,16 @@ Project memory for Claude Code. Load this at the start of every session.
 
 ## Project Identity
 
-- **Suite:** DentalACE One — three products on one codebase for the American Association of Dental Boards.
-- **Products:** DentalACE (accreditation), ProTrack (licensee CE dashboard), Verify (state-board random audits).
+- **Platform:** DentalACE One — **one platform**, one account per user, on one codebase for the American Association of Dental Boards.
+- **Features (not separate products):** DentalACE (accreditation), ProTrack (licensee CE dashboard), Verify (state-board random audits) — gated by per-user entitlements on the `users` row (see Access model below).
 - **Domain:** `dentalace.org`.
-- **Current phase:** Phase 1 — DentalACE (Phase 0 scaffolding complete; Week 2 auth + portals up next).
+- **Current phase:** Phase 1 — DentalACE (Phase 0 scaffolding complete; Week 2 auth + portals up next). **Phase 2 (ProTrack) is being pulled forward in parallel at the client's request** — its tables, the `/protrack` area, and the full free+Pro feature now exist ahead of the original Weeks 9–16 slot. The platform now runs on the **unified entitlement access model** (see below), not the original per-role portals.
 - **Repo:** `github.com/jaywilburn/dental-ace` (private; transfers to client at launch).
 - **Installed versions:** Next.js 16.2.6, React 19.2.4, Tailwind v4, Prisma 6+, @supabase/ssr.
 - **See also:** [`AGENTS.md`](./AGENTS.md) — auto-generated reminder that Next 16 has breaking changes from training data; check `node_modules/next/dist/docs/` when conventions feel uncertain.
 - **Timeline:** 24-week, 3-phase build. Weeks 1–8 DentalACE → 9–16 ProTrack → 17–24 Verify.
 - **Source of truth (scope/pricing/schema):** [`logic/aadb-master-sow-v1.1.html`](./logic/aadb-master-sow-v1.1.html)
-- **Suite framing:** [`PRD.md`](./PRD.md)
+- **Platform framing:** [`PRD.md`](./PRD.md)
 - **Phase 1 detail:** [`PRD-phase-1-dental-ace.md`](./PRD-phase-1-dental-ace.md)
 
 ---
@@ -27,7 +27,7 @@ The SOW (v1.1, May 2026) is the contract document, but three stack choices were 
 | SOW says | We use | Why |
 |----------|--------|-----|
 | Next.js 14 | **Next.js 16+ (App Router only)** | No `middleware.ts`, no `pages/`. Route protection lives in server-component portal layouts. |
-| NextAuth.js v5 | **Supabase Auth** | Native RLS integration; one fewer service. Roles via JWT claims + `users.role`. |
+| NextAuth.js v5 | **Supabase Auth** | Native RLS integration; one fewer service. Access via per-feature entitlement columns on `users` (mirrored to JWT claims), not a single role. |
 | AWS S3 (two buckets) | **Supabase Storage (two buckets)** | Drops the AWS account. Same two-bucket split: `certificates` + `uploads`. Private; signed URLs only. |
 
 Everything else from the SOW stands: Prisma + Postgres, Stripe + Stripe Connect, Resend, Vercel, Puppeteer + `@sparticuz/chromium`, qrcode, ShadCN + Tailwind themed.
@@ -38,9 +38,9 @@ Everything else from the SOW stands: Prisma + Postgres, Stripe + Stripe Connect,
 
 The SOW pre-dates the brand refresh. **The landing-page handoff (`logic/dentalace-landing-page-handoff.md`) is the brand source of truth.** Internal table/column names, enums, and code identifiers can keep their original short forms (CUSTOMER, REVIEWER, BOARD, etc.) but everything user-facing follows these rules:
 
-- **Suite name: DentalACE One.** Never "AADB Platform Suite" (that was the working title before the brand was set).
+- **Platform vs feature naming (important):** the **full platform is `DentalACE One`** and the **accreditation feature is `DentalACE`** (one word, no "One"). Use `DentalACE One` everywhere the whole platform/suite is meant (logo/top-left brand mark, page-title suffix, "the complete platform" copy); use `DentalACE` when referring specifically to the accreditation product alongside ProTrack and Verify. Never "AADB Platform Suite" (the old working title).
 - **Product names:**
-  - **Dental ACE** (two words, "ACE" always uppercase). Never "DentalAce" or "Dental Ace." The landing-page v3 brand uses the spaced form; only the suite name is one word.
+  - **DentalACE** (one word, "ACE" always uppercase and gold). Never "Dental ACE" (spaced), "DentalAce", or "Dental Ace." (Superseded the earlier spaced "Dental ACE" form on 2026-06-02 at the client's request.) The platform adds the suffix: **DentalACE One**.
   - **ProTrack** (one word, capital P and T). Never "Dental Track" or "Pro Track."
   - **Verify** (initial capital). Never "Dental Audit."
 - **No em dashes (`—`)** in user-facing copy. Use commas, parentheses, or restructure the sentence. Page titles, button labels, marketing copy, in-app strings, email templates: all em-dash-free.
@@ -56,11 +56,25 @@ The SOW pre-dates the brand refresh. **The landing-page handoff (`logic/dentalac
 These rules are how we avoid context drift. If you violate one, the user will tell you to add a new rule below — do it immediately.
 
 ### Routing & auth
-- **Never create a `middleware.ts` file.** Next 16 doesn't use it. Route protection goes in each portal's `layout.tsx` (e.g. `app/company/layout.tsx`) as a server component that reads the Supabase session and redirects on role mismatch.
-- **Public URLs follow the handoff:** `/login` (unified sign-in), `/company` (CUSTOMER), `/reviewer` (REVIEWER), `/admin` (ADMIN), `/attend/[token]` (public attendee), `/protrack` and `/protrack/register` (LICENSEE, Phase 2), `/verify` and `/verify/contact` (BOARD, Phase 3).
+- **Never create a `middleware.ts` file.** Next 16 doesn't use it. Route protection goes in each feature area's `layout.tsx` (e.g. `app/company/layout.tsx`) as a server component that reads the session and redirects when the required entitlement is missing.
+- **Public URLs:** `/login` (unified sign-in), `/signup` (public sign-up → account + ProTrack Free), `/home` (post-login hub), `/company` (DentalACE), `/reviewer` (staff), `/admin` (staff), `/attend/[token]` (public attendee), `/protrack` (ProTrack), `/verify` and `/verify/contact` (Verify, Phase 3).
 - **Never use the Pages Router.** The whole app is App Router under `app/`.
-- **Roles** live on `users.role` and are mirrored into JWT custom claims via a Supabase Auth hook or DB trigger. Read from the JWT on the server when possible; fall back to a `users` lookup only when needed.
-- **Supabase SSR cookie refresh** happens inside portal layouts (`app/company/layout.tsx`, `app/reviewer/layout.tsx`, `app/admin/layout.tsx`) via `supabase.auth.getUser()`, not in `middleware.ts`. The server client's `setAll` swallows errors inside RSC reads; refresh writes only succeed in server actions and route handlers.
+- **Supabase SSR cookie refresh** happens inside feature-area layouts via `supabase.auth.getUser()`, not in `middleware.ts`. The server client's `setAll` swallows errors inside RSC reads; refresh writes only succeed in server actions and route handlers.
+
+### Access model (implemented)
+DentalACE One is **one platform**; features are gated by **per-user entitlements on the `users` row**, not by a single role. The session cookie carries only `{ userId }`; `getCurrentUser()` (`lib/auth/session.ts`) loads the entitlements:
+
+| Column | Values | Grants |
+|--------|--------|--------|
+| `staff_role` | `NONE`/`REVIEWER`/`ADMIN` | `/reviewer`, `/admin` (admin-provisioned; ADMIN is a superset) |
+| `company_id` | FK → companies | DentalACE (`/company`); the company holds prepaid credits/billing |
+| `protrack_tier` | `FREE`/`PRO` | ProTrack (`/protrack`); every account is `FREE`, `PRO` is the upgrade |
+| `verify_access` | boolean | Verify (`/verify`); admin-granted |
+
+- **Guards** (`lib/auth/session.ts`): `requireUser()` (any account → ProTrack floor), `requireDentalAce()` (`company_id`), `requireStaff("REVIEWER"|"ADMIN")`, `requireVerify()`; ProTrack Pro pages use `requireProtrackPro()` (`lib/protrack/require-pro.ts`). A missing entitlement redirects to `/home`, never `/403`.
+- **One public sign-up** (`/signup` → `/api/auth/register`) creates an account + ProTrack Free (license fields optional). Login + signup land on the **`/home` hub**, which shows the account's available features. ATTENDEE stays a public token flow (no account).
+- **There is no `Role` enum and no `licensees` table.** ProTrack profile (`first_name`/`last_name`/`protrack_tier`/`pro_expires_at`/`reminder_settings`) lives on `users`; ProTrack child tables (`user_licenses`, `ce_certificates`, `pro_subscriptions`) keep a `licensee_id` column that FKs to `users.id`.
+- **RLS:** `current_user_role()` (`sql-migrations/0008`) derives `'ADMIN'`/`'REVIEWER'`/`'CUSTOMER'` from `staff_role` + company presence, so the Phase-1 + ProTrack policies keep working unchanged. The access-token hook emits `staff_role`/`company_id`/`protrack_tier`/`verify_access` into the JWT.
 
 ### Database
 - **Prisma** for application reads/writes.
@@ -136,15 +150,18 @@ pnpm seed
 
 ## Dev Test Credentials
 
-Seeded by `pnpm seed` against the live Supabase project. Use these to walk through end-to-end flows in local dev. **Dev-only. Rotate the admin password before any client demo and before transferring the repo.**
+Seeded by `pnpm seed` against the live Supabase project. Every account signs in at `/login` and lands on the `/home` hub. **Dev-only. Rotate the admin password before any client demo and before transferring the repo.**
 
-| Role | Email | Password | Lands on |
-|------|-------|----------|----------|
-| ADMIN | `jay@wilburncreative.com` | `ChangeMeNow!2026` | `/admin` |
-| REVIEWER | `reviewer@dentalace.org` | `test1234` | `/reviewer` |
-| CUSTOMER | `customer@dentalace.org` | `test1234` | `/company` |
+| Account | Email | Password | Entitlement |
+|---------|-------|----------|-------------|
+| Admin | `jay@wilburncreative.com` | `ChangeMeNow!2026` | `staff_role = ADMIN` (all areas) |
+| Reviewer | `reviewer@dentalace.org` | `test1234` | `staff_role = REVIEWER` |
+| DentalACE | `customer@dentalace.org` | `test1234` | `company_id` → Texas Dental Association |
+| ProTrack | `sarah.mitchell@example.com` | `test1234` | `protrack_tier = FREE` |
 
-The CUSTOMER seed is linked to **Texas Dental Association** (the test company), which is the company whose balance the mock-Stripe flow grants and whose applications populate the reviewer queue.
+The DentalACE seed is linked to **Texas Dental Association** (the test company), whose balance the mock-Stripe flow grants and whose applications populate the reviewer queue.
+
+The ProTrack seed (Sarah Mitchell, RDH, TX, license TX-RDH-91043) ships with six CE certificates on a Free plan, tracked against the provisional Texas RDH requirements. Provisional state requirements (TX/CA/FL) are seeded by `pnpm seed`; replace them with John's authoritative 50-state file when it lands.
 
 If the admin password is rotated in Supabase Auth, update this table.
 
@@ -211,7 +228,7 @@ If the admin password is rotated in Supabase Auth, update this table.
 ## Key Pointers
 
 - **Single source of truth (scope, schema, pricing):** [`logic/aadb-master-sow-v1.1.html`](./logic/aadb-master-sow-v1.1.html) — 794 lines of contract-spec. (Gitignored; only present on the dev machine.)
-- **Suite framing:** [`PRD.md`](./PRD.md)
+- **Platform framing:** [`PRD.md`](./PRD.md)
 - **Phase 1 detail:** [`PRD-phase-1-dental-ace.md`](./PRD-phase-1-dental-ace.md)
 - **Next 16 scaffold notes:** [`AGENTS.md`](./AGENTS.md)
 - **Prototypes** (open only when their product's phase starts; gitignored, local only):
