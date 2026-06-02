@@ -1,5 +1,5 @@
 import { PageHeader } from "@/components/portal-shell";
-import { requireRole } from "@/lib/auth/session";
+import { requireDentalAce } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { APP_CREDIT_SKUS, formatPrice } from "@/lib/billing/catalog";
 import { startCheckout } from "@/lib/billing/start-checkout";
@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils";
   on env. The $549/5-pack carries the "MOST POPULAR" badge defined in catalog.
 */
 export default async function BuyCreditsPage() {
-  const user = await requireRole("CUSTOMER");
+  const user = await requireDentalAce();
   const company = user.companyId
     ? await prisma.company.findUnique({
         where: { id: user.companyId },

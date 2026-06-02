@@ -12,18 +12,19 @@ Domain: `dentalace.org`
 
 The American Association of Dental Boards (AADB) administers continuing-education accreditation, licensee tracking, and state-board compliance audits for the U.S. dental industry. Today these workflows are stitched together from WordPress forms, Typeform, Zapier, Google Sheets, and Anvil — with manual paper-based audits at the state-board level. The seams cost time, introduce errors, and make adoption hard for both course providers and dental boards.
 
-DentalACE One replaces that stack with three integrated products on a single codebase, delivered over a 24-week build:
+DentalACE One replaces that stack. It is a **single platform** — one account per user — with three features, delivered over a 24-week build:
 
 - **DentalACE** — CE course accreditation and certificate distribution for course providers.
 - **ProTrack** — Personal CE dashboard for the ~50-state population of dentists, hygienists, and dental assistants.
 - **Verify** — Random-sample CE compliance auditing for state dental boards.
 
-Each product creates value on its own; together they form a flywheel: courses accredited in DentalACE auto-sync into ProTrack, which feeds compliance data into Verify. The same dataset serves the course provider, the licensee, and the regulator.
+Every user is a DentalACE One user; the three features are gated by per-user entitlements (see §3). Each feature stands on its own, and together they share one dataset: courses accredited in DentalACE auto-sync into ProTrack, which feeds compliance data into Verify. The same dataset serves the course provider, the licensee, and the regulator.
 
-## 2. The Three Products
+## 2. The Three Features
 
 ### DentalACE — Accreditation
-**Serves:** CE course providers (Customer role), AADB reviewers, and state-board observers.
+**Serves:** CE course providers, AADB reviewers, and admins.
+**Access:** the user belongs to a provider company that has purchased application credits (prepaid credits + certificate bundles — paid access, not a recurring subscription).
 **Replaces:** WordPress + Typeform + Zapier + Google Sheets + Anvil.
 **Core flow:** Provider buys application credits → submits 34-field course application → AADB reviews → approved course gets a Course ID (`ACE-YYYY-#####`), QR code, and attendee form → attendees take a 5-question quiz → certificates issued by email.
 **Revenue:** Per-application credits ($85–$99 depending on tier, plus optional expedite add-on) and certificate bundles ($4–$10 per cert depending on bundle size).
@@ -31,30 +32,41 @@ Each product creates value on its own; together they form a flywheel: courses ac
 
 ### ProTrack — CE Tracking
 **Serves:** Dentists (DDS/DMD), hygienists (RDH), and dental assistants (DA) in all 50 states.
+**Access:** included free with **every** DentalACE One account (the platform's free baseline); ProTrack Pro is a paid upgrade.
 **Replaces:** Spreadsheets, shoeboxes of paper certs, board-renewal anxiety.
-**Core flow:** Licensee registers (self-serve or via board invite code) → ACE-issued certificates auto-sync to their dashboard → upload other CE certificates (ADA CERP, AGD PACE, Other Accredited) → see real-time progress against their state's CE requirements → optional Pro tier unlocks audit-ready PDF export, renewal reminders, and multi-state licensure.
-**Revenue:** Free forever (baseline) + ProTrack Pro at $7/mo or $79/yr.
+**Core flow:** Every account includes ProTrack Free → ACE-issued certificates auto-sync to the dashboard → upload other CE certificates (ADA CERP, AGD PACE, Other Accredited) → see real-time progress against the user's state CE requirements → Pro tier unlocks audit-ready PDF export, renewal reminders, and multi-state licensure.
+**Revenue:** Free for every account (baseline) + ProTrack Pro at $7/mo or $79/yr.
 **Launch:** Week 16.
 
 ### Verify — Board Auditing
-**Serves:** State dental boards (Board role), provisioned by AADB after contract signing.
+**Serves:** State dental boards.
+**Access:** free, but **admin-granted** — the board signs up like any user, then an admin enables Verify access from the Admin dashboard after the board is contracted.
 **Replaces:** Manual paper-based random audit processes administered by board staff.
 **Core flow:** Board logs in → configures a random audit (sample %, license type filter, renewal cycle) → one click generates a sample → live compliance data pulled from ProTrack → board sends bulk deficiency notices via Resend → deficiencies auto-resolve when licensees upload missing hours → board exports a signed audit report PDF.
 **Revenue:** Annual board license — $500 (small board, <3K licensees) / $1,000 (mid, 3K–10K) / $1,500 (large, 10K+).
 **Launch:** Week 24.
 
-## 3. Users & Roles
+## 3. Users & Access
 
-| Role | URL | Access | Product |
-|------|-----|--------|---------|
-| **CUSTOMER** | `/company` | Submit applications, manage courses, buy and track certificates, billing history | DentalACE |
-| **REVIEWER** | `/reviewer` | Review queued applications, approve/reject, view accreditation history | DentalACE |
-| **ADMIN** | `/admin` | Full platform access (all companies, overrides, analytics, board provisioning) | All |
-| **ATTENDEE** | `/attend/[token]` | Public, no login. QR or link access only. Quiz + certificate issuance. | DentalACE |
-| **LICENSEE** | `/protrack` | CE dashboard, certificate upload, state requirements, Pro features | ProTrack |
-| **BOARD** | `/verify` | Compliance dashboard, random audit tool, deficiency notices, reports | Verify |
+Every user has **one DentalACE One account** and signs up through **one public sign-up**. A new account gets **ProTrack Free** immediately. The other features are layered on by entitlement, all readable directly off the streamlined `users` row:
 
-Six roles share one auth system. Login is unified at `/login`; role determines redirect destination. Portal isolation is enforced at the database layer (RLS) and at the server-component layout layer in Next.js.
+| Column | Values | Grants |
+|--------|--------|--------|
+| `staff_role` | `NONE` / `REVIEWER` / `ADMIN` | Internal AADB staff areas (`/reviewer`, `/admin`). Admin-provisioned; default `NONE`. |
+| `company_id` | FK → `companies` (nullable) | **DentalACE** access. Set when the user belongs to a provider company; the company holds prepaid credits/billing. |
+| `protrack_tier` | `FREE` / `PRO` | **ProTrack**. Every account is at least `FREE`; `PRO` unlocks reminders, multi-state, and audit-ready export. |
+| `verify_access` | boolean | **Verify**. Admin-granted from the Admin dashboard; default `false`. |
+
+A single account can hold several features at once, so login lands on a **platform home/hub**, not a single role-portal. Feature areas live at `/company` (DentalACE), `/protrack` (ProTrack), `/verify` (Verify), `/reviewer`, and `/admin`; each is gated by the relevant entitlement, enforced at the server-component layout layer and at the database layer (RLS).
+
+**ATTENDEE is not an account.** Attendees reach `/attend/[token]` via a public QR/link, take the quiz, and receive a certificate — no login, no `users` row.
+
+### Registration & access
+- **Sign-up (public, self-serve):** creates the account and activates ProTrack Free. One funnel for everyone.
+- **DentalACE:** added in-app by creating or joining a provider company and purchasing credits (sets `company_id`).
+- **ProTrack Pro:** a paid upgrade ($7/mo or $79/yr) on the existing account; no separate sign-up.
+- **Verify:** the state board signs up like any user; an admin then grants `verify_access`.
+- **Reviewer / Admin:** provisioned by an admin (not public sign-up); `staff_role` is set on their account.
 
 ## 4. Shared Tech Stack
 
@@ -62,7 +74,7 @@ Six roles share one auth system. Login is unified at `/login`; role determines r
 |-------|-----------|
 | **Framework** | **Next.js 16+** — App Router only. No `pages/`, no `middleware.ts`. TypeScript strict mode. |
 | **Database** | **Supabase Postgres** via Prisma ORM. Row Level Security policies as the access-control floor. |
-| **Authentication** | **Supabase Auth** — email/password. Role stored on `users` row and JWT claims. Route protection via server-component layout checks in each route group. |
+| **Authentication** | **Supabase Auth** — email/password. Staff role + per-feature entitlements stored on the `users` row (and mirrored to JWT claims). Route protection via server-component layout checks in each route group. |
 | **File Storage** | **Supabase Storage** — two private buckets (`certificates`, `uploads`). Signed URLs only; never expose service-role key to the client. |
 | **Payments** | Stripe + Stripe Connect. AADB is the master account; CE Exchange is the connected recipient (per the Services Agreement revenue split). |
 | **Email** | Resend with React Email TypeScript components. Sending domain `dentalace.org` with SPF + DKIM + DMARC. |
@@ -76,7 +88,7 @@ Six roles share one auth system. Login is unified at `/login`; role determines r
 Three of the SOW's stack choices were updated when this PRD was drafted. They are intentional — not mistakes to fix.
 
 1. **Next.js 16+ (not 14).** Removes `middleware.ts` and the Pages Router from the architecture. Route protection lives in server-component layouts (`app/company/layout.tsx`, `app/reviewer/layout.tsx`, `app/admin/layout.tsx`, etc.), not edge middleware.
-2. **Supabase Auth (not NextAuth.js v5).** Native integration with Supabase RLS, one fewer service to wire up, JWT-claim-based roles. The SOW's 4-role auth model (CUSTOMER, REVIEWER, ADMIN + public ATTENDEE token) is unchanged — just the implementation.
+2. **Supabase Auth (not NextAuth.js v5).** Native integration with Supabase RLS, one fewer service to wire up, JWT-claim-based access. Access is **entitlement-based on a single `users` row** (a staff role plus per-feature flags) rather than one-role-per-user; the public ATTENDEE token flow is unchanged.
 3. **Supabase Storage (not AWS S3).** Two buckets replace the two S3 buckets. Drops the AWS account entirely. Signed URLs replace S3 pre-signed URLs.
 
 All other SOW decisions stand: Prisma, Stripe Connect with 14 products in Phase 1, Resend, Vercel, Puppeteer + @sparticuz/chromium, qrcode, ShadCN + Tailwind themed.

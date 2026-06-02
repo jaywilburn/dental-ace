@@ -37,7 +37,7 @@ export async function POST(request: Request) {
   }
 
   const user = await getCurrentUser();
-  if (!user || user.role !== "CUSTOMER" || !user.companyId) {
+  if (!user || !user.companyId) {
     return NextResponse.json(
       { error: "Authenticated CUSTOMER session required." },
       { status: 401 },

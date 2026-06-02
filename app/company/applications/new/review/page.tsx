@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/portal-shell";
 import { ApplicationStepBar } from "@/components/application-form/step-bar";
-import { requireRole } from "@/lib/auth/session";
+import { requireDentalAce } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import {
   ensureDraft,
@@ -17,7 +17,7 @@ import { applicationDataSchema } from "@/lib/forms/application/schemas";
   the draft from DRAFT to PENDING.
 */
 export default async function ApplicationStep5Page() {
-  const user = await requireRole("CUSTOMER");
+  const user = await requireDentalAce();
   const applicationId = await ensureDraft();
   const draft = await getDraftData(applicationId);
 

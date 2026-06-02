@@ -26,7 +26,7 @@ export default async function StripeMockCheckoutPage({
   if (!sku) redirect("/company/buy/credits");
 
   const user = await getCurrentUser();
-  if (!user || user.role !== "CUSTOMER" || !user.companyId) redirect("/login");
+  if (!user || !user.companyId) redirect("/login");
 
   const grants = formatGrants(sku.id);
   const stripeEventId = `evt_mock_${randomUUID()}`;
@@ -123,7 +123,7 @@ async function completeMockCheckout(formData: FormData) {
   }
 
   const user = await getCurrentUser();
-  if (!user || user.role !== "CUSTOMER" || !user.companyId) redirect("/login");
+  if (!user || !user.companyId) redirect("/login");
 
   const skuId = String(formData.get("skuId") ?? "");
   const stripeEventId = String(formData.get("stripeEventId") ?? "");

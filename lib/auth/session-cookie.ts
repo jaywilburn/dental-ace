@@ -1,13 +1,13 @@
 import "server-only";
 import { createHmac, timingSafeEqual } from "node:crypto";
-import type { Role } from "@prisma/client";
 
 /*
   HMAC-signed session cookie. Replaces the previous @supabase/ssr-based
   cookie roundtrip with one we fully control.
 
   Format:    <base64url(payload)>.<base64url(hmac-sha256(payload))>
-  Payload:   { userId, role, exp } where exp is epoch seconds.
+  Payload:   { userId, exp } where exp is epoch seconds. Access (staff role +
+             feature entitlements) is loaded fresh from the users row each request.
   Secret:    SESSION_SECRET env var (>= 32 chars).
   Lifetime:  7 days. Refresh on next sign-in.
 
@@ -26,7 +26,6 @@ export const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 7;
 
 export type SessionPayload = {
   userId: string;
-  role: Role;
   exp: number;
 };
 
@@ -57,9 +56,9 @@ function hmac(payload: string): string {
   return b64UrlEncode(createHmac("sha256", getSecret()).update(payload).digest());
 }
 
-export function signSession(payload: Pick<SessionPayload, "userId" | "role">): string {
+export function signSession(payload: Pick<SessionPayload, "userId">): string {
   const full: SessionPayload = {
-    ...payload,
+    userId: payload.userId,
     exp: Math.floor(Date.now() / 1000) + SESSION_MAX_AGE_SECONDS,
   };
   const encoded = b64UrlEncode(Buffer.from(JSON.stringify(full), "utf8"));
@@ -80,7 +79,7 @@ export function verifySession(cookieValue: string): SessionPayload | null {
 
   try {
     const payload = JSON.parse(b64UrlDecode(encoded).toString("utf8")) as SessionPayload;
-    if (!payload.userId || !payload.role || !payload.exp) return null;
+    if (!payload.userId || !payload.exp) return null;
     if (payload.exp < Math.floor(Date.now() / 1000)) return null;
     return payload;
   } catch {

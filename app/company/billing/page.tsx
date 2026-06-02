@@ -1,5 +1,5 @@
 import { PageHeader } from "@/components/portal-shell";
-import { requireRole } from "@/lib/auth/session";
+import { requireDentalAce } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 
 /*
@@ -13,7 +13,7 @@ export default async function BillingHistoryPage({
 }: {
   searchParams: Promise<{ just?: string }>;
 }) {
-  const user = await requireRole("CUSTOMER");
+  const user = await requireDentalAce();
   const { just } = await searchParams;
 
   if (!user.companyId) {

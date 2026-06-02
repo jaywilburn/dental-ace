@@ -1,6 +1,6 @@
 import { PortalShell } from "@/components/portal-shell";
 import { navFor } from "@/lib/nav/portal-nav";
-import { requireRole } from "@/lib/auth/session";
+import { requireDentalAce } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 
 export default async function CompanyLayout({
@@ -8,7 +8,7 @@ export default async function CompanyLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const user = await requireRole("CUSTOMER");
+  const user = await requireDentalAce();
 
   const company = user.companyId
     ? await prisma.company.findUnique({
@@ -19,8 +19,7 @@ export default async function CompanyLayout({
 
   return (
     <PortalShell
-      nav={navFor("CUSTOMER")}
-      activeHref="/company"
+      nav={navFor("company")}
       userInitials={initialsFromName(company?.name ?? user.email)}
       userName={company?.name ?? user.email}
       userRole="CE Provider"

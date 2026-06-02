@@ -9,7 +9,7 @@ import {
   FormSelect,
   FormTextarea,
 } from "@/components/application-form/form-controls";
-import { requireRole } from "@/lib/auth/session";
+import { requireDentalAce } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import {
   DELIVERY_FORMATS,
@@ -24,7 +24,7 @@ import { ensureDraft, getDraftData, saveStep1 } from "@/lib/forms/application/ac
   Server component. The draft id is materialized once per session via ensureDraft.
 */
 export default async function ApplicationStep1Page() {
-  const user = await requireRole("CUSTOMER");
+  const user = await requireDentalAce();
   const applicationId = await ensureDraft();
   const draft = await getDraftData(applicationId);
 

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { PageHeader } from "@/components/portal-shell";
 import { PortalStatCard } from "@/components/portal-stat-card";
-import { requireRole } from "@/lib/auth/session";
+import { requireDentalAce } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 
 /*
@@ -12,7 +12,7 @@ import { prisma } from "@/lib/prisma";
   Layout mirrors logic/dentalace-dev-mockup-suite-v3.html #co-dashboard.
 */
 export default async function CompanyDashboard() {
-  const user = await requireRole("CUSTOMER");
+  const user = await requireDentalAce();
   if (!user.companyId) {
     return (
       <>

@@ -1,5 +1,5 @@
 import { PageHeader } from "@/components/portal-shell";
-import { requireRole } from "@/lib/auth/session";
+import { requireStaff } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 
 /*
@@ -7,7 +7,7 @@ import { prisma } from "@/lib/prisma";
   with reviewer notes (the same text sent in the rejection email).
 */
 export default async function ReviewerRejectedPage() {
-  await requireRole("REVIEWER");
+  await requireStaff("REVIEWER");
   const apps = await prisma.courseApplication.findMany({
     where: { status: "REJECTED" },
     include: {

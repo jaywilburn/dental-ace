@@ -1,25 +1,32 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { BrandMark } from "@/components/brand-mark";
 import { getCurrentUser, homePathFor } from "@/lib/auth/session";
 
 /*
-  Public sign-in page. Unified for all three private roles (CUSTOMER, REVIEWER,
-  ADMIN). Phase 1 is invite-only, so there is no sign-up link. Role is read
-  from the session after sign-in and determines the post-login redirect.
+  Public sign-in. One account for the whole platform; access is by entitlement
+  after sign-in. Public sign-up lives at /signup. Unverified accounts are blocked
+  here and offered a resend.
 
   Visuals mirror the v3 mockup: centered card on navy, gold accent.
 */
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; resent?: string; verified?: string }>;
 }) {
-  // If already signed in, skip the form and route to the home portal.
+  // If already signed in, skip the form and route to the platform hub.
   const current = await getCurrentUser();
-  if (current) redirect(homePathFor(current.role));
+  if (current) redirect(homePathFor());
 
-  const { error } = await searchParams;
+  const { error, resent, verified } = await searchParams;
   const errorMessage = errorMessageFor(error);
+  const unverified = error === "unverified";
+  const info = verified
+    ? "Your email is confirmed. Please sign in."
+    : resent
+      ? "Verification email sent. Check your inbox."
+      : null;
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-navy p-8">
@@ -70,6 +77,11 @@ export default async function LoginPage({
             />
           </div>
 
+          {info ? (
+            <p className="mt-3 rounded-md bg-green-500/15 px-3 py-2 text-[11px] text-green-300">
+              {info}
+            </p>
+          ) : null}
           {errorMessage ? (
             <p className="mt-3 rounded-md bg-red/20 px-3 py-2 text-[11px] text-red-bg">
               {errorMessage}
@@ -84,13 +96,39 @@ export default async function LoginPage({
           </button>
 
           <p className="mt-4 text-center text-[10px] text-white/30">
-            Accounts are provisioned by AADB. Contact{" "}
-            <a className="text-ace-light" href="mailto:info@dentalace.org">
-              info@dentalace.org
-            </a>{" "}
-            for access.
+            New to DentalACE One?{" "}
+            <Link className="text-ace-light" href="/signup">
+              Create an account
+            </Link>
           </p>
         </form>
+
+        {unverified ? (
+          <form
+            action="/api/auth/resend-verification"
+            method="POST"
+            className="mt-3 rounded-xl border border-white/10 bg-white/[0.05] p-4"
+          >
+            <p className="mb-2 text-[11px] text-white/55">
+              Confirm your email to sign in. Enter it to resend the link.
+            </p>
+            <div className="flex gap-2">
+              <input
+                name="email"
+                type="email"
+                required
+                placeholder="you@example.com"
+                className="w-full rounded-md border border-white/[0.12] bg-white/[0.07] px-3 py-2 text-xs text-white outline-none focus:border-ace/60"
+              />
+              <button
+                type="submit"
+                className="shrink-0 rounded-md border border-white/15 px-3 py-2 text-[11px] font-semibold text-white/70 transition hover:text-white"
+              >
+                Resend
+              </button>
+            </div>
+          </form>
+        ) : null}
       </div>
     </main>
   );
@@ -102,10 +140,14 @@ function errorMessageFor(error: string | undefined): string | null {
       return "Email and password are required.";
     case "invalid":
       return "Invalid email or password.";
-    case "norole":
-      return "Your account has no role assigned. Contact AADB to resolve.";
+    case "unverified":
+      return "Please confirm your email address before signing in.";
+    case "verification":
+      return "That verification link is invalid or expired. Resend it below.";
+    case "noaccount":
+      return "No account found. Try creating one.";
     case "forbidden":
-      return "You don't have access to that portal.";
+      return "You don't have access to that area.";
     default:
       return null;
   }

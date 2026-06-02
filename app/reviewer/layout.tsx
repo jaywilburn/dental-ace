@@ -1,18 +1,17 @@
 import { PortalShell } from "@/components/portal-shell";
 import { navFor } from "@/lib/nav/portal-nav";
-import { requireRole } from "@/lib/auth/session";
+import { requireStaff } from "@/lib/auth/session";
 
 export default async function ReviewerLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const user = await requireRole("REVIEWER");
+  const user = await requireStaff("REVIEWER");
 
   return (
     <PortalShell
-      nav={navFor("REVIEWER")}
-      activeHref="/reviewer"
+      nav={navFor("reviewer")}
       userInitials={initialsFromEmail(user.email)}
       userName={user.email}
       userRole="AADB Reviewer"

@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { PageHeader } from "@/components/portal-shell";
-import { requireRole } from "@/lib/auth/session";
+import { requireDentalAce } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { applicationDataSchema } from "@/lib/forms/application/schemas";
 import { saveEventSessions } from "@/lib/events/actions";
@@ -16,7 +16,7 @@ export default async function EventSetupPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const user = await requireRole("CUSTOMER");
+  const user = await requireDentalAce();
   const { id } = await params;
 
   const event = await prisma.event.findFirst({

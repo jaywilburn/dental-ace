@@ -1,8 +1,9 @@
 // DentalACE One — Prisma schema
 //
-// Phase 1 (DentalACE) — 6 tables in this file. Phase 2 (ProTrack) and Phase 3
-// (Verify) tables are added when their phases start. See PRD-phase-1-dental-ace.md
-// §4 for the full data model and the rationale behind each column.
+// Phase 1 (DentalACE) tables + Phase 2 (ProTrack) tables live here. Phase 2 was
+// pulled forward at the client's request (see CLAUDE.md). Phase 3 (Verify) tables
+// are added when that phase starts. See PRD-phase-1-dental-ace.md §4 for the
+// Phase 1 data model and the rationale behind each column.
 //
 // RLS policies are managed separately as raw-SQL migrations in /sql-migrations
 // (Prisma doesn't manage RLS). The Supabase MCP applies them via apply_migration.
@@ -18,11 +19,13 @@ datasource db {
   provider = "postgresql"
 }
 
-enum Role {
-  CUSTOMER
+// Internal AADB staff only. Customer-facing access is by entitlement columns on
+// `users` (company_id = DentalACE, protrack_tier = ProTrack, verify_access = Verify),
+// not by a role. See CLAUDE.md "Access model".
+enum StaffRole {
+  NONE
   REVIEWER
   ADMIN
-  // LICENSEE and BOARD added in Phase 2 / Phase 3 migrations.
 }
 
 enum ApplicationStatus {
@@ -39,16 +42,84 @@ enum BillingTransactionType {
   ADMIN_OVERRIDE
 }
 
+// ── Phase 2 (ProTrack) enums ────────────────────────────────────────────────
+
+enum PlanTier {
+  FREE
+  PRO
+}
+
+enum LicenseType {
+  DDS_DMD // Dentist
+  RDH // Hygienist
+  DA // Assistant
+}
+
+enum CertSource {
+  ACE // auto-synced from a DentalACE-issued certificate
+  ADA_CERP
+  AGD_PACE
+  UPLOADED
+}
+
+enum VerificationStatus {
+  AUTO // ACE-issued, trusted
+  ADA_CERP_ACCEPTED
+  AGD_PACE_ACCEPTED
+  PENDING // uploaded, awaiting review / auto-accept window
+  ADMIN_VERIFIED
+}
+
+enum DeliveryFormat {
+  IN_PERSON
+  ONLINE
+  HYBRID
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  INCOMPLETE
+  TRIALING
+}
+
+enum SubscriptionInterval {
+  MONTH
+  YEAR
+}
+
+enum RequirementStatus {
+  PROVISIONAL // seeded best-effort; not board-confirmed
+  CONFIRMED // matches John's authoritative file
+}
+
+// One account per user. Access is read off this row:
+//   staff_role     -> internal staff areas (/reviewer, /admin)
+//   company_id     -> DentalACE (the company holds prepaid credits/billing)
+//   protrack_tier  -> ProTrack (every account is FREE; PRO is the paid upgrade)
+//   verify_access  -> Verify (admin-granted)
+// ProTrack profile + data (name, tier, licenses, certs) live on / hang off this row.
 model User {
-  id        String    @id @default(uuid()) @db.Uuid
-  email     String    @unique
-  role      Role      @default(CUSTOMER)
-  companyId String?   @map("company_id") @db.Uuid
-  company   Company?  @relation(fields: [companyId], references: [id])
-  createdAt DateTime  @default(now()) @map("created_at")
-  lastLogin DateTime? @map("last_login")
+  id               String    @id @default(uuid()) @db.Uuid
+  email            String    @unique
+  firstName        String?   @map("first_name")
+  lastName         String?   @map("last_name")
+  staffRole        StaffRole @default(NONE) @map("staff_role")
+  companyId        String?   @map("company_id") @db.Uuid
+  company          Company?  @relation(fields: [companyId], references: [id])
+  protrackTier     PlanTier  @default(FREE) @map("protrack_tier")
+  proExpiresAt     DateTime? @map("pro_expires_at")
+  verifyAccess     Boolean   @default(false) @map("verify_access")
+  reminderSettings Json      @default("{}") @map("reminder_settings") // {d90,d60,d30,d7,categoryGap}
+  emailVerifiedAt  DateTime? @map("email_verified_at") // null until the signup email is confirmed
+  createdAt        DateTime  @default(now()) @map("created_at")
+  lastLogin        DateTime? @map("last_login")
 
   reviewedApplications CourseApplication[] @relation("ReviewedBy")
+  licenses             UserLicense[]
+  certificates         CeCertificate[]
+  subscription         ProSubscription?
 
   @@map("users")
 }
@@ -170,6 +241,8 @@ model IssuedCertificate {
   certPdfUrl     String?          @map("cert_pdf_url")
   issuedAt       DateTime         @default(now()) @map("issued_at")
 
+  ceCertificate CeCertificate? // Phase 2: the ProTrack copy once auto-synced
+
   @@index([companyId, issuedAt])
   @@index([courseId])
   @@index([attendeeEmail])
@@ -191,4 +264,116 @@ model BillingTransaction {
 
   @@index([companyId, createdAt])
   @@map("billing_transactions")
+}
+
+// ── Phase 2 (ProTrack) models ───────────────────────────────────────────────
+//
+// ProTrack data hangs directly off the user. The child tables keep their
+// `licensee_id` column name (a "licensee" is just a user using ProTrack) but the
+// FK references users.id. RLS scopes ProTrack data by licensee_id = auth.uid().
+// See sql-migrations/0008_unified_access_rls.sql.
+
+model UserLicense {
+  id            String      @id @default(uuid()) @db.Uuid
+  licenseeId    String      @map("licensee_id") @db.Uuid
+  user          User        @relation(fields: [licenseeId], references: [id], onDelete: Cascade)
+  state         String      @db.Char(2) // 2-char code, joins state_requirements.state
+  licenseType   LicenseType @map("license_type")
+  licenseNumber String      @map("license_number")
+  renewalDate   DateTime    @map("renewal_date")
+  isPrimary     Boolean     @default(false) @map("is_primary")
+  createdAt     DateTime    @default(now()) @map("created_at")
+
+  @@unique([licenseeId, state, licenseType])
+  @@index([licenseeId])
+  @@index([state, licenseType]) // join key into state_requirements
+  @@index([licenseNumber]) // ACE-sync match key
+  @@map("user_licenses")
+}
+
+model CeCertificate {
+  id                  String             @id @default(uuid()) @db.Uuid
+  licenseeId          String             @map("licensee_id") @db.Uuid
+  user                User               @relation(fields: [licenseeId], references: [id], onDelete: Cascade)
+  courseTitle         String             @map("course_title")
+  provider            String
+  source              CertSource
+  category            String // matches a state_requirements category name
+  hours               Decimal            @db.Decimal(5, 2)
+  deliveryFormat      DeliveryFormat?    @map("delivery_format") // gates In-Person-only categories
+  completedAt         DateTime           @map("completed_at")
+  verificationStatus  VerificationStatus @map("verification_status")
+  fileUrl             String?            @map("file_url") // Supabase Storage path (uploads bucket)
+  certNumber          String?            @map("cert_number")
+  // Link back to the auto-synced ACE cert (null for uploaded / CERP / PACE). The
+  // @unique makes the ACE backfill idempotent — one ProTrack cert per issued cert.
+  issuedCertificateId String?            @unique @map("issued_certificate_id") @db.Uuid
+  issuedCertificate   IssuedCertificate? @relation(fields: [issuedCertificateId], references: [id])
+  createdAt           DateTime           @default(now()) @map("created_at")
+
+  @@index([licenseeId, completedAt])
+  @@index([licenseeId, category])
+  @@map("ce_certificates")
+}
+
+model StateRequirement {
+  id            String            @id @default(uuid()) @db.Uuid
+  state         String            @db.Char(2)
+  licenseType   LicenseType       @map("license_type")
+  totalHours    Decimal           @map("total_hours") @db.Decimal(5, 2)
+  cycleMonths   Int               @map("cycle_months") // 12 / 24 / 36 (months, not years)
+  renewalMonth  Int?              @map("renewal_month") // 1-12 for fixed-month boards (TX = 12)
+  categories    Json // [{name, hours, format: "ANY" | "IN_PERSON" | "ONLINE"}]
+  status        RequirementStatus @default(PROVISIONAL)
+  source        String? // provenance note; John's authoritative file overwrites
+  lastUpdatedAt DateTime          @updatedAt @map("last_updated_at")
+
+  @@unique([state, licenseType])
+  @@map("state_requirements")
+}
+
+model ProSubscription {
+  licenseeId           String               @id @map("licensee_id") @db.Uuid
+  user                 User                 @relation(fields: [licenseeId], references: [id], onDelete: Cascade)
+  stripeCustomerId     String               @map("stripe_customer_id")
+  stripeSubscriptionId String               @unique @map("stripe_subscription_id")
+  status               SubscriptionStatus
+  interval             SubscriptionInterval
+  currentPeriodEnd     DateTime             @map("current_period_end")
+  cancelAtPeriodEnd    Boolean              @default(false) @map("cancel_at_period_end")
+  createdAt            DateTime             @default(now()) @map("created_at")
+  updatedAt            DateTime             @updatedAt @map("updated_at")
+
+  @@index([stripeCustomerId])
+  @@map("pro_subscriptions")
+}
+
+model BoardInvite {
+  id           String       @id @default(uuid()) @db.Uuid
+  code         String       @unique
+  state        String       @db.Char(2)
+  licenseType  LicenseType? @map("license_type")
+  email        String? // optional pre-fill / restriction
+  usedByUserId String?      @map("used_by_user_id") @db.Uuid
+  usedAt       DateTime?    @map("used_at")
+  expiresAt    DateTime?    @map("expires_at")
+  createdAt    DateTime     @default(now()) @map("created_at")
+
+  @@index([code])
+  @@map("board_invites")
+}
+
+// Cron send-once ledger: one row per (licensee, license, threshold, cycle).
+// INSERT ... ON CONFLICT DO NOTHING is the idempotency guard, same idiom as
+// billing_transactions.stripeEventId.
+model ProtrackReminderLog {
+  id               String   @id @default(uuid()) @db.Uuid
+  licenseeId       String   @map("licensee_id") @db.Uuid
+  licenseId        String   @map("license_id") @db.Uuid
+  threshold        String // "d90" | "d60" | "d30" | "d7" | "categoryGap"
+  cycleRenewalDate DateTime @map("cycle_renewal_date")
+  sentAt           DateTime @default(now()) @map("sent_at")
+
+  @@unique([licenseeId, licenseId, threshold, cycleRenewalDate])
+  @@map("protrack_reminder_log")
 }

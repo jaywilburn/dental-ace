@@ -14,7 +14,7 @@ import { prisma } from "@/lib/prisma";
 
 async function customerCompanyId(): Promise<string> {
   const user = await getCurrentUser();
-  if (!user || user.role !== "CUSTOMER" || !user.companyId) redirect("/login");
+  if (!user || !user.companyId) redirect("/login");
   return user.companyId;
 }
 

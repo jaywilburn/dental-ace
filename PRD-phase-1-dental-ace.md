@@ -29,11 +29,11 @@ The week-by-week breakdown mirrors the SOW phase cards (Weeks 1–8) but reframe
 - CLAUDE.md present; the four `/logic` HTML files preserved as reference (not imported).
 
 ### Week 2 — Auth & Portal Shells
-- Supabase Auth with email/password. Sign-up disabled for CUSTOMER/REVIEWER/ADMIN roles (those are provisioned by ADMIN, not self-serve). Public attendee flow has no login.
-- Role stored on `users` row and mirrored in JWT claims via a Supabase auth hook or trigger.
+- Supabase Auth with email/password. **One public self-serve sign-up** creates a DentalACE One account with ProTrack Free active by default. **Staff (Reviewer/Admin) are admin-provisioned**, not self-serve. **DentalACE access requires a provider company with purchased credits** (sets `company_id`).
+- Staff role + feature entitlements stored on the `users` row and mirrored in JWT claims via a Supabase auth hook or trigger.
 - Login page at `/login` styled with the navy/gold ACE branding from the prototypes.
-- Portal layouts at `app/company/layout.tsx`, `app/reviewer/layout.tsx`, `app/admin/layout.tsx`, each server-rendered with a role guard that redirects to `/login` on mismatch.
-- Sidebar navigation per role.
+- Feature-area layouts at `app/company/layout.tsx`, `app/reviewer/layout.tsx`, `app/admin/layout.tsx`, each server-rendered with an entitlement guard that redirects to `/login` (or the platform home) on a missing entitlement.
+- Sidebar navigation per feature area.
 - Seed: 1 test company, 1 test reviewer user, 1 test admin user.
 
 ### Weeks 3–4 — Application Form, Stripe Billing, Reviewer Dashboard
@@ -124,7 +124,7 @@ Six tables. Phase 2/3 tables (`licensees`, `state_requirements`, `pro_subscripti
 
 | Table | Key Fields |
 |-------|-----------|
-| **users** | `id`, `email` (unique), `role` (`CUSTOMER` \| `REVIEWER` \| `ADMIN` — `LICENSEE`/`BOARD` added later), `company_id` (FK, nullable), `created_at`, `last_login` |
+| **users** | `id`, `email` (unique), `first_name`, `last_name`, `staff_role` (`NONE` \| `REVIEWER` \| `ADMIN`; default `NONE`), `company_id` (FK → companies, nullable — DentalACE access), `protrack_tier` (`FREE` \| `PRO`; default `FREE`), `verify_access` (boolean; default `false`), `created_at`, `last_login` |
 | **companies** | `id`, `name`, `stripe_customer_id`, `application_credits`, `application_credits_expires_at`, `cert_balance`, `cert_alert_threshold`, `total_certs_issued`, `created_at` |
 | **course_applications** | `id`, `company_id`, `status` (`DRAFT` \| `PENDING` \| `APPROVED` \| `REJECTED`), `course_title`, `ce_hours`, `course_type`, `delivery_method`, `application_data` (JSON — all 34 fields), `is_expedited`, `submitted_at`, `reviewed_by_id`, `reviewer_notes`, `reviewed_at`, `created_at` |
 | **accredited_courses** | `id`, `application_id`, `company_id`, `course_id_number` (`ACE-YYYY-#####`), `approved_at`, `expires_at` (+3y), `attendee_link_token` (UUID), `qr_code_url`, `approval_letter_url`, `quiz_questions` (JSON), `certs_issued_count`, `created_at` |
@@ -135,29 +135,31 @@ Six tables. Phase 2/3 tables (`licensees`, `state_requirements`, `pro_subscripti
 - All money stored as integer cents.
 - `stripe_event_id` is the idempotency key: webhook handler upserts on this column to be safe against Stripe retries.
 - All credit/balance decrements run inside a transaction with a row-level lock on the `companies` row.
-- Phase 2 will add `LICENSEE` to the `users.role` enum and a `licensees` table; design the enum and FK to make that additive, not a breaking change.
+- Access is **entitlement-based, not role-based**: DentalACE via `company_id` (the company holds prepaid credits/billing), ProTrack via `protrack_tier` (every account is `FREE` by default; `PRO` is the paid upgrade), and Verify via `verify_access` (admin-granted). `staff_role` is for internal AADB staff only. There is **no `LICENSEE` or `BOARD` role.** ProTrack's per-user data (`user_licenses`, `ce_certificates`) attaches to the user, and `first_name`/`last_name` live on `users`.
 
 ## 5. Authentication & Authorization
 
 **Supabase Auth** with email/password. No social providers in Phase 1.
 
-### Role model
-- Three private roles in Phase 1: `CUSTOMER`, `REVIEWER`, `ADMIN`.
-- Public ATTENDEE access is via `attendee_link_token` only — never authenticated.
-- Role is the single source of truth on `users.role`. A Supabase Auth Hook (or DB trigger) mirrors it into JWT custom claims so server components can read it without a DB roundtrip on every request.
+### Access model
+- **One account per user.** Access is by **entitlement**, read off the `users` row: `staff_role` (`NONE`/`REVIEWER`/`ADMIN`), `company_id` (DentalACE), `protrack_tier` (`FREE`/`PRO`), `verify_access`.
+- Public ATTENDEE access is via `attendee_link_token` only — never authenticated, no `users` row.
+- Entitlements are the single source of truth on the `users` row. A Supabase Auth Hook (or DB trigger) mirrors them into JWT custom claims so server components can read them without a DB roundtrip on every request.
 
 ### Route protection (Next 16, no middleware.ts)
-Each portal has a server-component `layout.tsx` that:
+Each feature area has a server-component `layout.tsx` that:
 1. Reads the Supabase session on the server.
-2. Loads the role from JWT claims (or falls back to a `users` lookup).
-3. Redirects to `/login` if no session, or `/403` if the role doesn't match.
+2. Loads the user's entitlements from JWT claims (or falls back to a `users` lookup).
+3. Redirects to `/login` if no session, or to the platform home if the required entitlement is missing.
 
 Layouts:
-- `app/company/layout.tsx` requires `CUSTOMER`.
-- `app/reviewer/layout.tsx` requires `REVIEWER`.
-- `app/admin/layout.tsx` requires `ADMIN`.
+- `app/company/layout.tsx` requires DentalACE access (`company_id` set).
+- `app/reviewer/layout.tsx` requires `staff_role = REVIEWER` (or `ADMIN`).
+- `app/admin/layout.tsx` requires `staff_role = ADMIN`.
+- `app/protrack/...` is available to every signed-in account; Pro pages require `protrack_tier = PRO`.
+- `app/verify/...` requires `verify_access = true`.
 - `app/attend/[token]/page.tsx` is public; access controlled by token + course-active check.
-- `app/login/page.tsx` is public; sign-in form for all three private roles.
+- `app/login/page.tsx` is public; one sign-in form for all accounts. Public sign-up creates an account with ProTrack Free.
 
 ### RLS as the floor
 Even if a route handler is misconfigured, Supabase RLS policies enforce:
@@ -310,7 +312,7 @@ Differences from the SOW: dropped 4 AWS vars and 2 NextAuth vars; added 5 Supaba
 
 ## 12. Open Questions
 
-1. **Sign-up flow for new CUSTOMER companies** — is it self-serve (any email can sign up and start a new company) or invite-only (AADB admin provisions new companies)? The SOW implies self-serve via the company portal flow but doesn't say it explicitly. Default assumption in this PRD: **invite-only in Phase 1** (admin provisions companies; self-serve added in v1.1 if needed). Confirm.
+1. **Sign-up flow — RESOLVED (June 2026).** There is **one public self-serve sign-up** for the whole platform: anyone can create a DentalACE One account, which gets **ProTrack Free** by default. **DentalACE access** is added in-app by creating or joining a provider company and purchasing credits (sets `company_id`). **Staff (Reviewer/Admin)** are admin-provisioned, not self-serve. **Verify** access is admin-granted after a board signs up. See §3 of the suite PRD and §5 above.
 2. **Reviewer-notification email** — single shared inbox or fan-out to all reviewer addresses? Default assumption: fan-out per `REVIEWER_NOTIFICATION_EMAILS`. Confirm.
 3. **Certificate PDF — exact design source.** SOW references "matching `ACE_Certificate.pdf` exactly" — confirm the file location of the template to mirror.
 4. **AADB logo + brand assets** — confirm where the high-res logo (PNG, transparent, 400×400+) will be sourced for both the cert PDF and the platform UI.
@@ -321,8 +323,8 @@ Differences from the SOW: dropped 4 AWS vars and 2 NextAuth vars; added 5 Supaba
 
 Anything referenced in the SOW that this PRD intentionally defers:
 
-- LICENSEE role and ProTrack portal → Phase 2 (Weeks 9–16).
-- BOARD role and Verify portal → Phase 3 (Weeks 17–24).
+- ProTrack feature (the `/protrack` area + `protrack_tier` entitlement) → Phase 2 (Weeks 9–16). *(Pulled forward at the client's request — see CLAUDE.md.)*
+- Verify feature (the `/verify` area + `verify_access` entitlement) → Phase 3 (Weeks 17–24).
 - `licensees`, `ce_certificates`, `state_requirements`, `pro_subscriptions`, `pending_licensees`, `state_boards`, `audit_batches`, `audit_selections`, `deficiency_notices` tables.
 - ACE → Track auto-sync hook (added in Phase 2 once `licensees` exists).
 - ProTrack Pro Stripe subscriptions.

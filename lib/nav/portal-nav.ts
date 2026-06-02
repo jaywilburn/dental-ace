@@ -1,13 +1,11 @@
-import type { Role } from "@prisma/client";
-
 /*
-  Sidebar navigation per portal. Hrefs reflect the real Phase 1 routes that
-  exist or are wired up in Weeks 3-4. Items that need conditional visibility
-  (e.g. Events when the company has at least one live-event course) get
-  rendered or hidden in the layout, not removed from the catalog here.
-
-  Mirror the mockup ordering in logic/dentalace-dev-mockup-suite-v3.html.
+  Sidebar navigation per feature area. Hrefs reflect the real routes that exist
+  or are wired up. Items that need conditional visibility (e.g. Events when the
+  company has at least one live-event course) get rendered or hidden in the
+  layout, not removed from the catalog here.
 */
+
+export type PortalArea = "company" | "reviewer" | "admin" | "protrack";
 
 export type NavItem = {
   label: string;
@@ -20,8 +18,8 @@ export type NavSection = {
   items: NavItem[];
 };
 
-export const portalNav: Record<"CUSTOMER" | "REVIEWER" | "ADMIN", NavSection[]> = {
-  CUSTOMER: [
+export const portalNav: Record<PortalArea, NavSection[]> = {
+  company: [
     {
       label: "My Account",
       items: [
@@ -41,7 +39,7 @@ export const portalNav: Record<"CUSTOMER" | "REVIEWER" | "ADMIN", NavSection[]> 
       ],
     },
   ],
-  REVIEWER: [
+  reviewer: [
     {
       items: [
         { label: "Review Queue", href: "/reviewer", icon: "📋" },
@@ -50,7 +48,7 @@ export const portalNav: Record<"CUSTOMER" | "REVIEWER" | "ADMIN", NavSection[]> 
       ],
     },
   ],
-  ADMIN: [
+  admin: [
     {
       label: "Operations",
       items: [
@@ -70,11 +68,29 @@ export const portalNav: Record<"CUSTOMER" | "REVIEWER" | "ADMIN", NavSection[]> 
       ],
     },
   ],
+  // ProTrack. "Pro Features" items redirect FREE accounts to the upgrade page
+  // server-side (lib/protrack/require-pro.ts); the lock treatment is cosmetic.
+  protrack: [
+    {
+      label: "My CE",
+      items: [
+        { label: "CE Dashboard", href: "/protrack", icon: "📊" },
+        { label: "My Certificates", href: "/protrack/certificates", icon: "📜" },
+        { label: "Upload Certificate", href: "/protrack/upload", icon: "⬆️" },
+        { label: "State Requirements", href: "/protrack/states", icon: "🗺️" },
+      ],
+    },
+    {
+      label: "Pro Features",
+      items: [
+        { label: "Reminders", href: "/protrack/reminders", icon: "🔔" },
+        { label: "Export Report", href: "/protrack/export", icon: "📤" },
+        { label: "Multi-State", href: "/protrack/multistate", icon: "🌐" },
+      ],
+    },
+  ],
 };
 
-export function navFor(role: Role): NavSection[] {
-  if (role === "CUSTOMER" || role === "REVIEWER" || role === "ADMIN") {
-    return portalNav[role];
-  }
-  return [];
+export function navFor(area: PortalArea): NavSection[] {
+  return portalNav[area];
 }

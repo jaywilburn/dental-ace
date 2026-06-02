@@ -43,19 +43,26 @@ export async function POST(request: NextRequest) {
 
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
   if (error || !data?.user) {
-    return redirectTo("/login?error=invalid");
+    // Supabase rejects unconfirmed emails when "Confirm email" is on; surface the
+    // precise message (with a resend) instead of a generic invalid-credentials.
+    const unconfirmed =
+      error?.code === "email_not_confirmed" ||
+      /not confirmed/i.test(error?.message ?? "");
+    return redirectTo(unconfirmed ? "/login?error=unverified" : "/login?error=invalid");
   }
 
   const row = await prisma.user.findUnique({
     where: { id: data.user.id },
-    select: { role: true },
+    select: { id: true, emailVerifiedAt: true },
   });
-  if (!row?.role) return redirectTo("/login?error=norole");
+  if (!row) return redirectTo("/login?error=noaccount");
+  // Block accounts whose email has not been verified (no harvest, no access).
+  if (!row.emailVerifiedAt) return redirectTo("/login?error=unverified");
 
-  const response = redirectTo(homePathFor(row.role));
+  const response = redirectTo(homePathFor());
   response.cookies.set({
     name: SESSION_COOKIE_NAME,
-    value: signSession({ userId: data.user.id, role: row.role }),
+    value: signSession({ userId: data.user.id }),
     maxAge: SESSION_MAX_AGE_SECONDS,
     ...SESSION_COOKIE_OPTIONS,
   });

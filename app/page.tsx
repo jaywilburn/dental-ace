@@ -30,7 +30,7 @@ export default function LandingPage() {
           label="Product 01 · Accreditation"
           name={
             <>
-              Dental <span className="text-ace">ACE</span>
+              Dental<span className="text-ace">ACE</span>
             </>
           }
           audience="For CE course providers and dental educators"
@@ -77,7 +77,7 @@ export default function LandingPage() {
               body: "See exactly where you stand on your state's requirements. Hours break down by category, progress updates in real time, and ProTrack tells you which categories still need work and how long you have left.",
             },
             {
-              lead: "Dental ACE Certificates Sync Automatically. No Upload Needed.",
+              lead: "DentalACE Certificates Sync Automatically. No Upload Needed.",
               body: "Finish a course through any AADB-accredited provider and the certificate lands in your record automatically, matched by license number. For anything earned elsewhere, upload it once and ProTrack maps it to the right category.",
             },
             {

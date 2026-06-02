@@ -1,5 +1,5 @@
 import { PageHeader } from "@/components/portal-shell";
-import { requireRole } from "@/lib/auth/session";
+import { requireDentalAce } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { CERT_BUNDLE_SKUS, formatPrice } from "@/lib/billing/catalog";
 import { startCheckout } from "@/lib/billing/start-checkout";
@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils";
   #co-buycerts.
 */
 export default async function BuyCertsPage() {
-  const user = await requireRole("CUSTOMER");
+  const user = await requireDentalAce();
   const certBalance = user.companyId
     ? (
         await prisma.company.findUnique({

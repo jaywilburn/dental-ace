@@ -1,40 +1,40 @@
-import Link from "next/link";
 import { BrandMark } from "@/components/brand-mark";
-import { cn } from "@/lib/utils";
+import { SidebarNav } from "@/components/sidebar-nav";
 import type { NavSection } from "@/lib/nav/portal-nav";
 
 /*
   Two-column portal shell: navy sidebar + light main area.
   Matches the .shell / .sidebar / .main pattern from the v3 mockup.
 
-  - `nav` drives the sidebar items (per-role config in lib/nav/portal-nav.ts)
-  - `activeHref` highlights the matching item
+  - `nav` drives the sidebar items (per-role config in lib/nav/portal-nav.ts);
+    SidebarNav highlights the active item from the current path
+  - `product` switches the brand wordmark (ace / pro / ver)
   - `userInitials` renders the gold avatar; `userName`/`userRole` go below it
 */
 export function PortalShell({
   nav,
-  activeHref,
+  product = "ace",
   userInitials,
   userName,
   userRole,
   children,
 }: {
   nav: NavSection[];
-  activeHref: string;
+  product?: "ace" | "pro" | "ver";
   userInitials: string;
   userName: string;
   userRole: string;
   children: React.ReactNode;
 }) {
   return (
-    <div className="grid min-h-screen grid-cols-1 bg-surface md:grid-cols-[220px_1fr]">
+    <div className="grid min-h-dvh grid-cols-1 bg-surface md:grid-cols-[220px_1fr]">
       <aside className="flex flex-col bg-navy text-white">
         <div className="border-b border-white/[0.07] px-4 pb-3.5 pt-4">
-          <BrandMark tag="AADB" />
+          <BrandMark tag="AADB" product={product} />
         </div>
 
         <div className="flex items-center gap-2 border-b border-white/[0.07] px-4 py-3">
-          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-ace font-bold text-[11px] text-navy">
+          <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-ace font-bold text-[11px] text-navy">
             {userInitials}
           </div>
           <div>
@@ -43,34 +43,7 @@ export function PortalShell({
           </div>
         </div>
 
-        <nav className="flex-1 py-3">
-          {nav.map((section, i) => (
-            <div key={i}>
-              {section.label ? (
-                <div className="px-4 pb-1 pt-2 font-mono text-[9px] uppercase tracking-[2px] text-white/20">
-                  {section.label}
-                </div>
-              ) : null}
-              {section.items.map((item) => {
-                const isActive = item.href === activeHref;
-                return (
-                  <Link
-                    key={item.label}
-                    href={item.href}
-                    className={cn(
-                      "flex items-center gap-2 border-l-2 border-transparent px-4 py-1.5 text-[11px] font-medium text-white/50 transition hover:bg-white/[0.04] hover:text-white",
-                      isActive &&
-                        "border-ace bg-ace/[0.1] text-white hover:bg-ace/[0.15]",
-                    )}
-                  >
-                    <span className="text-sm">{item.icon}</span>
-                    {item.label}
-                  </Link>
-                );
-              })}
-            </div>
-          ))}
-        </nav>
+        <SidebarNav nav={nav} />
 
         <form
           action="/api/auth/signout"

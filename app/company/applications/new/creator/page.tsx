@@ -9,11 +9,11 @@ import {
   FormNav,
   FormTextarea,
 } from "@/components/application-form/form-controls";
-import { requireRole } from "@/lib/auth/session";
+import { requireDentalAce } from "@/lib/auth/session";
 import { ensureDraft, getDraftData, saveStep2 } from "@/lib/forms/application/actions";
 
 export default async function ApplicationStep2Page() {
-  await requireRole("CUSTOMER");
+  await requireDentalAce();
   const applicationId = await ensureDraft();
   const draft = await getDraftData(applicationId);
   if (!draft.courseTitle) redirect("/company/applications/new");

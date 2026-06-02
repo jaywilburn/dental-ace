@@ -10,7 +10,7 @@ import {
   FormSelect,
   FormTextarea,
 } from "@/components/application-form/form-controls";
-import { requireRole } from "@/lib/auth/session";
+import { requireDentalAce } from "@/lib/auth/session";
 import { ensureDraft, getDraftData, saveStep3 } from "@/lib/forms/application/actions";
 
 const PRESENTER_ROLES = ["Primary Presenter", "Co-Presenter", "Moderator"] as const;
@@ -21,7 +21,7 @@ const PRESENTER_ROLES = ["Primary Presenter", "Co-Presenter", "Moderator"] as co
   expansion is additive.
 */
 export default async function ApplicationStep3Page() {
-  await requireRole("CUSTOMER");
+  await requireDentalAce();
   const applicationId = await ensureDraft();
   const draft = await getDraftData(applicationId);
   if (!draft.creatorName) redirect("/company/applications/new/creator");

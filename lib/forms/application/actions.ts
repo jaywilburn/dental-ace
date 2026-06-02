@@ -40,7 +40,7 @@ const STEP_ROUTES = [
 
 async function getCustomerCompanyId(): Promise<string> {
   const user = await getCurrentUser();
-  if (!user || user.role !== "CUSTOMER" || !user.companyId) {
+  if (!user || !user.companyId) {
     redirect("/login");
   }
   return user.companyId;

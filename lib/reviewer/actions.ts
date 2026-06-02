@@ -30,7 +30,7 @@ import {
 
 async function requireReviewer() {
   const user = await getCurrentUser();
-  if (!user || user.role !== "REVIEWER") redirect("/login");
+  if (!user || (user.staffRole !== "REVIEWER" && user.staffRole !== "ADMIN")) redirect("/login");
   return user;
 }
 

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { PageHeader } from "@/components/portal-shell";
-import { requireRole } from "@/lib/auth/session";
+import { requireStaff } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 
 /*
@@ -12,7 +12,7 @@ export default async function ReviewerQueuePage({
 }: {
   searchParams: Promise<{ just?: string }>;
 }) {
-  await requireRole("REVIEWER");
+  await requireStaff("REVIEWER");
   const { just } = await searchParams;
 
   const pending = await prisma.courseApplication.findMany({

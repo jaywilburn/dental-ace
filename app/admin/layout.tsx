@@ -1,18 +1,17 @@
 import { PortalShell } from "@/components/portal-shell";
 import { navFor } from "@/lib/nav/portal-nav";
-import { requireRole } from "@/lib/auth/session";
+import { requireStaff } from "@/lib/auth/session";
 
 export default async function AdminLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const user = await requireRole("ADMIN");
+  const user = await requireStaff("ADMIN");
 
   return (
     <PortalShell
-      nav={navFor("ADMIN")}
-      activeHref="/admin"
+      nav={navFor("admin")}
       userInitials={initialsFromEmail(user.email)}
       userName={user.email}
       userRole="AADB Admin"

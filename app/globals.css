@@ -19,7 +19,8 @@
   /* Text */
   --text: #0B1A2E;
   --text-mid: #344E6E;
-  --text-muted: #6B87A8;
+  /* Darkened from #6B87A8 to pass WCAG AA (4.5:1) for small text on white/surface. */
+  --text-muted: #56708A;
 
   /* DentalACE — gold (primary brand accent) */
   --ace: #C8971A;
@@ -137,7 +138,7 @@
   --color-ring: var(--ring);
 
   /* Typography */
-  --font-serif: var(--font-cormorant), Georgia, "Times New Roman", serif;
+  --font-serif: var(--font-dm-serif), Georgia, "Times New Roman", serif;
   --font-sans: var(--font-dm-sans), -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-mono: var(--font-jetbrains-mono), "SF Mono", Menlo, Consolas, monospace;
 

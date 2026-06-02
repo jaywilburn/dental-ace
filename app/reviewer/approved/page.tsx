@@ -1,5 +1,5 @@
 import { PageHeader } from "@/components/portal-shell";
-import { requireRole } from "@/lib/auth/session";
+import { requireStaff } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 
 /*
@@ -7,7 +7,7 @@ import { prisma } from "@/lib/prisma";
   course with cert-issued count and review attribution.
 */
 export default async function ReviewerApprovedPage() {
-  await requireRole("REVIEWER");
+  await requireStaff("REVIEWER");
   const courses = await prisma.accreditedCourse.findMany({
     include: {
       company: { select: { name: true } },

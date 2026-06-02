@@ -1,25 +1,32 @@
 import "server-only";
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
-import type { Role } from "@prisma/client";
+import type { StaffRole, PlanTier } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { SESSION_COOKIE_NAME, verifySession } from "@/lib/auth/session-cookie";
 
 /*
-  Read the current user from our HMAC-signed session cookie + a Prisma lookup
-  for the bits we don't put in the cookie (email, companyId). Returns null if:
-   - cookie missing, malformed, or expired
-   - role on disk has drifted from the role baked into the cookie
-   - the user record was deleted
+  Read the current user from our HMAC-signed session cookie (userId only) + a
+  Prisma lookup for the account's access. Access is entitlement-based:
+   - staffRole     -> internal staff areas (/reviewer, /admin)
+   - companyId     -> DentalACE (/company)
+   - protrackTier  -> ProTrack (/protrack); every account has at least FREE
+   - verifyAccess  -> Verify (/verify)
 
-  Layouts use requireRole(...) to bounce unauthenticated/role-mismatched users.
+  Feature-area layouts call the require* guards below to bounce accounts that
+  lack the entitlement. A logged-in account lands on the /home hub.
 */
 
 export type SessionUser = {
   id: string;
   email: string;
-  role: Role;
+  firstName: string | null;
+  lastName: string | null;
+  staffRole: StaffRole;
   companyId: string | null;
+  protrackTier: PlanTier;
+  proExpiresAt: Date | null;
+  verifyAccess: boolean;
 };
 
 export async function getCurrentUser(): Promise<SessionUser | null> {
@@ -32,35 +39,54 @@ export async function getCurrentUser(): Promise<SessionUser | null> {
 
   const user = await prisma.user.findUnique({
     where: { id: payload.userId },
-    select: { email: true, role: true, companyId: true },
+    select: {
+      email: true,
+      firstName: true,
+      lastName: true,
+      staffRole: true,
+      companyId: true,
+      protrackTier: true,
+      proExpiresAt: true,
+      verifyAccess: true,
+    },
   });
   if (!user) return null;
-  if (user.role !== payload.role) return null;
 
-  return {
-    id: payload.userId,
-    email: user.email,
-    role: user.role,
-    companyId: user.companyId,
-  };
+  return { id: payload.userId, ...user };
 }
 
-export async function requireRole(role: Role): Promise<SessionUser> {
+/** Any signed-in account (the floor for ProTrack, which every account has). */
+export async function requireUser(): Promise<SessionUser> {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
-  if (user.role !== role) redirect("/403");
   return user;
 }
 
-export function homePathFor(role: Role): string {
-  switch (role) {
-    case "CUSTOMER":
-      return "/company";
-    case "REVIEWER":
-      return "/reviewer";
-    case "ADMIN":
-      return "/admin";
-    default:
-      return "/login";
-  }
+/** Internal staff areas. ADMIN satisfies a REVIEWER requirement. */
+export async function requireStaff(min: "REVIEWER" | "ADMIN"): Promise<SessionUser> {
+  const user = await requireUser();
+  const ok =
+    user.staffRole === "ADMIN" ||
+    (min === "REVIEWER" && user.staffRole === "REVIEWER");
+  if (!ok) redirect("/home");
+  return user;
+}
+
+/** DentalACE: the account belongs to a provider company. */
+export async function requireDentalAce(): Promise<SessionUser> {
+  const user = await requireUser();
+  if (!user.companyId) redirect("/home");
+  return user;
+}
+
+/** Verify: admin-granted entitlement (ADMIN also passes). */
+export async function requireVerify(): Promise<SessionUser> {
+  const user = await requireUser();
+  if (!user.verifyAccess && user.staffRole !== "ADMIN") redirect("/home");
+  return user;
+}
+
+/** Post-login landing: the platform hub. */
+export function homePathFor(): string {
+  return "/home";
 }

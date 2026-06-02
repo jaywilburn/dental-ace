@@ -7,7 +7,7 @@ import {
   FormLabel,
   FormNav,
 } from "@/components/application-form/form-controls";
-import { requireRole } from "@/lib/auth/session";
+import { requireDentalAce } from "@/lib/auth/session";
 import { ensureDraft, getDraftData, saveStep4 } from "@/lib/forms/application/actions";
 import type { QuizQuestion } from "@/lib/forms/application/schemas";
 
@@ -17,7 +17,7 @@ import type { QuizQuestion } from "@/lib/forms/application/schemas";
   no client state. The full draft is read once and reused.
 */
 export default async function ApplicationStep4Page() {
-  await requireRole("CUSTOMER");
+  await requireDentalAce();
   const applicationId = await ensureDraft();
   const draft = await getDraftData(applicationId);
   if (!draft.presenters?.length) redirect("/company/applications/new/presenters");

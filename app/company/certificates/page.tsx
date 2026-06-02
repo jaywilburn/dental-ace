@@ -1,5 +1,5 @@
 import { PageHeader } from "@/components/portal-shell";
-import { requireRole } from "@/lib/auth/session";
+import { requireDentalAce } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 
 /*
@@ -9,7 +9,7 @@ import { prisma } from "@/lib/prisma";
 */
 
 export default async function CertificateLogPage() {
-  const user = await requireRole("CUSTOMER");
+  const user = await requireDentalAce();
 
   const certs = user.companyId
     ? await prisma.issuedCertificate.findMany({

@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { PageHeader } from "@/components/portal-shell";
-import { requireRole } from "@/lib/auth/session";
+import { requireStaff } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { applicationDataSchema } from "@/lib/forms/application/schemas";
 import { approveApplication, rejectApplication } from "@/lib/reviewer/actions";
@@ -18,7 +18,7 @@ export default async function ReviewerApplicationPage({
   params: Promise<{ applicationId: string }>;
   searchParams: Promise<{ error?: string }>;
 }) {
-  await requireRole("REVIEWER");
+  await requireStaff("REVIEWER");
   const { applicationId } = await params;
   const { error } = await searchParams;
 
