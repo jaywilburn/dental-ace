@@ -1,0 +1,79 @@
+import { prisma } from "@/lib/prisma";
+import { z } from "zod";
+import { quizQuestionSchema } from "@/lib/forms/application/schemas";
+import { AttendeeForm } from "@/components/attend/attendee-form";
+
+/*
+  Public attendee entry. Fails closed: an invalid token, an expired course, or
+  a company with no remaining cert balance shows a friendly notice and no form.
+*/
+
+export const dynamic = "force-dynamic";
+
+const quizArraySchema = z.array(quizQuestionSchema).length(5);
+
+function Notice({ title, body }: { title: string; body: string }) {
+  return (
+    <main className="mx-auto max-w-md px-4 py-16 text-center">
+      <h1 className="text-lg font-semibold text-slate-900">{title}</h1>
+      <p className="mt-2 text-sm text-slate-600">{body}</p>
+    </main>
+  );
+}
+
+export default async function AttendPage({
+  params,
+}: {
+  params: Promise<{ token: string }>;
+}) {
+  const { token } = await params;
+
+  const course = await prisma.accreditedCourse.findUnique({
+    where: { attendeeLinkToken: token },
+    select: {
+      expiresAt: true,
+      quizQuestions: true,
+      company: { select: { certBalance: true } },
+      application: { select: { courseTitle: true, ceHours: true } },
+    },
+  });
+
+  if (!course) {
+    return <Notice title="Course not found" body="This certificate link is not valid." />;
+  }
+  if (course.expiresAt < new Date()) {
+    return <Notice title="Course expired" body="This course is no longer accepting certificate claims." />;
+  }
+  if (course.company.certBalance <= 0) {
+    return (
+      <Notice
+        title="Certificates unavailable"
+        body="The course provider has run out of certificate credits. Please contact them to continue."
+      />
+    );
+  }
+
+  const quiz = quizArraySchema.safeParse(course.quizQuestions);
+  if (!quiz.success) {
+    return <Notice title="Course unavailable" body="This course is not configured for certificates yet." />;
+  }
+
+  // Strip correct answers before sending the quiz to the client.
+  const publicQuiz = quiz.data.map((q) =>
+    q.type === "TF"
+      ? { type: "TF" as const, question: q.question }
+      : { type: "MC" as const, question: q.question, options: q.options },
+  );
+
+  return (
+    <main className="mx-auto max-w-md px-4 py-8">
+      <h1 className="text-xl font-semibold text-slate-900">
+        {course.application.courseTitle ?? "Claim your certificate"}
+      </h1>
+      <p className="mt-1 text-sm text-slate-600">
+        {Number(course.application.ceHours ?? 0).toFixed(1)} CE hours
+      </p>
+      <AttendeeForm token={token} quiz={publicQuiz} />
+    </main>
+  );
+}
