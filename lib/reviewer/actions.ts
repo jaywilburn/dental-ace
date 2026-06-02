@@ -16,6 +16,7 @@ import {
   applicationDataSchema,
   type ApplicationData,
 } from "@/lib/forms/application/schemas";
+import { formatCourseId, nextSeqFromLast } from "@/lib/reviewer/course-id";
 
 /*
   Approve / reject server actions invoked from the reviewer detail page.
@@ -51,9 +52,7 @@ async function nextCourseIdNumber(
     orderBy: { courseIdNumber: "desc" },
     select: { courseIdNumber: true },
   });
-  const lastSeq = last ? Number(last.courseIdNumber.split("-").at(-1)) : 0;
-  const seq = (Number.isFinite(lastSeq) ? lastSeq : 0) + 1;
-  return `${prefix}${String(seq).padStart(5, "0")}`;
+  return formatCourseId(year, nextSeqFromLast(last?.courseIdNumber ?? null));
 }
 
 export async function approveApplication(formData: FormData) {
