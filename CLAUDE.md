@@ -69,7 +69,7 @@ DentalACE One is **one platform**; features are gated by **per-user entitlements
 | `staff_role` | `NONE`/`REVIEWER`/`ADMIN` | `/reviewer`, `/admin` (admin-provisioned; ADMIN is a superset) |
 | `company_id` | FK → companies | DentalACE (`/company`); the company holds prepaid credits/billing |
 | `protrack_tier` | `FREE`/`PRO` | ProTrack (`/protrack`); every account is `FREE`, `PRO` is the upgrade |
-| `verify_access` | boolean | Verify (`/board` portal); self-registered at `/signup/board` (no admin gate per Phase 3 plan) |
+| `verify_access` | boolean | Verify (`/board` portal); self-registered at `/signup/board` — first claim for a state requires a `.gov` email, subsequent admins for an already-claimed state must be granted access manually (admin invite UI is a follow-up; today via direct DB grant or `pnpm seed:verify`) |
 
 - **Guards** (`lib/auth/session.ts`): `requireUser()` (any account → ProTrack floor), `requireDentalAce()` (`company_id`), `requireStaff("REVIEWER"|"ADMIN")`, `requireVerify()`; ProTrack Pro pages use `requireProtrackPro()` (`lib/protrack/require-pro.ts`). A missing entitlement redirects to `/home`, never `/403`.
 - **One public sign-up** (`/signup` → `/api/auth/register`) creates an account + ProTrack Free (license fields optional). Login lands on the **`/home` hub**, which shows the account's available features. ATTENDEE stays a public token flow (no account).

@@ -36,11 +36,12 @@ export default async function BoardSignupPage({
         <div className="mb-5 flex flex-col items-center text-center text-white">
           <BrandMark tag="AADB" size="lg" />
           <h1 className="mt-3 font-serif text-2xl font-bold text-balance">
-            Create a state board account
+            Register your state board
           </h1>
           <p className="mt-1 max-w-sm text-[12px] text-white/55 text-pretty">
             Verify lets state dental boards run random CE audits, send
-            deficiency notices, and track resolution.
+            deficiency notices, and track resolution. First registration for
+            a state requires a <span className="font-mono">.gov</span> email.
           </p>
         </div>
 
