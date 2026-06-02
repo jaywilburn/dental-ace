@@ -49,6 +49,18 @@ describe("issueCertificateTx", () => {
     expect(createArg.data.score).toBe(4);
   });
 
+  it("issues the last certificate when balance is exactly 1", async () => {
+    const tx = fakeTx(1);
+    // @ts-expect-error fake tx shape
+    const result = await issueCertificateTx(tx, baseInput);
+    expect(result).toEqual({ id: "cert-1" });
+    expect(tx.company.update).toHaveBeenCalledWith({
+      where: { id: "company-1" },
+      data: { certBalance: { decrement: 1 }, totalCertsIssued: { increment: 1 } },
+    });
+    expect(tx.issuedCertificate.create).toHaveBeenCalledOnce();
+  });
+
   it("throws CertBalanceExhaustedError and never mutates when balance is 0", async () => {
     const tx = fakeTx(0);
     await expect(

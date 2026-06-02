@@ -30,6 +30,13 @@ export type IssueCertInput = {
   score: number;
 };
 
+/**
+ * Issue a passing certificate. CALLER CONTRACT: invoke this only from inside a
+ * `prisma.$transaction` that has ALREADY run
+ * `SELECT id FROM companies WHERE id = ... FOR UPDATE` on this company. The
+ * balance re-check below is only race-safe while that row lock is held; calling
+ * this without the lock lets concurrent attendees drive certBalance negative.
+ */
 export async function issueCertificateTx(
   tx: Prisma.TransactionClient,
   input: IssueCertInput,
