@@ -236,18 +236,18 @@ async function seedLicensees(): Promise<void> {
 
     // Insert auth user (sync to public.users). We use a junk password since
     // these accounts are read-only audit targets — no one logs in as them.
-    await admin.auth.admin
+    // Use the id returned by createUser directly; only fall back to a paged
+    // listUsers lookup on the re-run path where the email already exists.
+    const result = await admin.auth.admin
       .createUser({
         email,
         password: randomUUID(),
         email_confirm: true,
         user_metadata: { seed: SEED_TAG },
       })
-      .catch(() => undefined);
-
-    // Replace generated auth-user id with our deterministic uuid via admin API
-    // would be nice but Supabase doesn't expose that; instead just look up.
-    const actualId = await findAuthUserByEmail(email);
+      .catch(() => null);
+    const actualId =
+      result?.data?.user?.id ?? (await findAuthUserByEmail(email));
     if (!actualId) continue;
 
     await prisma.user.upsert({
