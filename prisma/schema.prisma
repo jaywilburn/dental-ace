@@ -415,6 +415,24 @@ model ProtrackReminderLog {
   @@map("protrack_reminder_log")
 }
 
+// Dedupe / cooldown store for the Dental ACE lifecycle cron
+// (app/api/cron/dental-ace-lifecycle). Written by the cron via the service-role
+// client; ADMIN-readable under RLS (sql-migrations/0010). refId is NOT NULL
+// (Postgres treats NULLs as distinct in unique constraints, which would silently
+// break dedupe): courseId for course_* kinds, companyId for company-level kinds.
+model NotificationLog {
+  id        String   @id @default(uuid()) @db.Uuid
+  companyId String   @map("company_id") @db.Uuid
+  kind      String // course_expiring_60 | course_expiring_30 | credits_expiring_30 | low_balance | balance_exhausted
+  refId     String   @map("ref_id") @db.Uuid
+  periodKey String   @map("period_key")
+  sentAt    DateTime @default(now()) @map("sent_at")
+
+  @@unique([companyId, kind, refId, periodKey])
+  @@index([companyId, kind, sentAt])
+  @@map("notification_log")
+}
+
 // ── Phase 3 (Verify) models ─────────────────────────────────────────────────
 //
 // State-board portal. A board has one or more BOARD admin users (users.boardId)
