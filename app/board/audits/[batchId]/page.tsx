@@ -103,14 +103,22 @@ export default async function AuditBatchPage({
           batch.licenseType ? licenseTypeShort(batch.licenseType) : "All license types"
         } · ${batch.renewalCycle}`}
         action={
-          batch.deficientCount > 0 ? (
-            <Link
-              href={`/board/notices/send?batch=${batch.id}`}
-              className="inline-flex items-center gap-2 rounded-md bg-ver px-4 py-2 text-[12px] font-semibold text-white transition-colors hover:bg-ver/90"
+          <div className="flex items-center gap-2">
+            <a
+              href={`/board/audits/${batch.id}/export`}
+              className="inline-flex items-center gap-2 rounded-md border border-border bg-white px-3 py-2 text-[12px] font-semibold text-text-mid transition-colors hover:border-ver hover:text-navy"
             >
-              ✉️ Send notices ({batch.deficientCount})
-            </Link>
-          ) : null
+              📄 Download PDF
+            </a>
+            {batch.deficientCount > 0 ? (
+              <Link
+                href={`/board/notices/send?batch=${batch.id}`}
+                className="inline-flex items-center gap-2 rounded-md bg-ver px-4 py-2 text-[12px] font-semibold text-white transition-colors hover:bg-ver/90"
+              >
+                ✉️ Send notices ({batch.deficientCount})
+              </Link>
+            ) : null}
+          </div>
         }
       />
 
