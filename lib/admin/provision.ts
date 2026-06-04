@@ -66,17 +66,26 @@ export async function createStaffAccount(formData: FormData) {
   }
   const userId = created!.user.id;
 
-  await prisma.user.create({
-    data: {
-      id: userId,
-      email: data.email,
-      firstName: data.firstName,
-      lastName: data.lastName,
-      staffRole: data.staffRole,
-      protrackTier: "FREE",
-      emailVerifiedAt: new Date(),
-    },
-  });
+  // If the users-row insert fails, roll back the just-created auth user so the
+  // email isn't permanently orphaned (which would block all future retries).
+  // Mirrors the rollback in app/api/auth/register/route.ts.
+  try {
+    await prisma.user.create({
+      data: {
+        id: userId,
+        email: data.email,
+        firstName: data.firstName,
+        lastName: data.lastName,
+        staffRole: data.staffRole,
+        protrackTier: "FREE",
+        emailVerifiedAt: new Date(),
+      },
+    });
+  } catch (err) {
+    console.error("[createStaffAccount] users-row insert failed; rolling back auth user", err);
+    await admin.auth.admin.deleteUser(userId).catch(() => {});
+    redirect(`/admin/users?error=${encodeURIComponent("Could not create the account. Please try again.")}`);
+  }
 
   const token = signSetPasswordToken(userId);
   const setPasswordUrl = `${resolveBaseUrl()}/set-password?token=${encodeURIComponent(token)}`;
