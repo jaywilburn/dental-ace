@@ -93,7 +93,7 @@ export default async function AdminCompanyDetailPage({
               </tr>
             </thead>
             <tbody>
-              {company.billingTransactions.map((t) => (
+              {company.billingTransactions.map((t: (typeof company.billingTransactions)[number]) => (
                 <tr key={t.id} className="border-b border-border last:border-b-0">
                   <td className="px-4 py-2 text-text-muted">{t.createdAt.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</td>
                   <td className="px-4 py-2 text-text-mid">{t.type}</td>
