@@ -53,18 +53,8 @@ export const portalNav: Record<PortalArea, NavSection[]> = {
       label: "Operations",
       items: [
         { label: "Dashboard", href: "/admin", icon: "📊" },
-        { label: "Companies", href: "#", icon: "🏢" },
-        { label: "Users", href: "#", icon: "👥" },
-        { label: "Applications", href: "#", icon: "📝" },
-        { label: "Certificates", href: "#", icon: "📜" },
-      ],
-    },
-    {
-      label: "Platform",
-      items: [
-        { label: "Billing Overrides", href: "#", icon: "🛠" },
-        { label: "Reviewer Accounts", href: "#", icon: "🧑‍⚖️" },
-        { label: "State Board Access", href: "#", icon: "🏛" },
+        { label: "Companies", href: "/admin/companies", icon: "🏢" },
+        { label: "Staff Users", href: "/admin/users", icon: "👥" },
       ],
     },
   ],
