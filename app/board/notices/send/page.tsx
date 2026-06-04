@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { sendNotices } from "@/lib/board/notices/send";
 import { DeficiencyStatus, NoticeType } from "@prisma/client";
 import { licenseTypeShort } from "@/lib/protrack/reference";
+import { parseStoredSettings } from "@/lib/board/settings/schema";
 
 /*
   /board/notices/send — INITIAL notice composer.
@@ -23,9 +24,9 @@ const fieldClass =
   "w-full rounded-md border border-border bg-white px-3 py-2 text-[13px] text-navy outline-none focus:border-ver";
 const labelClass = "mb-1 block text-[11px] font-semibold text-text-mid";
 
-function defaultDeadline(): string {
+function defaultDeadline(days: number): string {
   const d = new Date();
-  d.setDate(d.getDate() + 60);
+  d.setDate(d.getDate() + days);
   return d.toISOString().slice(0, 10);
 }
 
@@ -123,7 +124,9 @@ export default async function NoticesComposerPage({
                 <input
                   type="date"
                   name="deadlineAt"
-                  defaultValue={defaultDeadline()}
+                  defaultValue={defaultDeadline(
+                    parseStoredSettings(board.settings).deficiencyResponseDays,
+                  )}
                   className={fieldClass}
                 />
                 <p className="mt-1 text-[10px] text-text-muted">

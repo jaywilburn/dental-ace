@@ -3,6 +3,7 @@ import { requireBoard } from "@/lib/board/scope";
 import { prisma } from "@/lib/prisma";
 import { runAudit } from "@/lib/board/audits/run";
 import { LicenseType } from "@prisma/client";
+import { parseStoredSettings } from "@/lib/board/settings/schema";
 
 /*
   /board/audits/new — single-page form to configure a random audit.
@@ -37,6 +38,7 @@ export default async function NewAuditPage({
 }) {
   const { board } = await requireBoard();
   const { error } = await searchParams;
+  const settings = parseStoredSettings(board.settings);
 
   // Counts per license type so the form can preview the audit size before
   // submission. Counts are scoped to the board's state.
@@ -46,6 +48,14 @@ export default async function NewAuditPage({
     _count: { _all: true },
   });
   const totalCount = counts.reduce((acc, c) => acc + c._count._all, 0);
+
+  // Snap the saved default (5-50) to the closest of the four radio options.
+  const defaultSample = SAMPLES.reduce((best, s) =>
+    Math.abs(s - settings.defaultSamplePercent) <
+    Math.abs(best - settings.defaultSamplePercent)
+      ? s
+      : best,
+  );
 
   return (
     <>
@@ -120,7 +130,7 @@ export default async function NewAuditPage({
                   type="radio"
                   name="samplePercent"
                   value={pct}
-                  defaultChecked={pct === 15}
+                  defaultChecked={pct === defaultSample}
                   className="accent-ver"
                 />
                 {pct}%

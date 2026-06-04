@@ -67,6 +67,30 @@ const VERIFIED_STATUSES: VerificationStatus[] = [
 const NAME_TOKEN_RE = /^[\p{L}'\-.]+$/u;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+/**
+ * States whose board has opted out of the public lookup. ProTrack-uploaded
+ * certificates for licensees who hold *any* license in one of these states
+ * are hidden. AADB-issued certificates (IssuedCertificate) are unaffected —
+ * those are national accreditation records, not state-board ones.
+ *
+ * Resolution is once per call. The set is small (≤ 56 boards even at full
+ * 50-state coverage) so a per-request fetch is cheap. Re-querying every
+ * call also means a settings flip takes effect on the next request without
+ * any cache invalidation work.
+ */
+async function disabledLookupStates(): Promise<string[]> {
+  const rows = await prisma.board.findMany({
+    where: {
+      settings: {
+        path: ["publicLookupEnabled"],
+        equals: false,
+      },
+    },
+    select: { state: true },
+  });
+  return rows.map((r) => r.state);
+}
+
 function verificationLabelFor(
   source: VerifyHit["source"],
   status?: VerificationStatus | null,
@@ -146,6 +170,7 @@ async function runNameLookup(parsed: {
   first: string;
   last: string;
 }): Promise<VerifyHit[]> {
+  const disabledStates = await disabledLookupStates();
   // Anchored-prefix match on both first and last, verified-only,
   // intentionally narrow.
   const protrackRows = await prisma.ceCertificate.findMany({
@@ -156,6 +181,9 @@ async function runNameLookup(parsed: {
           { firstName: { startsWith: parsed.first, mode: "insensitive" } },
           { lastName: { startsWith: parsed.last, mode: "insensitive" } },
         ],
+        ...(disabledStates.length > 0
+          ? { licenses: { none: { state: { in: disabledStates } } } }
+          : {}),
       },
     },
     orderBy: { completedAt: "desc" },
@@ -257,15 +285,27 @@ async function runIdentifierLookup(args: {
   licenseNumber?: string;
   certNumber?: string;
 }): Promise<VerifyHit[]> {
+  const disabledStates = await disabledLookupStates();
+  const userOptOutClause: Prisma.UserWhereInput | null =
+    disabledStates.length > 0
+      ? { licenses: { none: { state: { in: disabledStates } } } }
+      : null;
+
   const protrackWhere: Prisma.CeCertificateWhereInput = {
     verificationStatus: { in: VERIFIED_STATUSES },
     ...(args.licenseNumber
-      ? { user: { licenses: { some: { licenseNumber: args.licenseNumber } } } }
+      ? {
+          user: {
+            licenses: { some: { licenseNumber: args.licenseNumber } },
+            ...(userOptOutClause ?? {}),
+          },
+        }
       : {
           OR: [
             { certNumber: args.certNumber! },
             ...(UUID_RE.test(args.certNumber!) ? [{ id: args.certNumber! }] : []),
           ],
+          ...(userOptOutClause ? { user: userOptOutClause } : {}),
         }),
   };
 
