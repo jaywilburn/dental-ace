@@ -1,7 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { headers } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { homePathFor } from "@/lib/auth/session";
+import { rateLimit } from "@/lib/rate-limit";
 import {
   signSession,
   SESSION_COOKIE_NAME,
@@ -34,6 +36,10 @@ export async function POST(request: NextRequest) {
     NextResponse.redirect(`${origin}${path}`, 303);
 
   if (!email || !password) return redirectTo("/login?error=missing");
+
+  const ip = ((await headers()).get("x-forwarded-for") ?? "unknown").split(",")[0].trim();
+  const limited = rateLimit(`signin:${ip}:${email.toLowerCase()}`, { limit: 8, windowMs: 15 * 60 * 1000 });
+  if (!limited.ok) return redirectTo("/login?error=rate_limited");
 
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,

@@ -2,7 +2,9 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
 import { z } from "zod";
+import { rateLimit } from "@/lib/rate-limit";
 import { Prisma } from "@prisma/client";
 import { getCurrentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
@@ -202,6 +204,12 @@ export async function submitApplication(formData: FormData) {
   const applicationId = String(formData.get("applicationId") ?? "");
   const useExpedited = formData.get("useExpedited") === "true";
   const companyId = await getCustomerCompanyId();
+
+  const ip = ((await headers()).get("x-forwarded-for") ?? "unknown").split(",")[0].trim();
+  const submitLimited = rateLimit(`submit:${ip}:${companyId}`, { limit: 20, windowMs: 60 * 60 * 1000 });
+  if (!submitLimited.ok) {
+    redirect("/company/applications/new/review?error=rate_limited");
+  }
 
   const draft = await prisma.courseApplication.findFirst({
     where: { id: applicationId, companyId, status: "DRAFT" },
