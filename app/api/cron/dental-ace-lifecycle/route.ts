@@ -45,6 +45,12 @@ function fmtDate(d: Date): string {
   return d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
 }
 
+// Both helpers insert the notification_log row BEFORE sending the email, so a
+// transient sendEmail failure suppresses that notification permanently
+// (send-once) or until the cooldown elapses (balance alerts). This is an
+// intentional at-most-once / never-duplicate tradeoff, matching
+// app/api/cron/protrack-reminders. Do not reorder without that tradeoff in mind.
+
 /** Send-once: insert the key; email only when the row is newly created. */
 async function sendOnce(
   key: { companyId: string; kind: string; refId: string; periodKey: string },
@@ -169,7 +175,9 @@ export async function GET(request: NextRequest) {
     // Balance alerts (mutually exclusive).
     const kind = balanceAlertKind(c.certBalance, c.certAlertThreshold);
     if (kind === "exhausted") {
-      const to = adminEmail ? [...recipients, adminEmail] : recipients;
+      const to = adminEmail
+        ? Array.from(new Set([...recipients, adminEmail]))
+        : recipients;
       if (to.length > 0) {
         const props = { companyName: c.name, buyCertsUrl: `${origin}/company/buy/certs` };
         const sent = await sendWithCooldown(c.id, "balance_exhausted", now, () =>
