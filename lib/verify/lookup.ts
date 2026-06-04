@@ -1,4 +1,5 @@
 import "server-only";
+import { Prisma, VerificationStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 
 /*
@@ -7,30 +8,41 @@ import { prisma } from "@/lib/prisma";
      of accredited courses. Authoritative (the AADB issued them).
    - CeCertificate (Phase 2) — every CE cert a ProTrack licensee holds, whether
      auto-synced from DentalACE (source=ACE) or uploaded from another provider
-     (ADA CERP, AGD PACE, or self-upload). Provenance is on each row.
+     (ADA CERP, AGD PACE, or self-upload).
 
-  The lookup returns a normalized hit shape with a `provenance` label so the
-  public page can show users where the record came from. PII surfaced is the
-  minimum needed for a verifier to recognize the certificate: name, license
-  number, course title, hours, completion date. Email is never returned to the
-  public.
+  Security model:
+   - Only certificates with a verified status are surfaced. PENDING uploads
+     are intentionally hidden — anyone can upload anything to ProTrack, so
+     publishing those would let attackers seed fake records into the public
+     lookup. IssuedCertificate is always verified (AADB issued it).
+   - Name-mode lookups are deliberately weaker than license/cert modes:
+       * both first AND last name required, ≥3 chars each, alphabetic only
+       * prefix match (startsWith), not substring (contains)
+       * limit 5 hits, not 50 — surface a "refine your search" UX instead of
+         leaking a directory
+       * license number is NOT returned in name-mode hits (the requester
+         didn't provide it; surfacing it enables enumeration). License-mode
+         and cert-mode hits do include the license number because the
+         requester already supplied an identifier-grade input.
+   - Email is never returned to the public regardless of mode.
 
-  Three lookup modes:
-   - license — match by license number (exact)
-   - name    — match by attendee/licensee name (case-insensitive contains)
-   - cert    — match by cert number; for CeCertificate use cert_number, for
-               IssuedCertificate use the row id when input is a uuid
-
-  Results are de-duped: when a CeCertificate row links back to an
-  IssuedCertificate (source=ACE), we prefer the CeCertificate (richer
-  provenance + category data) and drop the IssuedCertificate twin.
+  Results carry a `verificationStatus` so the UI can render an explicit
+  "AADB Issued" / "ADA CERP Verified" / etc. badge.
 */
 
 export type VerifyMode = "license" | "name" | "cert";
 
+export type VerifyVerificationLabel =
+  | "AADB Issued"
+  | "ADA CERP Verified"
+  | "AGD PACE Verified"
+  | "Admin Verified"
+  | "Verified";
+
 export type VerifyHit = {
   source: "DENTAL_ACE_ISSUED" | "PROTRACK";
   provenance: string;
+  verificationLabel: VerifyVerificationLabel;
   attendeeName: string;
   licenseNumber: string | null;
   courseTitle: string;
@@ -40,7 +52,39 @@ export type VerifyHit = {
   certNumber: string | null;
 };
 
-const HIT_LIMIT = 50;
+const LICENSE_OR_CERT_LIMIT = 50;
+const NAME_LIMIT = 5;
+
+// Verified-only filter applied to the ProTrack side. PENDING is excluded so
+// the public lookup can't be poisoned by anonymous uploads.
+const VERIFIED_STATUSES: VerificationStatus[] = [
+  VerificationStatus.AUTO,
+  VerificationStatus.ADA_CERP_ACCEPTED,
+  VerificationStatus.AGD_PACE_ACCEPTED,
+  VerificationStatus.ADMIN_VERIFIED,
+];
+
+const NAME_TOKEN_RE = /^[\p{L}'\-.]+$/u;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function verificationLabelFor(
+  source: VerifyHit["source"],
+  status?: VerificationStatus | null,
+): VerifyVerificationLabel {
+  if (source === "DENTAL_ACE_ISSUED") return "AADB Issued";
+  switch (status) {
+    case VerificationStatus.AUTO:
+      return "AADB Issued";
+    case VerificationStatus.ADA_CERP_ACCEPTED:
+      return "ADA CERP Verified";
+    case VerificationStatus.AGD_PACE_ACCEPTED:
+      return "AGD PACE Verified";
+    case VerificationStatus.ADMIN_VERIFIED:
+      return "Admin Verified";
+    default:
+      return "Verified";
+  }
+}
 
 function provenanceFor(
   source: VerifyHit["source"],
@@ -57,13 +101,26 @@ function provenanceFor(
     case "AGD_PACE":
       return "Uploaded by licensee · AGD PACE source";
     case "UPLOADED":
-      return "Uploaded by licensee · self-reported";
+      return "Uploaded by licensee";
     default:
       return "Uploaded by licensee";
   }
 }
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/** Parse a name query into {first, last} only if both pass the strict gate. */
+function parseStrictName(
+  raw: string,
+): { first: string; last: string } | null {
+  const tokens = raw.trim().split(/\s+/).filter(Boolean);
+  if (tokens.length < 2) return null;
+  const first = tokens[0]!;
+  const last = tokens.slice(1).join(" ");
+  if (first.length < 3 || last.length < 3) return null;
+  if (!NAME_TOKEN_RE.test(first)) return null;
+  // Allow apostrophes / hyphens / dots / spaces in the last name (O'Brien, Smith-Jones).
+  if (!/^[\p{L}'\-. ]+$/u.test(last)) return null;
+  return { first, last };
+}
 
 export async function lookupCertificates(
   mode: VerifyMode,
@@ -72,81 +129,37 @@ export async function lookupCertificates(
   const q = rawQuery.trim();
   if (q.length < 2) return [];
 
-  const protrack = await queryProtrack(mode, q);
-  const issued = await queryIssued(mode, q);
+  if (mode === "name") {
+    const parsed = parseStrictName(q);
+    if (!parsed) return [];
+    return runNameLookup(parsed);
+  }
 
-  // De-dupe: drop IssuedCertificate twins that are already represented in the
-  // ProTrack-side hits (CeCertificate.issued_certificate_id links them).
-  const protrackIssuedIds = new Set<string>();
-  // We re-query just to get the link ids; the ProTrack query above already
-  // pulled them, but the hit type doesn't carry it — keep it lean by passing
-  // the ids back through a second narrow query.
-  const linked = await prisma.ceCertificate.findMany({
+  if (mode === "license") {
+    return runIdentifierLookup({ licenseNumber: q });
+  }
+
+  return runIdentifierLookup({ certNumber: q });
+}
+
+async function runNameLookup(parsed: {
+  first: string;
+  last: string;
+}): Promise<VerifyHit[]> {
+  // Anchored-prefix match on both first and last, verified-only,
+  // intentionally narrow.
+  const protrackRows = await prisma.ceCertificate.findMany({
     where: {
-      ...(mode === "license"
-        ? { user: { licenses: { some: { licenseNumber: q } } } }
-        : mode === "name"
-          ? { user: { OR: nameClauses(q) } }
-          : { OR: [{ certNumber: q }, ...(UUID_RE.test(q) ? [{ id: q }] : [])] }),
-      issuedCertificateId: { not: null },
+      verificationStatus: { in: VERIFIED_STATUSES },
+      user: {
+        AND: [
+          { firstName: { startsWith: parsed.first, mode: "insensitive" } },
+          { lastName: { startsWith: parsed.last, mode: "insensitive" } },
+        ],
+      },
     },
-    select: { issuedCertificateId: true },
-    take: HIT_LIMIT,
-  });
-  for (const row of linked) {
-    if (row.issuedCertificateId) protrackIssuedIds.add(row.issuedCertificateId);
-  }
-
-  const issuedDeduped = issued.filter(
-    (hit) => !(hit.certNumber && protrackIssuedIds.has(hit.certNumber)),
-  );
-
-  return [...protrack, ...issuedDeduped]
-    .sort((a, b) => b.completedAt.getTime() - a.completedAt.getTime())
-    .slice(0, HIT_LIMIT);
-}
-
-function nameClauses(q: string) {
-  const parts = q.split(/\s+/).filter(Boolean);
-  if (parts.length === 1) {
-    return [
-      { firstName: { contains: parts[0]!, mode: "insensitive" as const } },
-      { lastName: { contains: parts[0]!, mode: "insensitive" as const } },
-    ];
-  }
-  // First + last assumed when multiple tokens.
-  const [first, ...rest] = parts;
-  const last = rest.join(" ");
-  return [
-    {
-      AND: [
-        { firstName: { contains: first!, mode: "insensitive" as const } },
-        { lastName: { contains: last, mode: "insensitive" as const } },
-      ],
-    },
-  ];
-}
-
-async function queryProtrack(
-  mode: VerifyMode,
-  q: string,
-): Promise<VerifyHit[]> {
-  const where =
-    mode === "license"
-      ? { user: { licenses: { some: { licenseNumber: q } } } }
-      : mode === "name"
-        ? { user: { OR: nameClauses(q) } }
-        : {
-            OR: [
-              { certNumber: q },
-              ...(UUID_RE.test(q) ? [{ id: q }] : []),
-            ],
-          };
-
-  const rows = await prisma.ceCertificate.findMany({
-    where,
     orderBy: { completedAt: "desc" },
-    take: HIT_LIMIT,
+    take: NAME_LIMIT,
     select: {
       certNumber: true,
       courseTitle: true,
@@ -154,61 +167,26 @@ async function queryProtrack(
       category: true,
       completedAt: true,
       source: true,
-      user: {
-        select: {
-          firstName: true,
-          lastName: true,
-          licenses: {
-            where:
-              mode === "license"
-                ? { licenseNumber: q }
-                : { isPrimary: true },
-            select: { licenseNumber: true },
-            take: 1,
-          },
-        },
-      },
+      verificationStatus: true,
+      issuedCertificateId: true,
+      user: { select: { firstName: true, lastName: true } },
     },
   });
 
-  return rows.map((row) => ({
-    source: "PROTRACK" as const,
-    provenance: provenanceFor("PROTRACK", row.source),
-    attendeeName: nameOf(row.user.firstName, row.user.lastName) ?? "—",
-    licenseNumber: row.user.licenses[0]?.licenseNumber ?? null,
-    courseTitle: row.courseTitle,
-    ceHours: Number(row.hours),
-    category: row.category,
-    completedAt: row.completedAt,
-    certNumber: row.certNumber,
-  }));
-}
-
-async function queryIssued(
-  mode: VerifyMode,
-  q: string,
-): Promise<VerifyHit[]> {
-  const where =
-    mode === "license"
-      ? { licenseNumber: q }
-      : mode === "name"
-        ? { attendeeName: { contains: q, mode: "insensitive" as const } }
-        : UUID_RE.test(q)
-          ? { id: q }
-          : { id: "00000000-0000-0000-0000-000000000000" }; // no-match
-
-  const rows = await prisma.issuedCertificate.findMany({
-    where,
+  const issuedRows = await prisma.issuedCertificate.findMany({
+    where: {
+      // attendee_name in IssuedCertificate is "First Last"; we anchor on the
+      // full string starting with the first name.
+      attendeeName: { startsWith: `${parsed.first} `, mode: "insensitive" },
+    },
     orderBy: { issuedAt: "desc" },
-    take: HIT_LIMIT,
+    take: NAME_LIMIT,
     select: {
       id: true,
       attendeeName: true,
-      licenseNumber: true,
       issuedAt: true,
       course: {
         select: {
-          courseIdNumber: true,
           application: {
             select: {
               courseTitle: true,
@@ -221,17 +199,171 @@ async function queryIssued(
     },
   });
 
-  return rows.map((row) => ({
-    source: "DENTAL_ACE_ISSUED" as const,
-    provenance: provenanceFor("DENTAL_ACE_ISSUED"),
-    attendeeName: row.attendeeName,
-    licenseNumber: row.licenseNumber,
-    courseTitle: row.course.application.courseTitle ?? "(course)",
-    ceHours: Number(row.course.application.ceHours ?? 0),
-    category: row.course.application.courseType ?? null,
-    completedAt: row.issuedAt,
-    certNumber: row.id,
+  // Filter issued by last-name prefix in JS (the column is a single field;
+  // doing this in SQL would need a function index we don't have).
+  const lastLower = parsed.last.toLowerCase();
+  const issuedNarrowed = issuedRows.filter((row) => {
+    const parts = row.attendeeName.split(/\s+/);
+    if (parts.length < 2) return false;
+    const lastToken = parts.slice(1).join(" ").toLowerCase();
+    return lastToken.startsWith(lastLower);
+  });
+
+  // De-dupe: drop IssuedCertificate twins represented in ProTrack rows.
+  const linkedIds = new Set(
+    protrackRows
+      .map((r) => r.issuedCertificateId)
+      .filter((id): id is string => Boolean(id)),
+  );
+
+  const protrackHits: VerifyHit[] = protrackRows.map((row) => ({
+    source: "PROTRACK",
+    provenance: provenanceFor("PROTRACK", row.source),
+    verificationLabel: verificationLabelFor("PROTRACK", row.verificationStatus),
+    attendeeName:
+      nameOf(row.user.firstName, row.user.lastName) ?? "—",
+    // Name mode: do NOT return license number. Surfacing it here would let an
+    // attacker enumerate license numbers from a list of names.
+    licenseNumber: null,
+    courseTitle: row.courseTitle,
+    ceHours: Number(row.hours),
+    category: row.category,
+    completedAt: row.completedAt,
+    certNumber: row.certNumber,
   }));
+
+  const issuedHits: VerifyHit[] = issuedNarrowed
+    .filter((row) => !linkedIds.has(row.id))
+    .map((row) => ({
+      source: "DENTAL_ACE_ISSUED",
+      provenance: provenanceFor("DENTAL_ACE_ISSUED"),
+      verificationLabel: verificationLabelFor("DENTAL_ACE_ISSUED"),
+      attendeeName: row.attendeeName,
+      // Name mode: never surface license number (see comment above).
+      licenseNumber: null,
+      courseTitle: row.course.application.courseTitle ?? "(course)",
+      ceHours: Number(row.course.application.ceHours ?? 0),
+      category: row.course.application.courseType ?? null,
+      completedAt: row.issuedAt,
+      certNumber: row.id,
+    }));
+
+  return [...protrackHits, ...issuedHits]
+    .sort((a, b) => b.completedAt.getTime() - a.completedAt.getTime())
+    .slice(0, NAME_LIMIT);
+}
+
+async function runIdentifierLookup(args: {
+  licenseNumber?: string;
+  certNumber?: string;
+}): Promise<VerifyHit[]> {
+  const protrackWhere: Prisma.CeCertificateWhereInput = {
+    verificationStatus: { in: VERIFIED_STATUSES },
+    ...(args.licenseNumber
+      ? { user: { licenses: { some: { licenseNumber: args.licenseNumber } } } }
+      : {
+          OR: [
+            { certNumber: args.certNumber! },
+            ...(UUID_RE.test(args.certNumber!) ? [{ id: args.certNumber! }] : []),
+          ],
+        }),
+  };
+
+  const protrackRows = await prisma.ceCertificate.findMany({
+    where: protrackWhere,
+    orderBy: { completedAt: "desc" },
+    take: LICENSE_OR_CERT_LIMIT,
+    select: {
+      certNumber: true,
+      courseTitle: true,
+      hours: true,
+      category: true,
+      completedAt: true,
+      source: true,
+      verificationStatus: true,
+      issuedCertificateId: true,
+      user: {
+        select: {
+          firstName: true,
+          lastName: true,
+          licenses: {
+            where: args.licenseNumber
+              ? { licenseNumber: args.licenseNumber }
+              : { isPrimary: true },
+            select: { licenseNumber: true },
+            take: 1,
+          },
+        },
+      },
+    },
+  });
+
+  const issuedWhere: Prisma.IssuedCertificateWhereInput = args.licenseNumber
+    ? { licenseNumber: args.licenseNumber }
+    : UUID_RE.test(args.certNumber!)
+      ? { id: args.certNumber! }
+      : { id: "00000000-0000-0000-0000-000000000000" }; // no-match sentinel
+
+  const issuedRows = await prisma.issuedCertificate.findMany({
+    where: issuedWhere,
+    orderBy: { issuedAt: "desc" },
+    take: LICENSE_OR_CERT_LIMIT,
+    select: {
+      id: true,
+      attendeeName: true,
+      licenseNumber: true,
+      issuedAt: true,
+      course: {
+        select: {
+          application: {
+            select: {
+              courseTitle: true,
+              ceHours: true,
+              courseType: true,
+            },
+          },
+        },
+      },
+    },
+  });
+
+  const linkedIds = new Set(
+    protrackRows
+      .map((r) => r.issuedCertificateId)
+      .filter((id): id is string => Boolean(id)),
+  );
+
+  const protrackHits: VerifyHit[] = protrackRows.map((row) => ({
+    source: "PROTRACK",
+    provenance: provenanceFor("PROTRACK", row.source),
+    verificationLabel: verificationLabelFor("PROTRACK", row.verificationStatus),
+    attendeeName: nameOf(row.user.firstName, row.user.lastName) ?? "—",
+    licenseNumber: row.user.licenses[0]?.licenseNumber ?? null,
+    courseTitle: row.courseTitle,
+    ceHours: Number(row.hours),
+    category: row.category,
+    completedAt: row.completedAt,
+    certNumber: row.certNumber,
+  }));
+
+  const issuedHits: VerifyHit[] = issuedRows
+    .filter((row) => !linkedIds.has(row.id))
+    .map((row) => ({
+      source: "DENTAL_ACE_ISSUED",
+      provenance: provenanceFor("DENTAL_ACE_ISSUED"),
+      verificationLabel: verificationLabelFor("DENTAL_ACE_ISSUED"),
+      attendeeName: row.attendeeName,
+      licenseNumber: row.licenseNumber,
+      courseTitle: row.course.application.courseTitle ?? "(course)",
+      ceHours: Number(row.course.application.ceHours ?? 0),
+      category: row.course.application.courseType ?? null,
+      completedAt: row.issuedAt,
+      certNumber: row.id,
+    }));
+
+  return [...protrackHits, ...issuedHits]
+    .sort((a, b) => b.completedAt.getTime() - a.completedAt.getTime())
+    .slice(0, LICENSE_OR_CERT_LIMIT);
 }
 
 function nameOf(first: string | null, last: string | null): string | null {

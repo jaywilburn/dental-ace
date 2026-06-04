@@ -31,9 +31,17 @@ const MODE_LABELS: Record<VerifyMode, string> = {
 
 const MODE_PLACEHOLDERS: Record<VerifyMode, string> = {
   license: "e.g. TX-DDS_DMD-100042",
-  name: "First Last",
+  name: "First Last (both required, ≥3 chars each)",
   cert: "e.g. ACE-2026-00042 or cert number from your record",
 };
+
+function isStrictNameInput(value: string): boolean {
+  const tokens = value.trim().split(/\s+/).filter(Boolean);
+  if (tokens.length < 2) return false;
+  const first = tokens[0]!;
+  const last = tokens.slice(1).join(" ");
+  return first.length >= 3 && last.length >= 3;
+}
 
 export default async function VerifyPage({
   searchParams,
@@ -48,8 +56,9 @@ export default async function VerifyPage({
 
   let results: Awaited<ReturnType<typeof lookupCertificates>> = [];
   let limitState: ReturnType<typeof checkRateLimit> | null = null;
+  const nameNeedsRefinement = mode === "name" && hasQuery && !isStrictNameInput(q);
 
-  if (hasQuery) {
+  if (hasQuery && !nameNeedsRefinement) {
     const reqHeaders = await headers();
     limitState = checkRateLimit(
       `verify:${rateLimitKeyFromHeaders(reqHeaders)}`,
@@ -121,7 +130,19 @@ export default async function VerifyPage({
       </form>
 
       <section className="mt-8 w-full max-w-2xl">
-        {hasQuery && limitState && !limitState.ok ? (
+        {nameNeedsRefinement ? (
+          <div className="rounded-lg border border-white/10 bg-white/[0.03] p-6 text-center">
+            <p className="text-[14px] font-semibold text-white">
+              Refine your search
+            </p>
+            <p className="mt-1 text-[12px] text-white/55 text-pretty">
+              Name lookups require both a first and last name, each at least
+              three letters. To avoid name-only directory scraping we don&apos;t
+              return partial matches. Try license number or certificate number
+              for the most accurate results.
+            </p>
+          </div>
+        ) : hasQuery && limitState && !limitState.ok ? (
           <p className="rounded-lg border border-red-200/20 bg-red-50/5 p-5 text-center text-[13px] text-white/70">
             Too many lookups from this address. Try again after{" "}
             {limitState.resetAt.toLocaleTimeString("en-US", {
@@ -159,14 +180,13 @@ export default async function VerifyPage({
                     <span
                       className={
                         "rounded-full px-2 py-0.5 text-[10px] font-semibold " +
-                        (hit.source === "DENTAL_ACE_ISSUED"
+                        (hit.source === "DENTAL_ACE_ISSUED" ||
+                        hit.verificationLabel === "AADB Issued"
                           ? "bg-ace/20 text-ace-light"
                           : "bg-ver/20 text-white")
                       }
                     >
-                      {hit.source === "DENTAL_ACE_ISSUED"
-                        ? "AADB Issued"
-                        : "ProTrack"}
+                      {hit.verificationLabel}
                     </span>
                   </div>
                   <dl className="mt-2 grid gap-1 text-[12px] sm:grid-cols-2">
