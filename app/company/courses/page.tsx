@@ -75,6 +75,7 @@ export default async function MyCoursesPage({
                 <th className="px-4 py-2 font-semibold">Approved</th>
                 <th className="px-4 py-2 font-semibold">Expires</th>
                 <th className="px-4 py-2 text-right font-semibold">Certs Issued</th>
+                <th className="px-4 py-2 text-right font-semibold">Badge</th>
               </tr>
             </thead>
             <tbody>
@@ -101,6 +102,11 @@ export default async function MyCoursesPage({
                   </td>
                   <td className="px-4 py-2 text-right text-text-mid tabular-nums">
                     {course.certsIssuedCount}
+                  </td>
+                  <td className="px-4 py-2 text-right">
+                    <a href={`/api/courses/${course.id}/badge`} className="text-ace underline">
+                      Download
+                    </a>
                   </td>
                 </tr>
               ))}
