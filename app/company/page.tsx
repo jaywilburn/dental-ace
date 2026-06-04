@@ -136,7 +136,7 @@ export default async function CompanyDashboard() {
           </Link>
           {lowBalance ? (
             <p className="text-[11px] text-ace-dark">
-              ⚠ Low balance alert active · email + banner
+              ⚠ Low balance, top up to keep issuing certificates
             </p>
           ) : null}
         </div>
