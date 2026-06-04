@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { BillingTransactionType } from "@prisma/client";
-import { getCurrentUser } from "@/lib/auth/session";
+import { requireStaff } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import {
   validateAppCreditGrant,
@@ -19,12 +19,6 @@ import {
 
 class OverrideError extends Error {}
 
-async function requireAdmin() {
-  const user = await getCurrentUser();
-  if (!user || user.staffRole !== "ADMIN") redirect("/login");
-  return user;
-}
-
 function oneYearFromNow(): Date {
   const d = new Date();
   d.setFullYear(d.getFullYear() + 1);
@@ -32,7 +26,7 @@ function oneYearFromNow(): Date {
 }
 
 export async function grantAppCredits(formData: FormData) {
-  const admin = await requireAdmin();
+  const admin = await requireStaff("ADMIN");
   const companyId = String(formData.get("companyId") ?? "");
   const quantity = Number(formData.get("quantity") ?? 0);
   const expedited = formData.get("expedited") === "true";
@@ -66,7 +60,7 @@ export async function grantAppCredits(formData: FormData) {
 }
 
 export async function adjustCertBalance(formData: FormData) {
-  const admin = await requireAdmin();
+  const admin = await requireStaff("ADMIN");
   const companyId = String(formData.get("companyId") ?? "");
   const delta = Number(formData.get("delta") ?? 0);
   if (!companyId) throw new Error("companyId required");
