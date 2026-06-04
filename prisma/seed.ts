@@ -65,6 +65,12 @@ const SEEDS = [
     companyName: null,
   },
   {
+    email: "john@dentalace.org",
+    password: "test1234",
+    staffRole: StaffRole.ADMIN,
+    companyName: null,
+  },
+  {
     email: "reviewer@dentalace.org",
     password: "test1234",
     staffRole: StaffRole.REVIEWER,

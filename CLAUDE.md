@@ -157,6 +157,7 @@ Seeded by `pnpm seed` against the live Supabase project. Every account signs in 
 | Account | Email | Password | Entitlement |
 |---------|-------|----------|-------------|
 | Admin | `jay@wilburncreative.com` | `ChangeMeNow!2026` | `staff_role = ADMIN` (all areas) |
+| Admin | `john@dentalace.org` | `test1234` | `staff_role = ADMIN` (all areas) |
 | Reviewer | `reviewer@dentalace.org` | `test1234` | `staff_role = REVIEWER` |
 | DentalACE | `customer@dentalace.org` | `test1234` | `company_id` → Texas Dental Association |
 | ProTrack | `sarah.mitchell@example.com` | `test1234` | `protrack_tier = FREE` |
