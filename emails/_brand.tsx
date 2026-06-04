@@ -43,13 +43,17 @@ export function BrandEmail({
 }: {
   preview: string;
   subject: string;
-  product?: "suite" | "ace" | "pro";
+  product?: "suite" | "ace" | "pro" | "ver";
   children: React.ReactNode;
 }) {
   const wordmark =
     product === "pro" ? (
       <>
         Pro<span style={{ color: colors.aceLight }}>Track</span>
+      </>
+    ) : product === "ver" ? (
+      <>
+        <span style={{ color: colors.aceLight }}>Verify</span>
       </>
     ) : product === "suite" ? (
       <>
@@ -63,9 +67,11 @@ export function BrandEmail({
   const eyebrow =
     product === "pro"
       ? "CE Tracking for Dental Professionals"
-      : product === "suite"
-        ? "An AADB Program"
-        : "AADB Accredited Continuing Education";
+      : product === "ver"
+        ? "State Board CE Compliance"
+        : product === "suite"
+          ? "An AADB Program"
+          : "AADB Accredited Continuing Education";
 
   return (
     <Html>
@@ -146,9 +152,11 @@ export function BrandEmail({
             >
               {product === "pro"
                 ? "ProTrack · An AADB Program · dentalace.org"
-                : product === "suite"
-                  ? "DentalACE One · An AADB Program · dentalace.org"
-                  : "DentalACE · AADB Continuing Education Program · dentalace.org"}
+                : product === "ver"
+                  ? "Verify · An AADB Program · dentalace.org"
+                  : product === "suite"
+                    ? "DentalACE One · An AADB Program · dentalace.org"
+                    : "DentalACE · AADB Continuing Education Program · dentalace.org"}
               <br />
               Questions? Contact{" "}
               <a
