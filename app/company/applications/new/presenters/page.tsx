@@ -12,6 +12,7 @@ import {
 } from "@/components/application-form/form-controls";
 import { requireDentalAce } from "@/lib/auth/session";
 import { ensureDraft, getDraftData, saveStep3 } from "@/lib/forms/application/actions";
+import { FileUploadField } from "@/components/application-form/file-upload-field";
 
 const PRESENTER_ROLES = ["Primary Presenter", "Co-Presenter", "Moderator"] as const;
 
@@ -57,6 +58,14 @@ export default async function ApplicationStep3Page() {
               name="presenter_0_commercialDisclosure"
               defaultValue={primary?.commercialDisclosure ?? "No relevant financial relationships to disclose"}
               required
+            />
+          </FormField>
+          <FormField fullWidth>
+            <FileUploadField
+              applicationId={applicationId}
+              field="headshot"
+              label="Presenter Headshot"
+              existingFilename={draft.headshot?.filename}
             />
           </FormField>
         </FormCard>

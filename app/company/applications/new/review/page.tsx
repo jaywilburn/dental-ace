@@ -10,6 +10,8 @@ import {
   submitApplication,
 } from "@/lib/forms/application/actions";
 import { applicationDataSchema } from "@/lib/forms/application/schemas";
+import { resolveAttachmentLinks } from "@/lib/forms/application/attachments";
+import { AttachmentsCard } from "@/components/application-form/attachments-card";
 
 /*
   Step 5 — Review & Submit. Read-only summary of every field on the draft.
@@ -31,6 +33,8 @@ export default async function ApplicationStep5Page() {
     where: { id: user.companyId! },
     select: { applicationCredits: true, expeditedCredits: true },
   });
+
+  const attachments = await resolveAttachmentLinks(data);
 
   return (
     <>
@@ -101,6 +105,10 @@ export default async function ApplicationStep5Page() {
             full: true,
           }))}
         />
+
+        {attachments.length > 0 ? (
+          <AttachmentsCard title="Section E — Attachments" links={attachments} />
+        ) : null}
       </section>
 
       <form action={submitApplication} className="mt-6">

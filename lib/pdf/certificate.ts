@@ -1,5 +1,6 @@
 import "server-only";
 import PDFDocument from "pdfkit";
+import { drawAadbSeal } from "./seal";
 
 /*
   PDFKit-rendered completion certificate (landscape). Mirrors the approval
@@ -39,18 +40,25 @@ export async function renderCertificatePdf(
       doc.rect(24, 24, W - 48, H - 48).lineWidth(3).strokeColor(GOLD).stroke();
       doc.rect(32, 32, W - 64, H - 64).lineWidth(1).strokeColor(NAVY).stroke();
 
+      // Two-color brand mark. PDFKit miscenters `continued` segments under
+      // align:"center", so measure both halves and place them at an absolute,
+      // manually-centered x to render "DentalACE" as one word (ACE in gold).
+      doc.font("Times-Bold").fontSize(30);
+      const brandWidth =
+        doc.widthOfString("Dental") + doc.widthOfString("ACE");
       doc
         .fillColor(NAVY)
-        .font("Times-Bold")
-        .fontSize(30)
-        .text("Dental ", 0, 70, { align: "center", continued: true })
+        .text("Dental", (W - brandWidth) / 2, 70, { continued: true })
         .fillColor(GOLD)
         .text("ACE");
       doc
         .fillColor(TEXT_MUTED)
         .font("Helvetica")
         .fontSize(11)
-        .text("AADB Accredited Continuing Education Program", { align: "center" });
+        .text("AADB Accredited Continuing Education Program", 0, 112, {
+          align: "center",
+          width: W,
+        });
 
       doc
         .fillColor(NAVY)
@@ -92,6 +100,8 @@ export async function renderCertificatePdf(
           322,
           { align: "center" },
         );
+
+      drawAadbSeal(doc, { cx: W / 2, cy: 440, r: 40 });
 
       doc
         .fillColor(TEXT_MUTED)

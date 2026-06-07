@@ -11,6 +11,7 @@ import {
 } from "@/components/application-form/form-controls";
 import { requireDentalAce } from "@/lib/auth/session";
 import { ensureDraft, getDraftData, saveStep2 } from "@/lib/forms/application/actions";
+import { FileUploadField } from "@/components/application-form/file-upload-field";
 
 export default async function ApplicationStep2Page() {
   await requireDentalAce();
@@ -56,6 +57,14 @@ export default async function ApplicationStep2Page() {
               defaultValue={draft.professionalBio ?? ""}
               required
               className="min-h-[120px]"
+            />
+          </FormField>
+          <FormField fullWidth>
+            <FileUploadField
+              applicationId={applicationId}
+              field="cvResume"
+              label="CV / Resume"
+              existingFilename={draft.cvResume?.filename}
             />
           </FormField>
         </FormCard>

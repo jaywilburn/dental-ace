@@ -40,7 +40,7 @@ function badgeHtml(input: AceBadgeInput): string {
     .title{font-size:20px;margin:14px 0;color:#E6EDF5}
     .meta{font-size:13px;color:#6B87A8;margin-top:10px}
   </style></head><body><div class="card">
-    <div class="brand">Dental <span>ACE</span></div>
+    <div class="brand">Dental<span>ACE</span></div>
     <div class="seal">Accredited Continuing Education</div>
     <div class="title">${safeTitle}</div>
     <div class="meta">Course ID ${input.courseIdNumber}</div>
