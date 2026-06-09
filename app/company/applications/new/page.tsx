@@ -18,6 +18,7 @@ import {
   ADA_CERP_CATEGORIES,
 } from "@/lib/forms/application/schemas";
 import { ensureDraft, getDraftData, saveStep1 } from "@/lib/forms/application/actions";
+import { FileUploadField } from "@/components/application-form/file-upload-field";
 
 /*
   Step 1 — Course Information (fields 1-14 incl. Live Event detection).
@@ -202,6 +203,14 @@ export default async function ApplicationStep1Page() {
               name="adaCerpCategory"
               defaultValue={draft.adaCerpCategory ?? ADA_CERP_CATEGORIES[0]}
               options={ADA_CERP_CATEGORIES}
+            />
+          </FormField>
+          <FormField fullWidth>
+            <FileUploadField
+              applicationId={applicationId}
+              field="courseOutline"
+              label="Course Outline"
+              existingFilename={draft.courseOutline?.filename}
             />
           </FormField>
         </FormCard>

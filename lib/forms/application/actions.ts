@@ -16,7 +16,15 @@ import {
   step4Schema,
   applicationDataSchema,
   type ApplicationData,
+  type FileRef,
 } from "@/lib/forms/application/schemas";
+import {
+  uploadMetaSchema,
+  validateUpload,
+  sanitizeFilename,
+  buildAttachmentPath,
+  type AttachmentField,
+} from "@/lib/forms/application/upload-schema";
 import { sendEmail } from "@/lib/email/send";
 import ApplicationSubmittedEmail from "@/emails/application-submitted";
 import { chooseCreditPool } from "@/lib/billing/credit-pool";
@@ -317,24 +325,38 @@ export async function submitApplication(formData: FormData) {
 }
 
 /**
- * Upload a draft attachment (course outline PDF, CV PDF, headshot image) via
- * the service-role Supabase client. Client posts a multipart form to the
- * route handler at /api/uploads/draft-attachment, which calls into this.
+ * Upload a draft attachment (course outline, CV/resume, presenter headshot) via
+ * the service-role Supabase client. Client posts a multipart form to the route
+ * handler at /api/uploads/draft-attachment, which calls into this. Re-validates
+ * field + MIME/size (defense in depth) and sanitizes the filename before it
+ * reaches the storage path. The fileRef is persisted straight into
+ * applicationData; mergeStep preserves it because no step writes these keys.
  */
 export async function uploadDraftAttachment(args: {
   applicationId: string;
-  field: "courseOutline" | "cvResume" | "headshot";
+  field: AttachmentField;
   file: File;
-}): Promise<{ storagePath: string }> {
+}): Promise<FileRef> {
   const companyId = await getCustomerCompanyId();
+
+  const meta = uploadMetaSchema.parse({
+    applicationId: args.applicationId,
+    field: args.field,
+  });
+  const invalid = validateUpload(meta.field, {
+    type: args.file.type,
+    size: args.file.size,
+  });
+  if (invalid) throw new Error(invalid);
+
   const draft = await prisma.courseApplication.findFirst({
-    where: { id: args.applicationId, companyId, status: "DRAFT" },
+    where: { id: meta.applicationId, companyId, status: "DRAFT" },
     select: { id: true, applicationData: true },
   });
   if (!draft) throw new Error("Draft not found");
 
   const bucket = process.env.SUPABASE_STORAGE_BUCKET_UPLOADS ?? "uploads";
-  const storagePath = `applications/${draft.id}/${args.field}/${Date.now()}-${args.file.name}`;
+  const storagePath = buildAttachmentPath(draft.id, meta.field, args.file.name, Date.now());
 
   const supabase = createServiceRoleClient();
   const buffer = Buffer.from(await args.file.arrayBuffer());
@@ -344,20 +366,20 @@ export async function uploadDraftAttachment(args: {
   });
   if (error) throw new Error(`Upload failed: ${error.message}`);
 
-  const fileRef = {
+  const fileRef: FileRef = {
     storagePath,
-    filename: args.file.name,
+    filename: sanitizeFilename(args.file.name),
     uploadedAt: new Date().toISOString(),
   };
 
   const mergedAttachments = {
     ...((draft.applicationData as Record<string, unknown>) ?? {}),
-    [args.field]: fileRef,
+    [meta.field]: fileRef,
   };
   await prisma.courseApplication.update({
     where: { id: draft.id },
     data: { applicationData: mergedAttachments as Prisma.InputJsonValue },
   });
 
-  return { storagePath };
+  return fileRef;
 }

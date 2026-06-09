@@ -4,6 +4,8 @@ import { PageHeader } from "@/components/portal-shell";
 import { requireStaff } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { applicationDataSchema } from "@/lib/forms/application/schemas";
+import { resolveAttachmentLinks } from "@/lib/forms/application/attachments";
+import { AttachmentsCard } from "@/components/application-form/attachments-card";
 import { approveApplication, rejectApplication } from "@/lib/reviewer/actions";
 
 /*
@@ -49,6 +51,7 @@ export default async function ReviewerApplicationPage({
     );
   }
   const data = parsed.data;
+  const attachments = await resolveAttachmentLinks(data);
 
   return (
     <>
@@ -108,6 +111,8 @@ export default async function ReviewerApplicationPage({
               { label: "Commercial Disclosure", value: p.commercialDisclosure, full: true },
             ])}
           />
+
+          <AttachmentsCard title="Attachments" links={attachments} />
         </div>
 
         <div className="space-y-5">

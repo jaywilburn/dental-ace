@@ -38,9 +38,9 @@ export function LandingHero() {
         AADB · Dental CE Platform · dentalace.org
       </p>
       <h1 className="relative z-10 mb-4 text-balance font-serif text-[clamp(1.875rem,6vw,3.625rem)] font-bold leading-[1.08] text-white">
-        Dental continuing education,
+        Dental Continuing Education,
         <br />
-        <span className="text-ace-light">accredited by the AADB</span>
+        <span className="text-ace-light">Accredited by the AADB</span>
       </h1>
       <p className="relative z-10 mx-auto mb-12 max-w-[520px] text-pretty text-base font-light leading-relaxed text-white/65 md:text-lg">
         Accredit your courses, issue certificates automatically, and feed every

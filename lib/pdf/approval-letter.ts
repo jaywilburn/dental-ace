@@ -1,5 +1,6 @@
 import "server-only";
 import PDFDocument from "pdfkit";
+import { drawAadbSeal } from "./seal";
 
 /*
   PDFKit-rendered approval letter. Generates a single-page A4 letter with
@@ -44,7 +45,7 @@ export async function renderApprovalLetterPdf(
         .fillColor("#FFFFFF")
         .font("Times-Bold")
         .fontSize(28)
-        .text("Dental ", 56, 36, { continued: true })
+        .text("Dental", 56, 36, { continued: true })
         .fillColor("#E4C060")
         .text("ACE");
       doc
@@ -149,6 +150,9 @@ export async function renderApprovalLetterPdf(
       doc.font("Helvetica").fontSize(10).fillColor(TEXT_MUTED).text(
         "American Association of Dental Boards",
       );
+
+      // Accreditation seal, set to the right of the signature block.
+      drawAadbSeal(doc, { cx: doc.page.width - 110, cy: 640, r: 38 });
 
       // Footer
       doc

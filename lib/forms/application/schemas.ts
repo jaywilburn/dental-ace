@@ -39,11 +39,12 @@ export const TARGET_AUDIENCES = [
 
 export const ADA_CERP_CATEGORIES = ["Category 1", "Category 2", "Category 3"] as const;
 
-const fileRef = z.object({
+export const fileRef = z.object({
   storagePath: z.string(),
   filename: z.string(),
   uploadedAt: z.string(),
 });
+export type FileRef = z.infer<typeof fileRef>;
 
 export const step1Schema = z.object({
   courseTitle: z.string().min(3, "Course title is required").max(200),
@@ -72,11 +73,14 @@ export const presenterSchema = z.object({
   name: z.string().min(2).max(200),
   role: z.enum(["Primary Presenter", "Co-Presenter", "Moderator"]),
   commercialDisclosure: z.string().min(2).max(1000),
-  headshot: fileRef.optional(),
 });
 
 export const step3Schema = z.object({
   presenters: z.array(presenterSchema).min(1).max(8),
+  // Phase 1 ships a single primary presenter, so the headshot is captured once
+  // at the top level (uploaded straight to applicationData) rather than nested
+  // per-presenter. It survives mergeStep because saveStep3 never sets this key.
+  headshot: fileRef.optional(),
 });
 
 const trueFalseQuestionSchema = z.object({
