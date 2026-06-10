@@ -17,6 +17,7 @@ export type AttachmentLink = {
 
 type AttachmentSource = {
   courseOutline?: FileRef;
+  detailedBio?: FileRef;
   cvResume?: FileRef;
   headshot?: FileRef;
 };
@@ -26,6 +27,7 @@ export async function resolveAttachmentLinks(
 ): Promise<AttachmentLink[]> {
   const entries: [string, FileRef | undefined][] = [
     ["Course Outline", data.courseOutline],
+    ["Detailed Bio", data.detailedBio],
     ["CV / Resume", data.cvResume],
     ["Presenter Headshot", data.headshot],
   ];

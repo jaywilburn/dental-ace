@@ -9,7 +9,12 @@ import { z } from "zod";
   and the path builder can be unit-tested.
 */
 
-export const ATTACHMENT_FIELDS = ["courseOutline", "cvResume", "headshot"] as const;
+export const ATTACHMENT_FIELDS = [
+  "courseOutline",
+  "detailedBio",
+  "cvResume",
+  "headshot",
+] as const;
 export type AttachmentField = (typeof ATTACHMENT_FIELDS)[number];
 
 const PDF = "application/pdf";
@@ -36,6 +41,13 @@ type FieldRule = {
 export const FIELD_RULES: Record<AttachmentField, FieldRule> = {
   courseOutline: {
     label: "Course outline",
+    mimes: [PDF, DOC, DOCX, PNG, JPEG],
+    maxBytes: 10 * MB,
+    accept: ".pdf,.doc,.docx,.png,.jpg,.jpeg",
+    allowed: "PDF, Word, or image, up to 10 MB",
+  },
+  detailedBio: {
+    label: "Detailed bio",
     mimes: [PDF, DOC, DOCX, PNG, JPEG],
     maxBytes: 10 * MB,
     accept: ".pdf,.doc,.docx,.png,.jpg,.jpeg",

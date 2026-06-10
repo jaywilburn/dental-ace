@@ -2,6 +2,7 @@ import { PageHeader } from "@/components/portal-shell";
 import { ApplicationStepBar } from "@/components/application-form/step-bar";
 import {
   FormCard,
+  FormErrorBanner,
   FormField,
   FormInput,
   FormLabel,
@@ -24,8 +25,13 @@ import { FileUploadField } from "@/components/application-form/file-upload-field
   Step 1 — Course Information (fields 1-12 incl. live-format detection).
   Server component. The draft id is materialized once per session via ensureDraft.
 */
-export default async function ApplicationStep1Page() {
+export default async function ApplicationStep1Page({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string; detail?: string }>;
+}) {
   const user = await requireDentalAce();
+  const { error, detail } = await searchParams;
   const applicationId = await ensureDraft();
   const draft = await getDraftData(applicationId);
 
@@ -52,6 +58,7 @@ export default async function ApplicationStep1Page() {
         }
       />
       <ApplicationStepBar currentStep={1} />
+      {error === "validation" ? <FormErrorBanner detail={detail} /> : null}
       <form action={saveStep1} className="space-y-5">
         <input type="hidden" name="applicationId" value={applicationId} />
         <FormCard title="Step 1 — Course Information">
@@ -61,6 +68,8 @@ export default async function ApplicationStep1Page() {
               name="courseTitle"
               defaultValue={draft.courseTitle ?? ""}
               required
+              minLength={3}
+              maxLength={200}
             />
           </FormField>
           <FormField>
@@ -164,6 +173,8 @@ export default async function ApplicationStep1Page() {
               name="publicProtectionStatement"
               defaultValue={draft.publicProtectionStatement ?? ""}
               required
+              minLength={20}
+              maxLength={2000}
             />
           </FormField>
           <FormField fullWidth>
@@ -174,6 +185,8 @@ export default async function ApplicationStep1Page() {
               name="courseObjectives"
               defaultValue={draft.courseObjectives ?? ""}
               required
+              minLength={20}
+              maxLength={2000}
               className="min-h-[110px]"
             />
           </FormField>

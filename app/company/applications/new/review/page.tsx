@@ -78,7 +78,11 @@ export default async function ApplicationStep5Page() {
             { label: "Creator Name", value: data.creatorName },
             { label: "Credentials", value: data.credentials },
             { label: "Current Position", value: data.currentPosition },
-            { label: "Professional Bio", value: data.professionalBio, full: true },
+            {
+              label: "Attached detailed bio.",
+              value: data.detailedBio.filename,
+              full: true,
+            },
           ]}
         />
 

@@ -73,7 +73,11 @@ export const step2Schema = z.object({
   creatorName: z.string().min(2).max(200),
   credentials: z.string().min(2).max(200),
   currentPosition: z.string().min(2).max(200),
-  professionalBio: z.string().min(20).max(2000),
+  // The bio is an uploaded document ("Attached detailed bio.", client
+  // feedback 2026-06). Optional here because saveStep2 never posts it (the
+  // uploader persists it straight into applicationData); saveStep2 checks
+  // presence and the full schema below requires it at submit.
+  detailedBio: fileRef.optional(),
   cvResume: fileRef.optional(),
 });
 
@@ -124,7 +128,8 @@ export const step4Schema = z.object({
 export const applicationDataSchema = step1Schema
   .merge(step2Schema)
   .merge(step3Schema)
-  .merge(step4Schema);
+  .merge(step4Schema)
+  .extend({ detailedBio: fileRef });
 
 /*
   Tolerant variant for READING persisted application_data. Applications saved
@@ -142,6 +147,9 @@ export const applicationDataReadSchema = applicationDataSchema
     targetAudience: z.string(),
     courseDurationHours: z.number().optional(),
     adaCerpCategory: z.string().optional(),
+    // Pre-2026-06 applications carry a typed bio instead of the uploaded one.
+    professionalBio: z.string().optional(),
+    detailedBio: fileRef.optional(),
   })
   .passthrough();
 

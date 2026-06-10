@@ -3,6 +3,7 @@ import { PageHeader } from "@/components/portal-shell";
 import { ApplicationStepBar } from "@/components/application-form/step-bar";
 import {
   FormCard,
+  FormErrorBanner,
   FormField,
   FormInput,
   FormLabel,
@@ -21,8 +22,13 @@ const PRESENTER_ROLES = ["Primary Presenter", "Co-Presenter", "Moderator"] as co
   multi-presenter UI lands later. The schema already supports up to 8 so
   expansion is additive.
 */
-export default async function ApplicationStep3Page() {
+export default async function ApplicationStep3Page({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string; detail?: string }>;
+}) {
   await requireDentalAce();
+  const { error, detail } = await searchParams;
   const applicationId = await ensureDraft();
   const draft = await getDraftData(applicationId);
   if (!draft.creatorName) redirect("/company/applications/new/creator");
@@ -33,6 +39,7 @@ export default async function ApplicationStep3Page() {
     <>
       <PageHeader title="Course Application" subtitle="Step 3 of 5 — Presenters" />
       <ApplicationStepBar currentStep={3} />
+      {error === "validation" ? <FormErrorBanner detail={detail} /> : null}
       <form action={saveStep3} className="space-y-5">
         <input type="hidden" name="applicationId" value={applicationId} />
         <FormCard title="Step 3 — Primary Presenter">
@@ -42,6 +49,8 @@ export default async function ApplicationStep3Page() {
               name="presenter_0_name"
               defaultValue={primary?.name ?? ""}
               required
+              minLength={2}
+              maxLength={200}
             />
           </FormField>
           <FormField>
@@ -58,6 +67,8 @@ export default async function ApplicationStep3Page() {
               name="presenter_0_commercialDisclosure"
               defaultValue={primary?.commercialDisclosure ?? "No relevant financial relationships to disclose"}
               required
+              minLength={2}
+              maxLength={1000}
             />
           </FormField>
           <FormField fullWidth>

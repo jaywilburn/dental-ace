@@ -89,13 +89,28 @@ export async function getDraftData(applicationId: string): Promise<Partial<Appli
   return (row?.applicationData as Partial<ApplicationData> | null) ?? {};
 }
 
+/**
+ * Validate a step's slice and merge it into the draft's applicationData.
+ * On validation failure, redirects back to `stepRoute` with an error message
+ * in the query string (the step pages render it as a banner) instead of
+ * throwing an unhandled ZodError at the user.
+ */
 async function mergeStep<T>(
   applicationId: string,
   schema: z.ZodTypeAny,
   raw: unknown,
+  stepRoute: string,
 ): Promise<T> {
   const companyId = await getCustomerCompanyId();
-  const parsed = schema.parse(raw) as T;
+  const result = schema.safeParse(raw);
+  if (!result.success) {
+    const issue = result.error.issues[0];
+    const detail = issue
+      ? `${String(issue.path[0] ?? "Form")}: ${issue.message}`.slice(0, 200)
+      : "Please check the highlighted fields.";
+    redirect(`${stepRoute}?error=validation&detail=${encodeURIComponent(detail)}`);
+  }
+  const parsed = result.data as T;
 
   const existing = await prisma.courseApplication.findFirst({
     where: { id: applicationId, companyId, status: "DRAFT" },
@@ -135,7 +150,7 @@ export async function saveStep1(formData: FormData) {
     courseObjectives: String(formData.get("courseObjectives") ?? ""),
     targetAudience: String(formData.get("targetAudience") ?? ""),
   };
-  await mergeStep(applicationId, step1Schema, raw);
+  await mergeStep(applicationId, step1Schema, raw, STEP_ROUTES[0]);
   redirect(STEP_ROUTES[1]);
 }
 
@@ -146,9 +161,19 @@ export async function saveStep2(formData: FormData) {
     creatorName: String(formData.get("creatorName") ?? ""),
     credentials: String(formData.get("credentials") ?? ""),
     currentPosition: String(formData.get("currentPosition") ?? ""),
-    professionalBio: String(formData.get("professionalBio") ?? ""),
   };
-  await mergeStep(applicationId, step2Schema, raw);
+  await mergeStep(applicationId, step2Schema, raw, STEP_ROUTES[1]);
+
+  // The detailed bio is uploaded separately (straight into applicationData),
+  // so presence is checked after the merge rather than via the posted fields.
+  const draft = await getDraftData(applicationId);
+  if (!draft.detailedBio) {
+    redirect(
+      `${STEP_ROUTES[1]}?error=validation&detail=${encodeURIComponent(
+        "Attached detailed bio: please upload the bio document before continuing.",
+      )}`,
+    );
+  }
   redirect(STEP_ROUTES[2]);
 }
 
@@ -165,7 +190,7 @@ export async function saveStep3(formData: FormData) {
       commercialDisclosure: String(formData.get("presenter_0_commercialDisclosure") ?? ""),
     },
   ];
-  await mergeStep(applicationId, step3Schema, { presenters });
+  await mergeStep(applicationId, step3Schema, { presenters }, STEP_ROUTES[2]);
   redirect(STEP_ROUTES[3]);
 }
 
@@ -196,7 +221,7 @@ export async function saveStep4(formData: FormData) {
     })),
   ];
 
-  await mergeStep(applicationId, step4Schema, { quiz });
+  await mergeStep(applicationId, step4Schema, { quiz }, STEP_ROUTES[3]);
   redirect(STEP_ROUTES[4]);
 }
 
@@ -224,7 +249,15 @@ export async function submitApplication(formData: FormData) {
   if (!draft) throw new Error("Draft not found");
 
   // Full revalidation: every step's required fields must be present.
-  const fullData = applicationDataSchema.parse(draft.applicationData);
+  const fullParse = applicationDataSchema.safeParse(draft.applicationData);
+  if (!fullParse.success) {
+    redirect(
+      `${STEP_ROUTES[0]}?error=validation&detail=${encodeURIComponent(
+        "Some required fields are missing or incomplete. Walk through each step and re-save.",
+      )}`,
+    );
+  }
+  const fullData = fullParse.data;
 
   const submittedAt = new Date();
   // Tracks whether the expedited pool actually paid; emails + downstream logs

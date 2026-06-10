@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/portal-shell";
 import { ApplicationStepBar } from "@/components/application-form/step-bar";
 import {
+  FormErrorBanner,
   FormField,
   FormInput,
   FormLabel,
@@ -16,8 +17,13 @@ import type { QuizQuestion } from "@/lib/forms/application/schemas";
   multiple choice with exactly one correct answer marked. Server-rendered;
   no client state. The full draft is read once and reused.
 */
-export default async function ApplicationStep4Page() {
+export default async function ApplicationStep4Page({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string; detail?: string }>;
+}) {
   await requireDentalAce();
+  const { error, detail } = await searchParams;
   const applicationId = await ensureDraft();
   const draft = await getDraftData(applicationId);
   if (!draft.presenters?.length) redirect("/company/applications/new/presenters");
@@ -28,6 +34,7 @@ export default async function ApplicationStep4Page() {
     <>
       <PageHeader title="Course Application" subtitle="Step 4 of 5 — Quiz Builder · 5 questions required" />
       <ApplicationStepBar currentStep={4} />
+      {error === "validation" ? <FormErrorBanner detail={detail} /> : null}
       <div className="mb-4 rounded-md border border-ver bg-ver-bg p-3 text-[12px] text-ver-dark">
         <p className="mb-1 font-semibold">Quiz rules</p>
         <p className="leading-relaxed">

@@ -108,7 +108,11 @@ export default async function ReviewerApplicationPage({
               { label: "Creator Name", value: data.creatorName },
               { label: "Credentials", value: data.credentials },
               { label: "Current Position", value: data.currentPosition, full: true },
-              { label: "Professional Bio", value: data.professionalBio, full: true },
+              // Typed bio only exists on applications saved before the
+              // 2026-06 switch to the uploaded detailed bio (see Attachments).
+              ...(data.professionalBio
+                ? [{ label: "Professional Bio", value: data.professionalBio, full: true }]
+                : []),
             ]}
           />
 

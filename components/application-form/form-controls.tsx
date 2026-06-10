@@ -86,6 +86,19 @@ export function FormField({
   return <div className={fullWidth ? "md:col-span-2" : undefined}>{children}</div>;
 }
 
+/** Banner shown when a step's server-side validation rejects the submission. */
+export function FormErrorBanner({ detail }: { detail?: string }) {
+  return (
+    <div className="mb-4 rounded-md border border-red-300 bg-red-50 px-4 py-2.5 text-[12px] text-red-700">
+      <p className="font-semibold">This step could not be saved.</p>
+      <p>
+        {detail ??
+          "Check that every required field is filled in and meets the minimum length, then try again."}
+      </p>
+    </div>
+  );
+}
+
 export function FormNav({
   back,
   nextLabel,
