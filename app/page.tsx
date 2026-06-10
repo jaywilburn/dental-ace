@@ -27,18 +27,18 @@ export default function LandingPage() {
         <ProductDetail
           id="ace"
           color="ace"
-          label="Product 01 · Accreditation"
+          label="Accreditation"
           name={
             <>
               Dental<span className="text-ace">ACE</span>
             </>
           }
           audience="For CE course providers and dental educators"
-          description="The AADB accreditation program, fully digitized. Apply, get approved, and issue QR-coded certificates automatically, replacing the spreadsheet-and-Zapier stack you hold together by hand."
+          description="The official AADB Accredited Continuing Education program, fully online. Apply for accreditation, receive your approval, and issue QR-coded certificates to attendees automatically."
           features={[
             {
               lead: "Get AADB-Accredited Fast.",
-              body: "A guided 5-step application. Approved courses get an official Course ID, approval letter, and scannable QR code.",
+              body: "A guided 5-step application. Approved courses get an official Course ID, attendee link, QR code, and approval letter, generated automatically.",
             },
             {
               lead: "Issue Certificates Automatically.",
@@ -59,10 +59,10 @@ export default function LandingPage() {
           color="pro"
           bg="alt"
           reverse
-          label="Product 02 · CE Tracking"
+          label="CE Tracking"
           name="ProTrack"
           audience="For dentists, hygienists & dental assistants"
-          description="Your personal CE dashboard, free forever. Track every hour against your state's exact requirements and stay audit-ready before your board ever asks."
+          description="Your personal CE dashboard. Track every hour against your state's exact requirements and stay audit-ready before your board ever asks."
           features={[
             {
               lead: "Always Know Where You Stand.",
@@ -85,7 +85,7 @@ export default function LandingPage() {
         <ProductDetail
           id="verify"
           color="ver"
-          label="Product 03 · Board Auditing"
+          label="Board Auditing"
           name="Verify"
           audience="For state dental boards, provisioned by AADB"
           description="Replace your paper CE audit process entirely. Run a random audit in one click, send deficiency notices in bulk, and keep a full audit trail, automatically."

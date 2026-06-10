@@ -6,17 +6,14 @@
 
 const cards = [
   {
-    icon: "🏛",
     title: "AADB accreditation authority",
     body: "DentalACE is the official AADB accreditation program. That credential carries weight with state boards and attendees nationwide; no startup can replicate it.",
   },
   {
-    icon: "🔗",
     title: "Connected by design",
     body: "DentalACE, ProTrack, and Verify share one data layer. A DentalACE certificate auto-appears in ProTrack. Verify reads compliance live from ProTrack. No duplicate entry anywhere.",
   },
   {
-    icon: "📋",
     title: "Regulatory alignment",
     body: "Verify is an AADB program, not a third-party vendor tool. That distinction is what makes state boards willing to adopt it as part of their official compliance process.",
   },
@@ -42,9 +39,6 @@ export function TrustSection() {
             key={card.title}
             className="rounded-xl bg-surface p-6 text-left"
           >
-            <p aria-hidden className="mb-3 text-3xl">
-              {card.icon}
-            </p>
             <p className="mb-1.5 text-[15px] font-semibold text-navy">
               {card.title}
             </p>

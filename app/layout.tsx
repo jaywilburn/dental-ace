@@ -33,7 +33,7 @@ export const metadata: Metadata = {
     template: "%s · DentalACE One",
   },
   description:
-    "The complete dental continuing education platform. CE accreditation, license tracking, and state board auditing from the American Association of Dental Boards. An AADB Program, powered by CE Exchange.",
+    "The complete dental continuing education platform. CE accreditation, license tracking, and state board auditing, operated by the American Association of Dental Boards.",
   applicationName: "DentalACE One",
   openGraph: {
     type: "website",
@@ -41,13 +41,13 @@ export const metadata: Metadata = {
     siteName: "DentalACE One",
     title: "DentalACE One · The Complete Dental CE Platform",
     description:
-      "Three connected tools, one platform: DentalACE accreditation, ProTrack CE dashboards, and Verify board auditing. Built with the AADB.",
+      "Three connected tools, one platform: DentalACE accreditation, ProTrack CE dashboards, and Verify board auditing. Operated by the AADB.",
   },
   twitter: {
     card: "summary_large_image",
     title: "DentalACE One · The Complete Dental CE Platform",
     description:
-      "Three connected tools, one platform: DentalACE accreditation, ProTrack CE dashboards, and Verify board auditing. Built with the AADB.",
+      "Three connected tools, one platform: DentalACE accreditation, ProTrack CE dashboards, and Verify board auditing. Operated by the AADB.",
   },
 };
 

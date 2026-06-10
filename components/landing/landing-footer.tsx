@@ -73,11 +73,9 @@ export function LandingFooter() {
             Dental<span className="text-ace-light">ACE</span> One
           </p>
           <p className="mb-4 max-w-[240px] text-pretty text-xs leading-relaxed text-white/55">
-            An AADB program, the complete dental continuing education platform.
+            The complete dental continuing education platform, operated by the
+            American Association of Dental Boards.
           </p>
-          <span className="inline-block rounded border border-white/15 px-2.5 py-0.5 font-mono text-[10px] text-white/50">
-            Powered by CE Exchange
-          </span>
         </div>
         <FooterColumn title="Products" links={products} />
         <FooterColumn title="For You" links={forYou} />
@@ -86,8 +84,7 @@ export function LandingFooter() {
       <div className="border-t border-white/[0.07]">
         <div className="mx-auto flex max-w-[1100px] flex-wrap items-center justify-between gap-2 px-5 py-5 text-[11px] text-white/50 md:px-10">
           <span>
-            © {year} Dental Exchange, Inc. d/b/a CE Exchange · An AADB Program ·
-            dentalace.org
+            © {year} American Association of Dental Boards · dentalace.org
           </span>
           <a
             href="mailto:info@dentalace.org"

@@ -8,19 +8,16 @@ export const metadata: Metadata = {
     "DentalACE One is built by the American Association of Dental Boards, the only organization that sits at the intersection of CE providers, dental professionals, and state boards.",
 };
 
-const pillars: { icon: string; title: string; body: string }[] = [
+const pillars: { title: string; body: string }[] = [
   {
-    icon: "🏛",
     title: "Accreditation authority",
     body: "The AADB has set the standard for dental continuing education and licensure for decades. DentalACE One puts that authority online, so an accreditation issued here carries the same institutional weight providers and boards already trust.",
   },
   {
-    icon: "🔗",
     title: "Connected by design",
     body: "Accreditation, CE tracking, and board auditing have always lived in separate silos. We built all three on one platform so a certificate issued in DentalACE flows into a licensee's ProTrack record and is visible to their board in Verify, with no re-keying.",
   },
   {
-    icon: "📋",
     title: "Regulatory alignment",
     body: "Because the AADB works directly with state dental boards, the platform reflects real licensure requirements across all 50 states. Categories, hour totals, and audit rules match what boards actually enforce.",
   },
@@ -61,7 +58,7 @@ export default function AboutPage() {
             Built on institutional <span className="text-ace-light">authority</span>
           </>
         }
-        sub="DentalACE One is powered by the American Association of Dental Boards, the only organization that sits at the intersection of CE providers, dental professionals, and state boards."
+        sub="DentalACE One is operated by the American Association of Dental Boards, the only organization that sits at the intersection of CE providers, dental professionals, and state boards."
       />
 
       {/* Pillars */}
@@ -72,9 +69,6 @@ export default function AboutPage() {
               key={p.title}
               className="rounded-2xl border border-border bg-surface p-7"
             >
-              <div className="mb-4 text-2xl" aria-hidden>
-                {p.icon}
-              </div>
               <h2 className="mb-2 font-serif text-xl font-bold text-navy">
                 {p.title}
               </h2>
@@ -114,18 +108,17 @@ export default function AboutPage() {
         </div>
       </section>
 
-      {/* Powered by */}
+      {/* Operated by the AADB */}
       <section className="bg-white px-5 py-16 text-center md:px-10 md:py-20">
         <div className="mx-auto max-w-[680px]">
           <h2 className="mb-4 text-balance font-serif text-3xl font-bold text-navy md:text-[34px]">
-            An AADB Program, powered by CE Exchange
+            Operated by the American Association of Dental Boards
           </h2>
           <p className="text-pretty text-base leading-relaxed text-text-mid">
-            DentalACE One is operated by Dental Exchange, Inc. (d/b/a CE
-            Exchange) in partnership with the American Association of Dental
-            Boards. Together we maintain the accreditation standards, the
-            technology, and the board relationships that keep dental continuing
-            education credible from the classroom to the renewal.
+            DentalACE One is operated by the American Association of Dental
+            Boards (AADB). The AADB maintains the accreditation standards, the
+            technology, and the state board relationships that keep dental
+            continuing education credible from the classroom to the renewal.
           </p>
         </div>
       </section>

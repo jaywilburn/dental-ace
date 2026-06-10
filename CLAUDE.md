@@ -45,7 +45,9 @@ The SOW pre-dates the brand refresh. **The landing-page handoff (`logic/dentalac
   - **Verify** (initial capital). Never "Dental Audit."
 - **No em dashes (`—`)** in user-facing copy. Use commas, parentheses, or restructure the sentence. Page titles, button labels, marketing copy, in-app strings, email templates: all em-dash-free.
 - **Brand mark rendering:** "Dental" in white on dark / navy on light. "ACE" in gold (`--ace` token).
-- **Tagline:** "An AADB Program · Powered by CE Exchange."
+- **Operator framing (client feedback, 2026-06-09):** DentalACE One is **operated by the American Association of Dental Boards (AADB)**. Never "Powered by CE Exchange" and never "Dental Exchange, Inc. d/b/a CE Exchange" in user-facing copy, including the footer copyright and Privacy Policy §1. (Superseded the earlier "An AADB Program · Powered by CE Exchange" tagline.)
+- **No "Free Forever"** anywhere in user-facing copy. ProTrack has a Free plan and a paid Pro plan ($7/mo or $79/yr, `lib/billing/pro-plans.ts`); call the free tier "Free".
+- **No emojis** in marketing/landing copy (client feedback, 2026-06-09). Status glyphs (✓ ⚠ ✗ arrows) in app UI are fine.
 - **Public email:** `info@dentalace.org`.
 - **Product accent colors:** DentalACE = gold (`--ace`), ProTrack = teal (`--pro`), Verify = blue (`--ver`). Use these only when product-color semantics matter (landing page, marketing). Internal app UI defaults to `--ace` for primary accent regardless of product.
 

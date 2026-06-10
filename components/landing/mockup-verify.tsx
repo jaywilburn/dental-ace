@@ -52,7 +52,7 @@ export function MockupVerify() {
         aria-hidden
         className="mb-2 w-full rounded-md bg-ace py-2.5 text-xs font-bold text-navy"
       >
-        🎲 Run Random Audit · 10% of licensees
+        Run Random Audit · 10% of licensees
       </button>
 
       <div className="rounded-md border border-ver/25 bg-ver/10 px-3 py-2">

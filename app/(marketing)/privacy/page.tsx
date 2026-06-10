@@ -16,10 +16,12 @@ const sections: Section[] = [
     heading: "1. Who we are",
     body: (
       <>
-        DentalACE One is operated by Dental Exchange, Inc. (d/b/a CE Exchange) in
-        partnership with the American Association of Dental Boards (AADB). This
-        policy covers the DentalACE, ProTrack, and Verify products at
-        dentalace.org. You can reach us at{" "}
+        DentalACE One is operated by the American Association of Dental Boards
+        (AADB). The AADB maintains the accreditation standards, the technology,
+        and the state board relationships that keep dental continuing education
+        credible from the classroom to the renewal. This policy covers the
+        DentalACE, ProTrack, and Verify products at dentalace.org. You can
+        reach us at{" "}
         <a
           href="mailto:info@dentalace.org"
           className="font-medium text-ace-dark hover:underline"
@@ -89,7 +91,7 @@ const sections: Section[] = [
         DentalACE One is built to connect CE providers, licensees, and
         regulators. CE compliance data for a licensee may be made available to
         the relevant state dental board through Verify, consistent with the
-        board's regulatory authority and applicable law.
+        board&apos;s regulatory authority and applicable law.
       </>
     ),
   },

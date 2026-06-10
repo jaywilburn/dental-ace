@@ -44,8 +44,8 @@ export function LandingHero() {
       </h1>
       <p className="relative z-10 mx-auto mb-12 max-w-[520px] text-pretty text-base font-light leading-relaxed text-white/65 md:text-lg">
         Accredit your courses, issue certificates automatically, and feed every
-        credit into your attendees' license records. One connected platform for
-        CE providers, clinicians, and state boards.
+        credit into your attendees&apos; license records. One connected platform
+        for CE providers, clinicians, and state boards.
       </p>
 
       <p className="relative z-10 mb-1.5 text-base font-semibold text-white md:text-[17px]">
@@ -65,7 +65,7 @@ export function LandingHero() {
             </>
           }
           audience="For CE providers & educators"
-          description="Accredit your CE courses with the AADB, then issue QR-coded certificates to attendees automatically. End to end, no spreadsheets or Zapier."
+          description="Accredit your CE courses through the official AADB program, then issue QR-coded, board-recognized certificates to attendees automatically. From application to completion in one place."
           features={[
             "Guided application, reviewed by the AADB",
             "Certificates issued automatically, at scale",
@@ -79,7 +79,7 @@ export function LandingHero() {
           tag="CE Tracking"
           name="ProTrack"
           audience="For dentists, hygienists & dental assistants"
-          description="Free forever. Track your hours against your state's exact requirements, upload certificates from any provider, and stay audit-ready before your board ever asks."
+          description="Track your hours against your state's exact requirements, upload certificates from any provider, and stay audit-ready before your board ever asks."
           features={[
             "Every category, every state, always current",
             "AADB certificates log themselves, no upload",

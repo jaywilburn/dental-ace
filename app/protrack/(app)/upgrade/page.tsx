@@ -66,7 +66,7 @@ export default async function UpgradePage({
         {/* Free */}
         <div className="rounded-xl border border-border bg-white p-6">
           <p className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">
-            Free Forever
+            Free
           </p>
           <p className="mt-1 font-serif text-3xl font-bold text-navy tabular-nums">
             $0

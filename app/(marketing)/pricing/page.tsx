@@ -7,12 +7,13 @@ import {
   formatPrice,
   type Sku,
 } from "@/lib/billing/catalog";
+import { PRO_PLANS } from "@/lib/billing/pro-plans";
 import { PageHero } from "@/components/marketing/page-hero";
 
 export const metadata: Metadata = {
   title: "Pricing",
   description:
-    "DentalACE pricing: pay per course application plus certificate bundles, with no subscription. ProTrack is free for dental professionals. Verify is provisioned for state boards.",
+    "DentalACE pricing: pay per course application plus certificate bundles, with no subscription. ProTrack offers a free plan and a paid Pro plan. Verify is provisioned for state boards.",
 };
 
 /*
@@ -66,7 +67,7 @@ export default function PricingPage() {
             Pay for what you <span className="text-ace-light">use</span>
           </>
         }
-        sub="No subscriptions. CE providers pay per course application and buy certificate bundles as they grow. Dental professionals use ProTrack free. State boards are provisioned directly by the AADB."
+        sub="CE providers pay per course application and buy certificate bundles as they grow. Dental professionals start on ProTrack free and can upgrade to Pro. State boards are provisioned directly by the AADB."
       />
 
       {/* DentalACE pricing */}
@@ -110,14 +111,12 @@ export default function PricingPage() {
 
       {/* ProTrack + Verify */}
       <section className="bg-surface px-5 py-16 md:px-10 md:py-20">
-        <div className="mx-auto grid max-w-[840px] gap-6 md:grid-cols-2">
+        <div className="mx-auto grid max-w-[1040px] gap-6 md:grid-cols-3">
           <div className="flex flex-col rounded-2xl border border-pro/30 bg-white p-7">
             <p className="mb-2 font-mono text-[10px] uppercase tracking-[2px] text-pro-dark">
-              ProTrack · For dental professionals
+              ProTrack Free · For dental professionals
             </p>
-            <p className="mb-1 font-serif text-3xl font-bold text-pro">
-              Free forever
-            </p>
+            <p className="mb-1 font-serif text-3xl font-bold text-pro">$0</p>
             <p className="mb-5 text-sm leading-relaxed text-text-mid">
               Dentists, hygienists, and dental assistants track CE hours across
               all 50 states at no cost. DentalACE certificates sync
@@ -130,16 +129,39 @@ export default function PricingPage() {
               Create free account
             </Link>
           </div>
+          <div className="flex flex-col rounded-2xl border border-pro bg-white p-7 shadow-lg">
+            <p className="mb-2 font-mono text-[10px] uppercase tracking-[2px] text-pro-dark">
+              ProTrack Pro · For dental professionals
+            </p>
+            <p className="mb-1 font-serif text-3xl font-bold text-pro">
+              {formatPrice(PRO_PLANS.pro_monthly.amountCents)}
+              <span className="text-base font-semibold">/mo</span>
+            </p>
+            <p className="mb-3 text-xs text-text-muted">
+              or {formatPrice(PRO_PLANS.pro_annual.amountCents)}/yr
+            </p>
+            <p className="mb-5 text-sm leading-relaxed text-text-mid">
+              Everything in Free, plus renewal reminders at 90, 60, 30, and 7
+              days, category-gap alerts, multi-state license tracking, and
+              audit-ready PDF exports.
+            </p>
+            <Link
+              href="/signup"
+              className="mt-auto rounded-lg bg-pro px-4 py-2 text-center text-[13px] font-semibold text-white transition-colors hover:bg-pro-dark"
+            >
+              Start with Pro
+            </Link>
+          </div>
           <div className="flex flex-col rounded-2xl border border-ver/30 bg-white p-7">
             <p className="mb-2 font-mono text-[10px] uppercase tracking-[2px] text-ver-dark">
               Verify · For state boards
             </p>
             <p className="mb-1 font-serif text-3xl font-bold text-ver">
-              Board-provisioned
+              Provisioned by the AADB
             </p>
             <p className="mb-5 text-sm leading-relaxed text-text-mid">
-              Verify is provisioned directly by the AADB for state dental
-              boards. Pricing is arranged per board. Reach out and we will set up
+              Verify is set up directly by the AADB for state dental boards,
+              with pricing arranged per board. Contact us and we will provision
               access for your jurisdiction.
             </p>
             <Link

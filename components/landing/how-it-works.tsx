@@ -1,42 +1,37 @@
 import { cn } from "@/lib/utils";
 
 /*
-  5-step horizontal timeline on --surface background. Step circles are tinted
-  per the product they represent (ace, pro, ver). A 1px connector line runs
-  behind the circles at desktop widths (hidden on mobile where steps stack
-  two-per-row).
+  5-step horizontal timeline on --surface background. Step circles show the
+  step number, tinted per the product they represent (ace, pro, ver). A 1px
+  connector line runs behind the circles at desktop widths (hidden on mobile
+  where steps stack two-per-row).
 */
 
-const steps: { color: "ace" | "pro" | "ver"; icon: string; title: string; desc: string }[] = [
+const steps: { color: "ace" | "pro" | "ver"; title: string; desc: string }[] = [
   {
     color: "ace",
-    icon: "🎓",
     title: "Course accredited",
-    desc: "CE provider submits via DentalACE. AADB reviewer approves. Course ID and QR code generated automatically.",
+    desc: "CE provider submits through DentalACE and an AADB reviewer approves. The Course ID, attendee link, QR code, and approval letter are generated automatically.",
   },
   {
     color: "ace",
-    icon: "📱",
-    title: "Attendees scan QR",
-    desc: "Attendees scan, complete the quiz, and receive their CE certificate PDF by email instantly.",
+    title: "Attendees scan or click",
+    desc: "Attendees scan the QR code or click the attendee link, complete the quiz, and receive their CE certificate PDF by email instantly.",
   },
   {
     color: "pro",
-    icon: "📊",
     title: "CE auto-logged",
-    desc: "Certificate appears automatically in the licensee's ProTrack dashboard. No upload needed.",
+    desc: "The certificate appears automatically in the licensee's ProTrack dashboard. No upload needed.",
   },
   {
     color: "ver",
-    icon: "🏛",
     title: "Board audits",
     desc: "State board runs a random audit in Verify. Compliance data is live. Deficiencies flagged instantly.",
   },
   {
     color: "ver",
-    icon: "✅",
     title: "Renewal complete",
-    desc: "Licensee renews with confidence. Board has full audit trail. No paper, no delays, no scrambling.",
+    desc: "Licensee renews with confidence. Board has a full audit trail. No paper, no delays, no scrambling.",
   },
 ];
 
@@ -72,12 +67,12 @@ export function HowItWorks() {
           >
             <div
               className={cn(
-                "mx-auto mb-3.5 flex size-14 items-center justify-center rounded-full border bg-white text-lg",
+                "mx-auto mb-3.5 flex size-14 items-center justify-center rounded-full border bg-white font-serif text-lg font-bold",
                 stepBg[step.color],
               )}
               aria-hidden
             >
-              {step.icon}
+              {i + 1}
             </div>
             <p className="mb-1 text-[13px] font-semibold text-navy">
               <span className="sr-only">Step {i + 1}. </span>
