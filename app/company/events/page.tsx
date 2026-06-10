@@ -2,12 +2,17 @@ import Link from "next/link";
 import { PageHeader } from "@/components/portal-shell";
 import { requireDentalAce } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
+import {
+  applicationDataReadSchema,
+  isLiveFormat,
+} from "@/lib/forms/application/schemas";
 import { createEvent } from "@/lib/events/actions";
 
 /*
   Events index for the customer. Shows existing events + a small "create"
-  form. Event Setup is reachable from the v3 mockup's app form after a
-  multi-session Live Event course is approved.
+  form. Event Setup needs at least one approved live-format course with
+  combinedCert + submitSessionsSeparately; when none exists yet, a banner
+  explains how to get one instead of leaving the feature looking broken.
 */
 export default async function EventsIndexPage({
   searchParams,
@@ -17,14 +22,32 @@ export default async function EventsIndexPage({
   const user = await requireDentalAce();
   const { just } = await searchParams;
 
-  const events = user.companyId
-    ? await prisma.event.findMany({
-        where: { companyId: user.companyId },
-        orderBy: { createdAt: "desc" },
-        include: { sessions: { select: { courseId: true } } },
-        take: 50,
-      })
-    : [];
+  const [events, approvedCourses] = user.companyId
+    ? await Promise.all([
+        prisma.event.findMany({
+          where: { companyId: user.companyId },
+          orderBy: { createdAt: "desc" },
+          include: { sessions: { select: { courseId: true } } },
+          take: 50,
+        }),
+        prisma.accreditedCourse.findMany({
+          where: { companyId: user.companyId },
+          select: { application: { select: { applicationData: true } } },
+        }),
+      ])
+    : [[], []];
+
+  const hasEligibleCourse = approvedCourses.some((c) => {
+    const parsed = applicationDataReadSchema.safeParse(
+      c.application.applicationData,
+    );
+    return (
+      parsed.success &&
+      isLiveFormat(parsed.data.deliveryFormat) &&
+      parsed.data.combinedCert === true &&
+      parsed.data.submitSessionsSeparately === true
+    );
+  });
 
   return (
     <>
@@ -32,6 +55,26 @@ export default async function EventsIndexPage({
         title="Events"
         subtitle="Tag your approved multi-session courses to a single event so live attendees get one combined certificate."
       />
+
+      {!hasEligibleCourse ? (
+        <div className="mb-4 rounded-md border border-ace bg-ace-bg px-4 py-3 text-[12px] leading-relaxed text-ace-dark">
+          <p className="font-semibold">No event-eligible courses yet</p>
+          <p>
+            Events need at least one approved course with a live delivery
+            format (Live/In Person or Live/Virtual) where you answered Yes to
+            the combined-certificate and sessions-submitted-separately
+            questions on Step 1.{" "}
+            <Link
+              href="/company/applications/new"
+              className="font-semibold underline"
+            >
+              Start an application
+            </Link>
+            . You can still create the event now and tag sessions once they are
+            approved.
+          </p>
+        </div>
+      ) : null}
 
       {just === "saved" ? (
         <div className="mb-4 rounded-md border border-emerald-400 bg-emerald-50 px-4 py-2.5 text-[13px] text-emerald-700">

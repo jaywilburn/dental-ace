@@ -2,11 +2,15 @@ import Link from "next/link";
 import { PageHeader } from "@/components/portal-shell";
 import { requireDentalAce } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
+import { createSignedUrl } from "@/lib/storage";
 
 /*
   My Courses — lists every application + accredited course for the company.
   Pending applications show their submitted timestamp; approved courses show
-  Course ID, expiry, and cert-issued count.
+  Course ID, title, expiry, cert-issued count, and the four deliverables:
+  Course ID, attendee link, QR code, and approval letter (QR + letter via
+  short-lived signed URLs from the uploads bucket, same pattern as the
+  certificate log).
 */
 
 export default async function MyCoursesPage({
@@ -36,8 +40,30 @@ export default async function MyCoursesPage({
       where: { companyId: user.companyId },
       orderBy: { approvedAt: "desc" },
       take: 50,
+      include: { application: { select: { courseTitle: true } } },
     }),
   ]);
+
+  const appBase = (
+    process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"
+  ).replace(/\/+$/, "");
+
+  // Signed download URLs expire after 5 minutes; a null means the asset has
+  // not been rendered (pre-feature course or a failed asset job).
+  const courses = await Promise.all(
+    accreditedCourses.map(async (course) => ({
+      ...course,
+      attendeeUrl: `${appBase}/attend/${course.attendeeLinkToken}`,
+      qrDownloadUrl: course.qrCodeUrl
+        ? await createSignedUrl("uploads", course.qrCodeUrl).catch(() => null)
+        : null,
+      letterDownloadUrl: course.approvalLetterUrl
+        ? await createSignedUrl("uploads", course.approvalLetterUrl).catch(
+            () => null,
+          )
+        : null,
+    })),
+  );
 
   return (
     <>
@@ -75,18 +101,17 @@ export default async function MyCoursesPage({
                 <th className="px-4 py-2 font-semibold">Approved</th>
                 <th className="px-4 py-2 font-semibold">Expires</th>
                 <th className="px-4 py-2 text-right font-semibold">Certs Issued</th>
-                <th className="px-4 py-2 text-right font-semibold">Badge</th>
+                <th className="px-4 py-2 font-semibold">Deliverables</th>
               </tr>
             </thead>
             <tbody>
-              {accreditedCourses.map((course) => (
+              {courses.map((course) => (
                 <tr key={course.id} className="border-b border-border last:border-b-0">
                   <td className="px-4 py-2 font-mono text-[11px] text-navy">
                     {course.courseIdNumber}
                   </td>
                   <td className="px-4 py-2 font-medium text-navy">
-                    {/* applicationId join not loaded; fall back to course id for now */}
-                    Course #{course.id.slice(0, 8)}
+                    {course.application.courseTitle ?? `Course #${course.id.slice(0, 8)}`}
                   </td>
                   <td className="px-4 py-2 text-text-muted">
                     {course.approvedAt.toLocaleDateString("en-US", {
@@ -103,10 +128,47 @@ export default async function MyCoursesPage({
                   <td className="px-4 py-2 text-right text-text-mid tabular-nums">
                     {course.certsIssuedCount}
                   </td>
-                  <td className="px-4 py-2 text-right">
-                    <a href={`/api/courses/${course.id}/badge`} className="text-ace underline">
-                      Download
-                    </a>
+                  <td className="px-4 py-2">
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 whitespace-nowrap">
+                      <a
+                        href={course.attendeeUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-ace underline"
+                      >
+                        Attendee Link
+                      </a>
+                      {course.qrDownloadUrl ? (
+                        <a
+                          href={course.qrDownloadUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-ace underline"
+                        >
+                          QR Code
+                        </a>
+                      ) : (
+                        <span className="text-text-muted">QR processing</span>
+                      )}
+                      {course.letterDownloadUrl ? (
+                        <a
+                          href={course.letterDownloadUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-ace underline"
+                        >
+                          Approval Letter
+                        </a>
+                      ) : (
+                        <span className="text-text-muted">Letter processing</span>
+                      )}
+                      <a
+                        href={`/api/courses/${course.id}/badge`}
+                        className="text-ace underline"
+                      >
+                        Badge
+                      </a>
+                    </div>
                   </td>
                 </tr>
               ))}

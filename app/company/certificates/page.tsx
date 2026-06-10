@@ -3,12 +3,13 @@ import { PageHeader } from "@/components/portal-shell";
 import { requireDentalAce } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { createSignedUrl } from "@/lib/storage";
-import { Prisma } from "@prisma/client";
+import { buildCertWhere } from "@/lib/certificates/query";
 
 /*
   Certificate Log — real listing of issued (passed) certificates for the
   company, searchable by attendee name/email, paginated, with short-lived
-  signed-URL PDF downloads. Failed quiz attempts (passed=false) are excluded.
+  signed-URL PDF downloads and a CSV export of the filtered set. Failed quiz
+  attempts (passed=false) are excluded.
 */
 
 const PAGE_SIZE = 25;
@@ -23,18 +24,7 @@ export default async function CertificateLogPage({
   const pageNum = Math.max(1, Number(page ?? "1") || 1);
   const query = (q ?? "").trim();
 
-  const where: Prisma.IssuedCertificateWhereInput = {
-    companyId: user.companyId ?? "",
-    passed: true,
-    ...(query
-      ? {
-          OR: [
-            { attendeeName: { contains: query, mode: "insensitive" } },
-            { attendeeEmail: { contains: query, mode: "insensitive" } },
-          ],
-        }
-      : {}),
-  };
+  const where = buildCertWhere(user.companyId, query);
 
   const [total, certs] = await Promise.all([
     prisma.issuedCertificate.count({ where }),
@@ -64,15 +54,25 @@ export default async function CertificateLogPage({
         subtitle={`${total} certificate${total === 1 ? "" : "s"} issued`}
       />
 
-      <form className="mb-4" action="/company/certificates" method="get">
-        <input
-          type="search"
-          name="q"
-          defaultValue={query}
-          placeholder="Search attendee name or email"
-          className="w-full max-w-sm rounded-md border border-border px-3 py-2 text-[13px]"
-        />
-      </form>
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <form action="/company/certificates" method="get" className="flex-1">
+          <input
+            type="search"
+            name="q"
+            defaultValue={query}
+            placeholder="Search attendee name or email"
+            className="w-full max-w-sm rounded-md border border-border px-3 py-2 text-[13px]"
+          />
+        </form>
+        {total > 0 ? (
+          <a
+            href={`/api/company/certificates/export${query ? `?${new URLSearchParams({ q: query })}` : ""}`}
+            className="rounded-md border border-border bg-white px-3.5 py-2 text-[12px] font-semibold text-navy transition-colors hover:bg-surface"
+          >
+            Export CSV
+          </a>
+        ) : null}
+      </div>
 
       <div className="overflow-hidden rounded-lg border border-border bg-white">
         {rows.length === 0 ? (
