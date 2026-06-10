@@ -10,6 +10,10 @@ export default defineConfig({
     path: "prisma/migrations",
   },
   datasource: {
-    url: env("DATABASE_URL"),
+    // This config is CLI-only (the runtime client reads process.env.DATABASE_URL
+    // via the driver adapter in lib/prisma.ts). Point the CLI at the direct
+    // session connection: pgbouncer transaction mode can't run DDL or hold the
+    // advisory lock prisma migrate requires.
+    url: env("DIRECT_URL"),
   },
 });

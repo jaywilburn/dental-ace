@@ -2,7 +2,6 @@ import { describe, it, expect } from "vitest";
 import {
   daysUntil,
   dueCourseReminders,
-  creditsReminderDue,
   balanceAlertKind,
   isCooldownElapsed,
 } from "@/lib/notifications/lifecycle";
@@ -29,18 +28,6 @@ describe("dueCourseReminders", () => {
   it("returns both d60 and d30 at 30 or fewer days", () => {
     expect(dueCourseReminders(30)).toEqual(["d60", "d30"]);
     expect(dueCourseReminders(1)).toEqual(["d60", "d30"]);
-  });
-});
-
-describe("creditsReminderDue", () => {
-  it("is true within 30 days with credits remaining", () => {
-    expect(creditsReminderDue(30, 3)).toBe(true);
-    expect(creditsReminderDue(1, 1)).toBe(true);
-  });
-  it("is false past 30 days, at/under 0 days, or with no credits", () => {
-    expect(creditsReminderDue(31, 3)).toBe(false);
-    expect(creditsReminderDue(0, 3)).toBe(false);
-    expect(creditsReminderDue(10, 0)).toBe(false);
   });
 });
 

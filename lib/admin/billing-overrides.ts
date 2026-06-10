@@ -19,12 +19,6 @@ import {
 
 class OverrideError extends Error {}
 
-function oneYearFromNow(): Date {
-  const d = new Date();
-  d.setFullYear(d.getFullYear() + 1);
-  return d;
-}
-
 export async function grantAppCredits(formData: FormData) {
   const admin = await requireStaff("ADMIN");
   const companyId = String(formData.get("companyId") ?? "");
@@ -40,8 +34,8 @@ export async function grantAppCredits(formData: FormData) {
     await tx.company.update({
       where: { id: companyId },
       data: expedited
-        ? { expeditedCredits: { increment: quantity }, applicationCreditsExpiresAt: oneYearFromNow() }
-        : { applicationCredits: { increment: quantity }, applicationCreditsExpiresAt: oneYearFromNow() },
+        ? { expeditedCredits: { increment: quantity } }
+        : { applicationCredits: { increment: quantity } },
     });
     await tx.billingTransaction.create({
       data: {

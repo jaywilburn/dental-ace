@@ -2,13 +2,11 @@ import { NextResponse, type NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { sendEmail } from "@/lib/email/send";
 import CourseExpiringEmail from "@/emails/course-expiring";
-import AppCreditsExpiringEmail from "@/emails/app-credits-expiring";
 import LowCertBalanceEmail from "@/emails/low-cert-balance";
 import CertBalanceExhaustedEmail from "@/emails/cert-balance-exhausted";
 import {
   daysUntil,
   dueCourseReminders,
-  creditsReminderDue,
   balanceAlertKind,
   isCooldownElapsed,
 } from "@/lib/notifications/lifecycle";
@@ -16,7 +14,6 @@ import {
 /*
   Daily Dental ACE lifecycle cron (Vercel Cron -> vercel.json). One pass:
    - course-expiry reminders at 60 and 30 days (send-once per course+threshold)
-   - app-credit-expiry reminder at <=30 days (send-once per credit window)
    - cert-balance alerts: exhausted (==0) or low (<=threshold), rolling 7-day
      cooldown, mutually exclusive.
 
@@ -92,7 +89,6 @@ export async function GET(request: NextRequest) {
   const origin = process.env.NEXT_PUBLIC_APP_URL ?? new URL(request.url).origin;
   const now = new Date();
   let coursesReminded = 0;
-  let creditsReminded = 0;
   let lowBalance = 0;
   let exhausted = 0;
 
@@ -132,13 +128,11 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // 2) Per-company: app-credit expiry + balance alerts.
+  // 2) Per-company: balance alerts.
   const companies = await prisma.company.findMany({
     select: {
       id: true,
       name: true,
-      applicationCredits: true,
-      applicationCreditsExpiresAt: true,
       certBalance: true,
       certAlertThreshold: true,
       users: { select: { email: true } },
@@ -148,29 +142,6 @@ export async function GET(request: NextRequest) {
 
   for (const c of companies) {
     const recipients = c.users.map((u) => u.email);
-
-    // App credits expiring.
-    if (c.applicationCreditsExpiresAt && recipients.length > 0) {
-      const days = daysUntil(c.applicationCreditsExpiresAt, now);
-      if (creditsReminderDue(days, c.applicationCredits)) {
-        const props = {
-          companyName: c.name,
-          creditsRemaining: c.applicationCredits,
-          expiresAt: fmtDate(c.applicationCreditsExpiresAt),
-          buyCreditsUrl: `${origin}/company/buy/credits`,
-        };
-        const sent = await sendOnce(
-          {
-            companyId: c.id,
-            kind: "credits_expiring_30",
-            refId: c.id,
-            periodKey: isoDate(c.applicationCreditsExpiresAt),
-          },
-          () => sendEmail({ to: recipients, subject: AppCreditsExpiringEmail.subject(props), react: AppCreditsExpiringEmail(props) }),
-        );
-        if (sent) creditsReminded++;
-      }
-    }
 
     // Balance alerts (mutually exclusive).
     const kind = balanceAlertKind(c.certBalance, c.certAlertThreshold);
@@ -199,5 +170,5 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  return NextResponse.json({ ok: true, coursesReminded, creditsReminded, lowBalance, exhausted });
+  return NextResponse.json({ ok: true, coursesReminded, lowBalance, exhausted });
 }

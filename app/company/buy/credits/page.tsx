@@ -28,7 +28,7 @@ export default async function BuyCreditsPage() {
     <>
       <PageHeader
         title="Buy Application Credits"
-        subtitle={`Current balance: ${total} credit${total === 1 ? "" : "s"} · Credits expire 1 year from purchase`}
+        subtitle={`Current balance: ${total} credit${total === 1 ? "" : "s"} · Credits never expire`}
       />
 
       <div className="mb-5 rounded-lg border border-ace bg-ace-bg p-4">

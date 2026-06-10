@@ -80,9 +80,6 @@ export async function handleCheckoutCompleted(
           where: { id: input.companyId },
           data: {
             applicationCredits: { increment: sku.grants.applicationCredits },
-            // Reset the 1-year expiry on every credit purchase. Cleanest model:
-            // newest purchase governs the company's credit-expiry window.
-            applicationCreditsExpiresAt: oneYearFromNow(),
           },
         });
       } else if (sku.grants.expeditedCredits) {
@@ -90,7 +87,6 @@ export async function handleCheckoutCompleted(
           where: { id: input.companyId },
           data: {
             expeditedCredits: { increment: sku.grants.expeditedCredits },
-            applicationCreditsExpiresAt: oneYearFromNow(),
           },
         });
       } else if (sku.grants.certBalance) {
@@ -108,12 +104,6 @@ export async function handleCheckoutCompleted(
   }
 
   return { ok: true, status: "applied", sku };
-}
-
-function oneYearFromNow(): Date {
-  const d = new Date();
-  d.setFullYear(d.getFullYear() + 1);
-  return d;
 }
 
 function isPrismaUniqueViolation(err: unknown, column: string): boolean {

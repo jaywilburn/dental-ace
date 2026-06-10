@@ -164,7 +164,6 @@ model Company {
   stripeCustomerId            String?   @unique @map("stripe_customer_id")
   applicationCredits          Int       @default(0) @map("application_credits")
   expeditedCredits            Int       @default(0) @map("expedited_credits")
-  applicationCreditsExpiresAt DateTime? @map("application_credits_expires_at")
   certBalance                 Int       @default(0) @map("cert_balance")
   certAlertThreshold          Int       @default(25) @map("cert_alert_threshold")
   totalCertsIssued            Int       @default(0) @map("total_certs_issued")

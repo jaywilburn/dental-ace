@@ -30,7 +30,6 @@ export default async function CompanyDashboard() {
       name: true,
       applicationCredits: true,
       expeditedCredits: true,
-      applicationCreditsExpiresAt: true,
       certBalance: true,
       certAlertThreshold: true,
       totalCertsIssued: true,
@@ -58,11 +57,6 @@ export default async function CompanyDashboard() {
   ]);
 
   const totalCredits = company.applicationCredits + company.expeditedCredits;
-  const expiresAtLabel = company.applicationCreditsExpiresAt
-    ? new Intl.DateTimeFormat("en-US", { month: "short", year: "numeric" }).format(
-        company.applicationCreditsExpiresAt,
-      )
-    : "—";
   const lowBalance = company.certBalance <= company.certAlertThreshold;
 
   return (
@@ -89,8 +83,8 @@ export default async function CompanyDashboard() {
           value={totalCredits}
           meta={
             company.expeditedCredits > 0
-              ? `${company.applicationCredits} standard + ${company.expeditedCredits} expedited · Expires ${expiresAtLabel}`
-              : `Expires ${expiresAtLabel}`
+              ? `${company.applicationCredits} standard + ${company.expeditedCredits} expedited`
+              : "Never expire"
           }
         />
         <PortalStatCard

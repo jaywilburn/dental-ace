@@ -18,11 +18,6 @@ export function dueCourseReminders(days: number): ("d60" | "d30")[] {
   return ["d60", "d30"];
 }
 
-/** App credits get a single 30-day reminder while some remain and not yet expired. */
-export function creditsReminderDue(days: number, creditsRemaining: number): boolean {
-  return creditsRemaining > 0 && days > 0 && days <= 30;
-}
-
 /** Mutually-exclusive cert-balance alert classification. */
 export function balanceAlertKind(
   certBalance: number,
