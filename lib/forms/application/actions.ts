@@ -124,7 +124,6 @@ export async function saveStep1(formData: FormData) {
     ceCreditHours: Number(formData.get("ceCreditHours") ?? 0),
     subjectMatter: String(formData.get("subjectMatter") ?? ""),
     deliveryFormat: String(formData.get("deliveryFormat") ?? ""),
-    courseDurationHours: Number(formData.get("courseDurationHours") ?? 0),
     combinedCert: formData.get("combinedCert") === "yes" ? true : formData.get("combinedCert") === "no" ? false : undefined,
     submitSessionsSeparately:
       formData.get("submitSessionsSeparately") === "yes"
@@ -135,7 +134,6 @@ export async function saveStep1(formData: FormData) {
     publicProtectionStatement: String(formData.get("publicProtectionStatement") ?? ""),
     courseObjectives: String(formData.get("courseObjectives") ?? ""),
     targetAudience: String(formData.get("targetAudience") ?? ""),
-    adaCerpCategory: String(formData.get("adaCerpCategory") ?? ""),
   };
   await mergeStep(applicationId, step1Schema, raw);
   redirect(STEP_ROUTES[1]);

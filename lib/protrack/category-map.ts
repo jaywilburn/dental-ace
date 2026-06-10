@@ -26,17 +26,22 @@ export function mapDeliveryFormat(method?: string | null): DeliveryFormat | null
   if (!method) return null;
   const m = method.toLowerCase();
   if (m.includes("hybrid")) return DeliveryFormat.HYBRID;
-  if (m.includes("person") || m.includes("live") || m.includes("classroom")) {
-    return DeliveryFormat.IN_PERSON;
-  }
+  // Virtual/online checks must run before the live/person check: the
+  // "Live/Virtual" application format contains "live" but is delivered online.
   if (
     m.includes("online") ||
     m.includes("self-study") ||
     m.includes("self study") ||
     m.includes("webinar") ||
-    m.includes("virtual")
+    m.includes("virtual") ||
+    m.includes("on demand") ||
+    m.includes("on-demand") ||
+    m.includes("written")
   ) {
     return DeliveryFormat.ONLINE;
+  }
+  if (m.includes("person") || m.includes("live") || m.includes("classroom")) {
+    return DeliveryFormat.IN_PERSON;
   }
   return null;
 }

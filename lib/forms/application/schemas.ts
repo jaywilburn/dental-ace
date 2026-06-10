@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 /*
-  Zod schemas for the 34-field course application, split into the 5 form
+  Zod schemas for the 32-field course application, split into the 5 form
   steps. The merged ApplicationData shape lives below; each step's schema
   validates that step's slice. Persisted in
   course_applications.application_data as JSON.
@@ -11,21 +11,33 @@ import { z } from "zod";
 */
 
 export const DELIVERY_FORMATS = [
-  "In-Person",
-  "Online (self-study)",
-  "Hybrid",
-  "Live Event",
+  "Live/In Person",
+  "Live/Virtual",
+  "Written Education",
+  "On Demand",
 ] as const;
 
-export const SUBJECT_MATTERS = [
-  "Periodontics",
-  "Restorative Dentistry",
-  "Infection Control",
-  "Dental Materials",
-  "Oral Pathology",
-  "Sedation",
-  "Pediatric Dentistry",
-  "Practice Management",
+/*
+  Formats that count as a live event for the combined-certificate questions
+  and Event Setup eligibility. "Live Event" is the legacy value from
+  applications saved before the 2026-06 format rename; existing data is never
+  migrated, so the predicate must keep accepting it.
+*/
+export const LIVE_FORMATS = ["Live/In Person", "Live/Virtual"] as const;
+
+export function isLiveFormat(format: string | undefined | null): boolean {
+  if (!format) return false;
+  return (
+    (LIVE_FORMATS as readonly string[]).includes(format) ||
+    format === "Live Event"
+  );
+}
+
+// Stored under the legacy `subjectMatter` JSON key (renaming the key would
+// orphan every existing draft and application).
+export const CATEGORIES = [
+  "Business/Practice Management",
+  "Scientific",
 ] as const;
 
 export const TARGET_AUDIENCES = [
@@ -37,8 +49,6 @@ export const TARGET_AUDIENCES = [
   "Pediatric Dentists",
 ] as const;
 
-export const ADA_CERP_CATEGORIES = ["Category 1", "Category 2", "Category 3"] as const;
-
 export const fileRef = z.object({
   storagePath: z.string(),
   filename: z.string(),
@@ -49,15 +59,13 @@ export type FileRef = z.infer<typeof fileRef>;
 export const step1Schema = z.object({
   courseTitle: z.string().min(3, "Course title is required").max(200),
   ceCreditHours: z.number().min(0.5).max(40),
-  subjectMatter: z.enum(SUBJECT_MATTERS),
+  subjectMatter: z.enum(CATEGORIES),
   deliveryFormat: z.enum(DELIVERY_FORMATS),
-  courseDurationHours: z.number().min(0.5).max(40),
   combinedCert: z.boolean().optional(),
   submitSessionsSeparately: z.boolean().optional(),
   publicProtectionStatement: z.string().min(20, "Please describe how this course benefits patient safety").max(2000),
   courseObjectives: z.string().min(20, "List at least 3 objectives").max(2000),
   targetAudience: z.enum(TARGET_AUDIENCES),
-  adaCerpCategory: z.enum(ADA_CERP_CATEGORIES),
   courseOutline: fileRef.optional(),
 });
 
@@ -117,6 +125,27 @@ export const applicationDataSchema = step1Schema
   .merge(step2Schema)
   .merge(step3Schema)
   .merge(step4Schema);
+
+/*
+  Tolerant variant for READING persisted application_data. Applications saved
+  before the 2026-06 form changes carry retired enum values ("Live Event",
+  "Periodontics", ...) plus removed fields (courseDurationHours,
+  adaCerpCategory). The strict schema would make those records unviewable and
+  unapprovable, so readers (reviewer detail/approve, Event Setup eligibility)
+  parse with this one. The strict schema stays on the WRITE path (saveStep1,
+  submit) so new data always uses the current options.
+*/
+export const applicationDataReadSchema = applicationDataSchema
+  .extend({
+    subjectMatter: z.string(),
+    deliveryFormat: z.string(),
+    targetAudience: z.string(),
+    courseDurationHours: z.number().optional(),
+    adaCerpCategory: z.string().optional(),
+  })
+  .passthrough();
+
+export type ApplicationDataRead = z.infer<typeof applicationDataReadSchema>;
 
 export type ApplicationData = z.infer<typeof applicationDataSchema>;
 export type Step1Data = z.infer<typeof step1Schema>;

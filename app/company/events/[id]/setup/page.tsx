@@ -3,13 +3,17 @@ import Link from "next/link";
 import { PageHeader } from "@/components/portal-shell";
 import { requireDentalAce } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
-import { applicationDataSchema } from "@/lib/forms/application/schemas";
+import {
+  applicationDataReadSchema,
+  isLiveFormat,
+} from "@/lib/forms/application/schemas";
 import { saveEventSessions } from "@/lib/events/actions";
 
 /*
-  Event Setup — tag approved multi-session Live Event courses to this event.
-  Only courses whose application_data has combinedCert=true and
-  submitSessionsSeparately=true qualify. Save persists into event_sessions.
+  Event Setup — tag approved multi-session live courses to this event.
+  Only live-format courses (incl. legacy "Live Event") whose application_data
+  has combinedCert=true and submitSessionsSeparately=true qualify. Save
+  persists into event_sessions.
 */
 export default async function EventSetupPage({
   params,
@@ -32,10 +36,10 @@ export default async function EventSetupPage({
     orderBy: { approvedAt: "desc" },
   });
   const eligible = approvedCourses.filter((c) => {
-    const parsed = applicationDataSchema.safeParse(c.application.applicationData);
+    const parsed = applicationDataReadSchema.safeParse(c.application.applicationData);
     return (
       parsed.success &&
-      parsed.data.deliveryFormat === "Live Event" &&
+      isLiveFormat(parsed.data.deliveryFormat) &&
       parsed.data.combinedCert === true &&
       parsed.data.submitSessionsSeparately === true
     );
@@ -65,7 +69,8 @@ export default async function EventSetupPage({
           {eligible.length === 0 ? (
             <p className="px-4 py-8 text-center text-[12px] text-text-muted">
               No eligible approved sessions yet. Submit individual session
-              course applications with delivery format set to <strong>Live Event</strong>
+              course applications with a live delivery format
+              (<strong>Live/In Person</strong> or <strong>Live/Virtual</strong>)
               {" "}and answer <strong>Yes</strong> to combined-cert + sessions-separately
               on Step 1. Once approved, they&apos;ll show up here for tagging.
             </p>
@@ -81,7 +86,7 @@ export default async function EventSetupPage({
               </thead>
               <tbody>
                 {eligible.map((c) => {
-                  const parsed = applicationDataSchema.safeParse(
+                  const parsed = applicationDataReadSchema.safeParse(
                     c.application.applicationData,
                   );
                   const title = parsed.success ? parsed.data.courseTitle : "(untitled)";

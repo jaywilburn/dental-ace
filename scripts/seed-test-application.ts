@@ -28,15 +28,17 @@ const APPLICATION_DATA = {
   // Step 1 — course info
   courseTitle: "Advanced Periodontal Therapy: Evidence-Based Approaches",
   ceCreditHours: 4,
-  subjectMatter: "Periodontics",
-  deliveryFormat: "In-Person",
-  courseDurationHours: 4,
+  subjectMatter: "Scientific",
+  deliveryFormat: "Live/In Person",
+  // Makes the course Event-Setup eligible once approved (live format +
+  // combined cert + sessions submitted separately).
+  combinedCert: true,
+  submitSessionsSeparately: true,
   publicProtectionStatement:
     "This course reduces patient risk by training clinicians on current evidence-based protocols for diagnosing and managing periodontitis, leading to better long-term clinical outcomes and fewer adverse events.",
   courseObjectives:
     "1. Identify the stages and grades of periodontitis per the 2017 classification.\n2. Apply evidence-based non-surgical periodontal therapy protocols.\n3. Recognize systemic-periodontal disease relationships and refer appropriately.",
   targetAudience: "General Dentists",
-  adaCerpCategory: "Category 1",
 
   // Step 2 — creator
   creatorName: "Dr. Alex Morgan",

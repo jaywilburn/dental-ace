@@ -9,7 +9,7 @@ import {
   getDraftData,
   submitApplication,
 } from "@/lib/forms/application/actions";
-import { applicationDataSchema } from "@/lib/forms/application/schemas";
+import { applicationDataSchema, isLiveFormat } from "@/lib/forms/application/schemas";
 import { resolveAttachmentLinks } from "@/lib/forms/application/attachments";
 import { AttachmentsCard } from "@/components/application-form/attachments-card";
 
@@ -51,14 +51,12 @@ export default async function ApplicationStep5Page() {
           rows={[
             { label: "Course Title", value: data.courseTitle },
             { label: "CE Credit Hours", value: `${data.ceCreditHours.toFixed(1)} hours` },
-            { label: "Course Duration", value: `${data.courseDurationHours.toFixed(1)} hours` },
-            { label: "Subject Matter", value: data.subjectMatter },
+            { label: "Category", value: data.subjectMatter },
             { label: "Delivery Format", value: data.deliveryFormat },
             { label: "Target Audience", value: data.targetAudience },
-            { label: "ADA CERP Category", value: data.adaCerpCategory },
             { label: "Public Protection Statement", value: data.publicProtectionStatement, full: true },
             { label: "Course Objectives", value: data.courseObjectives, full: true },
-            ...(data.deliveryFormat === "Live Event"
+            ...(isLiveFormat(data.deliveryFormat)
               ? [
                   {
                     label: "Combined Certificate for live attendees?",

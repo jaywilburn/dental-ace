@@ -3,15 +3,17 @@ import Link from "next/link";
 import { PageHeader } from "@/components/portal-shell";
 import { requireStaff } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
-import { applicationDataSchema } from "@/lib/forms/application/schemas";
+import { applicationDataReadSchema, isLiveFormat } from "@/lib/forms/application/schemas";
 import { resolveAttachmentLinks } from "@/lib/forms/application/attachments";
 import { AttachmentsCard } from "@/components/application-form/attachments-card";
 import { approveApplication, rejectApplication } from "@/lib/reviewer/actions";
 
 /*
-  Application review detail. Shows all 34 fields read-only with approve/reject
+  Application review detail. Shows all fields read-only with approve/reject
   controls. Quiz preview lives in its own column. Approve generates the Course
   ID + assets via the reviewer action; Reject requires notes >= 10 chars.
+  Parses with the tolerant read schema so applications submitted before the
+  2026-06 form changes (old formats, duration, ADA CERP) stay reviewable.
 */
 export default async function ReviewerApplicationPage({
   params,
@@ -30,7 +32,7 @@ export default async function ReviewerApplicationPage({
   });
   if (!app) notFound();
 
-  const parsed = applicationDataSchema.safeParse(app.applicationData);
+  const parsed = applicationDataReadSchema.safeParse(app.applicationData);
   if (!parsed.success) {
     return (
       <>
@@ -71,16 +73,22 @@ export default async function ReviewerApplicationPage({
       <div className="grid gap-5 lg:grid-cols-[2fr_1fr]">
         <div className="space-y-5">
           <Section
-            title="Section A — Course Information (Fields 1-14)"
+            title="Section A — Course Information (Fields 1-12)"
             rows={[
               { label: "Course Title", value: data.courseTitle, full: true },
               { label: "CE Credit Hours", value: `${data.ceCreditHours.toFixed(1)} hours` },
-              { label: "Course Duration", value: `${data.courseDurationHours.toFixed(1)} hours` },
-              { label: "Subject Matter", value: data.subjectMatter },
+              // Legacy fields: only present on applications saved before the
+              // 2026-06 form changes.
+              ...(data.courseDurationHours != null
+                ? [{ label: "Course Duration", value: `${data.courseDurationHours.toFixed(1)} hours` }]
+                : []),
+              { label: "Category", value: data.subjectMatter },
               { label: "Delivery Format", value: data.deliveryFormat },
               { label: "Target Audience", value: data.targetAudience },
-              { label: "ADA CERP Category", value: data.adaCerpCategory },
-              ...(data.deliveryFormat === "Live Event"
+              ...(data.adaCerpCategory
+                ? [{ label: "ADA CERP Category", value: data.adaCerpCategory }]
+                : []),
+              ...(isLiveFormat(data.deliveryFormat)
                 ? [
                     { label: "Combined Cert?", value: data.combinedCert ? "Yes" : "No" },
                     {
@@ -95,7 +103,7 @@ export default async function ReviewerApplicationPage({
           />
 
           <Section
-            title="Section B — Course Creator (Fields 15-22)"
+            title="Section B — Course Creator (Fields 13-20)"
             rows={[
               { label: "Creator Name", value: data.creatorName },
               { label: "Credentials", value: data.credentials },
@@ -105,7 +113,7 @@ export default async function ReviewerApplicationPage({
           />
 
           <Section
-            title="Section C — Presenters (Fields 23-30)"
+            title="Section C — Presenters (Fields 21-28)"
             rows={data.presenters.flatMap((p, i) => [
               { label: `Presenter ${i + 1}`, value: `${p.name} · ${p.role}` },
               { label: "Commercial Disclosure", value: p.commercialDisclosure, full: true },
@@ -118,7 +126,7 @@ export default async function ReviewerApplicationPage({
         <div className="space-y-5">
           <div className="rounded-lg border border-border bg-surface p-4">
             <p className="mb-2 text-[12px] font-semibold text-navy">
-              Quiz Preview (Fields 31-34)
+              Quiz Preview (Fields 29-32)
             </p>
             {data.quiz.map((q, i) => (
               <div key={i} className="mt-3 text-[11px] text-text-mid">
@@ -243,7 +251,7 @@ function Section({
 }
 
 function countFields(data: unknown): number {
-  // Marketing-y label: the form is split into 34 conceptual fields.
+  // Marketing-y label: the form is split into 32 conceptual fields.
   void data;
-  return 34;
+  return 32;
 }

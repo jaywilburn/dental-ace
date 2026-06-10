@@ -13,8 +13,8 @@ import { sendEmail } from "@/lib/email/send";
 import ApplicationApprovedEmail from "@/emails/application-approved";
 import ApplicationRejectedEmail from "@/emails/application-rejected";
 import {
-  applicationDataSchema,
-  type ApplicationData,
+  applicationDataReadSchema,
+  type ApplicationDataRead,
 } from "@/lib/forms/application/schemas";
 import { formatCourseId, nextSeqFromLast } from "@/lib/reviewer/course-id";
 
@@ -68,11 +68,13 @@ export async function approveApplication(formData: FormData) {
   if (!application) throw new Error("Application not found");
   if (application.status !== "PENDING") throw new Error("Only PENDING applications can be approved");
 
-  const parsed = applicationDataSchema.safeParse(application.applicationData);
+  // Tolerant read schema: applications submitted before the 2026-06 form
+  // changes must stay approvable despite retired enum values / removed fields.
+  const parsed = applicationDataReadSchema.safeParse(application.applicationData);
   if (!parsed.success) {
     throw new Error(`Application data invalid: ${parsed.error.message}`);
   }
-  const data: ApplicationData = parsed.data;
+  const data: ApplicationDataRead = parsed.data;
 
   const approvedAt = new Date();
   const expiresAt = new Date(approvedAt);
@@ -215,7 +217,7 @@ export async function rejectApplication(formData: FormData) {
   if (!application) throw new Error("Application not found");
   if (application.status !== "PENDING") throw new Error("Only PENDING applications can be rejected");
 
-  const parsed = applicationDataSchema.safeParse(application.applicationData);
+  const parsed = applicationDataReadSchema.safeParse(application.applicationData);
   const courseTitle = parsed.success ? parsed.data.courseTitle : "(unknown course)";
 
   const rejectedAt = new Date();

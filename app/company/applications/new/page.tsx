@@ -13,15 +13,15 @@ import { requireDentalAce } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import {
   DELIVERY_FORMATS,
-  SUBJECT_MATTERS,
+  CATEGORIES,
   TARGET_AUDIENCES,
-  ADA_CERP_CATEGORIES,
+  isLiveFormat,
 } from "@/lib/forms/application/schemas";
 import { ensureDraft, getDraftData, saveStep1 } from "@/lib/forms/application/actions";
 import { FileUploadField } from "@/components/application-form/file-upload-field";
 
 /*
-  Step 1 — Course Information (fields 1-14 incl. Live Event detection).
+  Step 1 — Course Information (fields 1-12 incl. live-format detection).
   Server component. The draft id is materialized once per session via ensureDraft.
 */
 export default async function ApplicationStep1Page() {
@@ -38,13 +38,13 @@ export default async function ApplicationStep1Page() {
       ) ?? { applicationCredits: 0, expeditedCredits: 0 }
     : { applicationCredits: 0, expeditedCredits: 0 };
 
-  const isLiveEvent = draft.deliveryFormat === "Live Event";
+  const isLive = isLiveFormat(draft.deliveryFormat);
 
   return (
     <>
       <PageHeader
         title="Course Application"
-        subtitle="34 fields · 5 steps · 1 application credit consumed on submit"
+        subtitle="32 fields · 5 steps · 1 application credit consumed on submit"
         action={
           <span className="rounded-full bg-ace-bg px-2.5 py-1 text-[10px] font-bold text-ace-dark">
             {totalCredits.applicationCredits + totalCredits.expeditedCredits} Credits Available
@@ -76,23 +76,11 @@ export default async function ApplicationStep1Page() {
             />
           </FormField>
           <FormField>
-            <FormLabel required>Course Duration (hours)</FormLabel>
-            <FormInput
-              type="number"
-              step="0.5"
-              min="0.5"
-              max="40"
-              name="courseDurationHours"
-              defaultValue={draft.courseDurationHours ?? ""}
-              required
-            />
-          </FormField>
-          <FormField>
-            <FormLabel required>Subject Matter Category</FormLabel>
+            <FormLabel required>Category</FormLabel>
             <FormSelect
               name="subjectMatter"
-              defaultValue={draft.subjectMatter ?? SUBJECT_MATTERS[0]}
-              options={SUBJECT_MATTERS}
+              defaultValue={draft.subjectMatter ?? CATEGORIES[0]}
+              options={CATEGORIES}
             />
           </FormField>
           <FormField>
@@ -103,11 +91,11 @@ export default async function ApplicationStep1Page() {
               options={DELIVERY_FORMATS}
             />
           </FormField>
-          {isLiveEvent ? (
+          {isLive ? (
             <FormField fullWidth>
               <div className="rounded-md border-2 border-ace bg-ace-bg p-4">
                 <p className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-ace-dark">
-                  ★ Live Event detected — two questions before you continue
+                  ★ Live course detected — two questions before you continue
                 </p>
                 <div className="mb-4">
                   <FormLabel required>
@@ -195,14 +183,6 @@ export default async function ApplicationStep1Page() {
               name="targetAudience"
               defaultValue={draft.targetAudience ?? TARGET_AUDIENCES[0]}
               options={TARGET_AUDIENCES}
-            />
-          </FormField>
-          <FormField>
-            <FormLabel>ADA CERP Category</FormLabel>
-            <FormSelect
-              name="adaCerpCategory"
-              defaultValue={draft.adaCerpCategory ?? ADA_CERP_CATEGORIES[0]}
-              options={ADA_CERP_CATEGORIES}
             />
           </FormField>
           <FormField fullWidth>
