@@ -3,12 +3,7 @@ import { ProgressBar } from "@/components/protrack/progress-bar";
 import { requireUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { LicenseType } from "@prisma/client";
-import {
-  STATE_CODES,
-  US_STATES,
-  licenseTypeLong,
-  stateName,
-} from "@/lib/protrack/reference";
+import { US_STATES, licenseTypeLong, stateName } from "@/lib/protrack/reference";
 import {
   computeRequirementProgress,
   formatHours,
@@ -18,25 +13,36 @@ import {
 } from "@/lib/protrack/progress";
 
 /*
-  50-state CE requirements browser. Shows the requirements for the licensee's
-  license type across every state. Only states with loaded requirements show
-  hours; the rest are pending John's authoritative file. Mirrors
-  logic/protrack-dev-mockup-suite.html #states.
+  CE requirements for the licensee's own states. Scoped to the states where
+  the user holds a license (client feedback, 2026-06: showing all 50 states
+  was noise); states without loaded requirements show as pending John's
+  authoritative file.
 */
 export default async function StatesPage() {
   const user = await requireUser();
 
-  const primary = await prisma.userLicense.findFirst({
-    where: { licenseeId: user.id, isPrimary: true },
-    select: { state: true, licenseType: true },
+  const licenses = await prisma.userLicense.findMany({
+    where: { licenseeId: user.id },
+    select: { state: true, licenseType: true, isPrimary: true },
+    orderBy: [{ isPrimary: "desc" }, { state: "asc" }],
   });
+  const primary = licenses.find((l) => l.isPrimary) ?? licenses[0] ?? null;
   const licenseType = primary?.licenseType ?? LicenseType.RDH;
   const primaryState = primary?.state ?? null;
 
-  const requirements = await prisma.stateRequirement.findMany({
-    where: { licenseType },
-  });
-  const byState = new Map(requirements.map((r) => [r.state, r]));
+  const requirements = licenses.length
+    ? await prisma.stateRequirement.findMany({
+        where: {
+          OR: licenses.map((l) => ({
+            state: l.state,
+            licenseType: l.licenseType,
+          })),
+        },
+      })
+    : [];
+  const byKey = new Map(
+    requirements.map((r) => [`${r.state}-${r.licenseType}`, r]),
+  );
 
   // The licensee's certificates, to show real progress on their primary state.
   const certs = primaryState
@@ -46,15 +52,17 @@ export default async function StatesPage() {
       })
     : [];
 
-  const primaryReq = primaryState ? byState.get(primaryState) : null;
+  const primaryReq = primary
+    ? byKey.get(`${primary.state}-${primary.licenseType}`)
+    : null;
 
   return (
     <>
       <PageHeader
         title="State CE Requirements"
-        subtitle={`Continuing-education requirements for a ${licenseTypeLong(
+        subtitle={`Continuing-education requirements for the states where you hold a ${licenseTypeLong(
           licenseType,
-        )} across all 50 states. Select your state to see the full breakdown.`}
+        )} license.`}
       />
 
       <p className="mb-4 rounded-md border border-ace/40 bg-ace-bg px-3 py-2 text-[11px] text-ace-dark text-pretty">
@@ -79,41 +87,48 @@ export default async function StatesPage() {
       ) : null}
 
       <h2 className="mb-2 mt-6 text-[12px] font-semibold uppercase tracking-wide text-text-muted">
-        All states
+        Your states
       </h2>
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-        {STATE_CODES.map((code) => {
-          const req = byState.get(code);
-          const isPrimary = code === primaryState;
-          return (
-            <div
-              key={code}
-              className={`rounded-lg border bg-white p-3 ${
-                isPrimary ? "border-ace ring-1 ring-ace/40" : "border-border"
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <p className="text-[13px] font-semibold text-navy">
-                  {US_STATES[code]}
-                </p>
-                {isPrimary ? (
-                  <span className="rounded-full bg-ace-bg px-2 py-0.5 text-[9px] font-semibold text-ace-dark">
-                    Your state
-                  </span>
-                ) : null}
+      {licenses.length === 0 ? (
+        <p className="rounded-lg border border-border bg-white px-4 py-8 text-center text-[12px] text-text-muted">
+          Add a license to see your state&apos;s CE requirements.
+        </p>
+      ) : (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+          {licenses.map((license) => {
+            const code = license.state;
+            const req = byKey.get(`${code}-${license.licenseType}`);
+            const isPrimary = code === primaryState;
+            return (
+              <div
+                key={`${code}-${license.licenseType}`}
+                className={`rounded-lg border bg-white p-3 ${
+                  isPrimary ? "border-ace ring-1 ring-ace/40" : "border-border"
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <p className="text-[13px] font-semibold text-navy">
+                    {US_STATES[code] ?? code}
+                  </p>
+                  {isPrimary ? (
+                    <span className="rounded-full bg-ace-bg px-2 py-0.5 text-[9px] font-semibold text-ace-dark">
+                      Primary
+                    </span>
+                  ) : null}
+                </div>
+                {req ? (
+                  <p className="mt-1 text-[11px] text-text-mid tabular-nums">
+                    {formatHours(Number(req.totalHours))} hrs ·{" "}
+                    {cycleLabel(req.cycleMonths)}
+                  </p>
+                ) : (
+                  <p className="mt-1 text-[11px] text-text-muted">Not yet loaded</p>
+                )}
               </div>
-              {req ? (
-                <p className="mt-1 text-[11px] text-text-mid tabular-nums">
-                  {formatHours(Number(req.totalHours))} hrs ·{" "}
-                  {cycleLabel(req.cycleMonths)}
-                </p>
-              ) : (
-                <p className="mt-1 text-[11px] text-text-muted">Not yet loaded</p>
-              )}
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      )}
     </>
   );
 }

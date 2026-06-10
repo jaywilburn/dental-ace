@@ -7,11 +7,7 @@ import { CertSource, VerificationStatus, DeliveryFormat } from "@prisma/client";
 import { getCurrentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { uploadToStorage } from "@/lib/storage";
-import {
-  ACCREDITATIONS,
-  CATEGORY_OPTIONS,
-  type CertActionState,
-} from "@/lib/protrack/cert-options";
+import { ACCREDITATIONS, type CertActionState } from "@/lib/protrack/cert-options";
 
 /*
   Manual CE certificate upload for a licensee. Validates with Zod, stores the
@@ -32,7 +28,9 @@ const uploadSchema = z.object({
   accreditationType: z.enum(ACCREDITATIONS, {
     message: "Select an accreditation type",
   }),
-  category: z.enum(CATEGORY_OPTIONS, { message: "Select a CE category" }),
+  // Free-form string (not an enum): the offered options come from the user's
+  // own state-requirement categories, which vary by state and license type.
+  category: z.string().trim().min(1, "Select a CE category").max(100),
   hours: z.coerce
     .number({ message: "Enter the CE hours" })
     .min(0.5, "At least 0.5 hours")

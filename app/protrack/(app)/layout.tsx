@@ -32,9 +32,17 @@ export default async function ProtrackAppLayout({
     ? `${stateName(primary.state)} · ${planLabel}`
     : planLabel;
 
+  // Free accounts never see the Pro Features nav section (client feedback,
+  // 2026-06). The pages behind it still call requireProtrackPro() themselves,
+  // so a typed-in URL gets the upgrade redirect, not the feature.
+  const nav =
+    user.protrackTier === "PRO"
+      ? navFor("protrack")
+      : navFor("protrack").filter((section) => section.label !== "Pro Features");
+
   return (
     <PortalShell
-      nav={navFor("protrack")}
+      nav={nav}
       product="pro"
       userInitials={initialsFromName(fullName)}
       userName={userName}

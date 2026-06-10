@@ -19,7 +19,12 @@ function FieldError({ message }: { message?: string }) {
   return <p className="mt-1 text-[11px] text-red-600">{message}</p>;
 }
 
-export function CertUploadForm() {
+export function CertUploadForm({
+  categoryOptions = CATEGORY_OPTIONS,
+}: {
+  /** Category names from the user's state requirement; falls back to the generic list. */
+  categoryOptions?: readonly string[];
+}) {
   const [state, formAction, isPending] = useActionState<CertActionState, FormData>(
     uploadCertificate,
     {},
@@ -135,7 +140,7 @@ export function CertUploadForm() {
             <option value="" disabled>
               Select one
             </option>
-            {CATEGORY_OPTIONS.map((c) => (
+            {categoryOptions.map((c) => (
               <option key={c} value={c}>
                 {c}
               </option>
@@ -158,7 +163,8 @@ export function CertUploadForm() {
               Select one
             </option>
             {DELIVERY_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>
+              // Key by label: several formats share the same enum bucket.
+              <option key={o.label} value={o.value}>
                 {o.label}
               </option>
             ))}
