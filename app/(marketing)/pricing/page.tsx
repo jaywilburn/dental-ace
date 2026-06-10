@@ -2,9 +2,11 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import {
-  APP_CREDIT_SKUS,
+  APP_COURSE_TIERS,
+  CATALOG,
   CERT_BUNDLE_SKUS,
   formatPrice,
+  formatWholePrice,
   type Sku,
 } from "@/lib/billing/catalog";
 import { PRO_PLANS } from "@/lib/billing/pro-plans";
@@ -13,7 +15,7 @@ import { PageHero } from "@/components/marketing/page-hero";
 export const metadata: Metadata = {
   title: "Pricing",
   description:
-    "DentalACE pricing: pay per course application plus certificate bundles, with no subscription. ProTrack offers a free plan and a paid Pro plan. Verify is provisioned for state boards.",
+    "DentalACE pricing: pay per course application with volume discounts, plus certificate bundles. ProTrack offers a free plan and a paid Pro plan. Verify is free for dental boards with AADB membership.",
 };
 
 /*
@@ -67,7 +69,7 @@ export default function PricingPage() {
             Pay for what you <span className="text-ace-light">use</span>
           </>
         }
-        sub="CE providers pay per course application and buy certificate bundles as they grow. Dental professionals start on ProTrack free and can upgrade to Pro. State boards are provisioned directly by the AADB."
+        sub="CE providers pay per course application, with the per-course price dropping as you buy more, and add certificate bundles as they grow. Dental professionals start on ProTrack free and can upgrade to Pro. Verify is free for state boards with their AADB membership."
       />
 
       {/* DentalACE pricing */}
@@ -81,15 +83,37 @@ export default function PricingPage() {
               Course applications
             </h2>
             <p className="mx-auto mt-2 max-w-[520px] text-pretty text-sm text-text-muted">
-              One credit covers one course application through AADB review. Buy
-              in bulk to lower your per-credit cost, or add expedited review
-              when you are on a deadline.
+              One credit covers one course application through AADB review. The
+              per-course price drops as you buy more in a single order, or add
+              expedited review when you are on a deadline.
             </p>
           </div>
-          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-            {APP_CREDIT_SKUS.map((sku) => (
-              <SkuCard key={sku.id} sku={sku} />
-            ))}
+          <div className="grid gap-5 md:grid-cols-2">
+            <div className="flex flex-col rounded-2xl border border-ace bg-white p-6 shadow-lg">
+              <p className="mb-3 text-sm font-semibold text-navy">
+                Course applications, volume pricing
+              </p>
+              <ul className="divide-y divide-border rounded-xl border border-border text-sm">
+                {APP_COURSE_TIERS.map((tier) => (
+                  <li
+                    key={tier.minQty}
+                    className="flex items-center justify-between px-4 py-2.5"
+                  >
+                    <span className="text-text-mid">{tier.label}</span>
+                    <span className="font-semibold text-navy tabular-nums">
+                      {formatWholePrice(tier.unitCents)} per course
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              <Link
+                href="/company"
+                className="mt-5 rounded-lg bg-navy px-4 py-2 text-center text-[13px] font-semibold text-white transition-colors hover:bg-navy/90"
+              >
+                Buy in your portal
+              </Link>
+            </div>
+            <SkuCard sku={CATALOG.app_1_exp} />
           </div>
 
           <div className="mb-10 mt-16 text-center">
@@ -109,9 +133,9 @@ export default function PricingPage() {
         </div>
       </section>
 
-      {/* ProTrack + Verify */}
+      {/* ProTrack + Verify + VerifyIQ */}
       <section className="bg-surface px-5 py-16 md:px-10 md:py-20">
-        <div className="mx-auto grid max-w-[1040px] gap-6 md:grid-cols-3">
+        <div className="mx-auto grid max-w-[1280px] gap-6 md:grid-cols-2 xl:grid-cols-4">
           <div className="flex flex-col rounded-2xl border border-pro/30 bg-white p-7">
             <p className="mb-2 font-mono text-[10px] uppercase tracking-[2px] text-pro-dark">
               ProTrack Free · For dental professionals
@@ -156,19 +180,41 @@ export default function PricingPage() {
             <p className="mb-2 font-mono text-[10px] uppercase tracking-[2px] text-ver-dark">
               Verify · For state boards
             </p>
-            <p className="mb-1 font-serif text-3xl font-bold text-ver">
-              Provisioned by the AADB
+            <p className="mb-1 font-serif text-3xl font-bold text-ver">Free</p>
+            <p className="mb-3 text-xs text-text-muted">
+              with your AADB membership
             </p>
             <p className="mb-5 text-sm leading-relaxed text-text-mid">
-              Verify is set up directly by the AADB for state dental boards,
-              with pricing arranged per board. Contact us and we will provision
-              access for your jurisdiction.
+              Verify is included for state dental boards as part of their AADB
+              membership. Contact us and we will provision access for your
+              jurisdiction.
             </p>
             <Link
               href="/verify/contact"
               className="mt-auto rounded-lg bg-ver px-4 py-2 text-center text-[13px] font-semibold text-white transition-colors hover:bg-ver-dark"
             >
               Request board access
+            </Link>
+          </div>
+          <div className="flex flex-col rounded-2xl border border-ver bg-white p-7">
+            <p className="mb-2 font-mono text-[10px] uppercase tracking-[2px] text-ver-dark">
+              VerifyIQ · For state boards
+            </p>
+            <p className="mb-1 font-serif text-3xl font-bold text-ver">
+              $499
+              <span className="text-base font-semibold">/mo</span>
+            </p>
+            <p className="mb-3 text-xs text-text-muted">or $5,000/yr</p>
+            <p className="mb-5 text-sm leading-relaxed text-text-mid">
+              An advanced compliance intelligence add-on to Verify for state
+              dental boards. Coming soon; contact us for details and early
+              access.
+            </p>
+            <Link
+              href="/verify/contact"
+              className="mt-auto rounded-lg bg-ver px-4 py-2 text-center text-[13px] font-semibold text-white transition-colors hover:bg-ver-dark"
+            >
+              Contact us
             </Link>
           </div>
         </div>

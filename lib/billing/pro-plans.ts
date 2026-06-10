@@ -5,7 +5,8 @@ import { SubscriptionInterval } from "@prisma/client";
   one-time catalog (lib/billing/catalog.ts): Pro is recurring and its state lives
   in pro_subscriptions + licensees.planTier, so it never touches company credits.
 
-  Prices: $7/mo or $79/yr (the annual saves ~$5 vs monthly). Money in cents.
+  Prices: $7/mo or $67/yr (June 2026 pricing sheet; the annual saves $17 vs
+  monthly). Money in cents.
 */
 
 export type ProPlanId = "pro_monthly" | "pro_annual";
@@ -30,7 +31,7 @@ export const PRO_PLANS: Record<ProPlanId, ProPlan> = {
   pro_annual: {
     id: "pro_annual",
     interval: SubscriptionInterval.YEAR,
-    amountCents: 7900,
+    amountCents: 6700,
     cadence: "per year",
     envPriceIdKey: "STRIPE_PRICE_ID_PRO_ANNUAL",
   },

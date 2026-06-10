@@ -6,9 +6,8 @@ import { startCheckout } from "@/lib/billing/start-checkout";
 import { cn } from "@/lib/utils";
 
 /*
-  Buy Certificate Bundles page. Renders the six cert-bundle SKUs. The 750-pack
-  carries the "BEST VALUE" badge. Mirrors logic/dentalace-dev-mockup-suite-v3.html
-  #co-buycerts.
+  Buy Certificate Bundles page. Renders the seven cert-bundle SKUs from the
+  catalog. The 1,500-pack carries the "BEST VALUE" badge.
 */
 export default async function BuyCertsPage() {
   const user = await requireDentalAce();
@@ -59,11 +58,12 @@ export default async function BuyCertsPage() {
 
       <div className="mt-6 rounded-lg border border-ace bg-ace-bg p-4">
         <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-ace-dark">
-          10 Stripe products total
+          How bundles work
         </p>
         <p className="text-[12px] leading-relaxed text-text-mid">
-          4 application credit tiers + 6 certificate bundles. The webhook handler
-          identifies each SKU and applies the right balance grant atomically.
+          Certificates are issued to attendees from your shared balance across
+          all courses. The webhook handler identifies each bundle and applies
+          the balance grant atomically.
         </p>
       </div>
     </>

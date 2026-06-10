@@ -1,14 +1,14 @@
 import { PageHeader } from "@/components/portal-shell";
 import { requireDentalAce } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
-import { APP_CREDIT_SKUS, formatPrice } from "@/lib/billing/catalog";
+import { CATALOG, formatPrice } from "@/lib/billing/catalog";
 import { startCheckout } from "@/lib/billing/start-checkout";
-import { cn } from "@/lib/utils";
+import { AppCoursePurchase } from "@/components/billing/app-course-purchase";
 
 /*
-  Buy Application Credits page. Renders the four app-credit SKUs from the
-  catalog. Each form button starts the checkout flow — mock or real depending
-  on env. The $549/5-pack carries the "MOST POPULAR" badge defined in catalog.
+  Buy Application Credits page. Course applications use the volume-tiered
+  quantity picker (AppCoursePurchase); the expedited add-on stays a fixed SKU.
+  Both start the checkout flow — mock or real depending on env.
 */
 export default async function BuyCreditsPage() {
   const user = await requireDentalAce();
@@ -24,6 +24,8 @@ export default async function BuyCreditsPage() {
   const total =
     (company?.applicationCredits ?? 0) + (company?.expeditedCredits ?? 0);
 
+  const expedited = CATALOG.app_1_exp;
+
   return (
     <>
       <PageHeader
@@ -37,36 +39,28 @@ export default async function BuyCreditsPage() {
         </p>
         <p className="text-[12px] leading-relaxed text-text-mid">
           Each credit allows you to submit one course for AADB accreditation
-          review. The Expedited add-on is bundled into the $219 SKU below for
-          faster turnaround (~3 business days vs ~10 for standard).
+          review. Pricing is per course and drops with volume. Need a faster
+          decision? The expedited option below includes priority review (~3
+          business days vs ~10 for standard).
         </p>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {APP_CREDIT_SKUS.map((sku) => (
-          <form key={sku.id} action={startCheckout}>
-            <input type="hidden" name="skuId" value={sku.id} />
-            <button
-              type="submit"
-              className={cn(
-                "block w-full rounded-lg border bg-white p-4 text-left transition-colors hover:border-navy/40 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ace focus-visible:ring-offset-2",
-                sku.badge && "border-ace bg-ace-bg/30",
-                !sku.badge && "border-border",
-              )}
-            >
-              {sku.badge ? (
-                <span className="mb-1 inline-block text-[9px] font-bold uppercase tracking-wider text-ace-dark">
-                  ★ {sku.badge}
-                </span>
-              ) : null}
-              <p className="text-[12px] font-semibold text-navy">{sku.name}</p>
-              <p className="mt-2 font-serif text-3xl font-bold text-navy tabular-nums">
-                {formatPrice(sku.amountCents)}
-              </p>
-              <p className="mt-2 text-[11px] text-text-muted">{sku.blurb}</p>
-            </button>
-          </form>
-        ))}
+      <div className="grid gap-4 lg:grid-cols-[3fr_2fr]">
+        <AppCoursePurchase />
+
+        <form action={startCheckout}>
+          <input type="hidden" name="skuId" value={expedited.id} />
+          <button
+            type="submit"
+            className="block h-full w-full rounded-lg border border-border bg-white p-5 text-left transition-colors hover:border-navy/40 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ace focus-visible:ring-offset-2"
+          >
+            <p className="text-[13px] font-semibold text-navy">{expedited.name}</p>
+            <p className="mt-2 font-serif text-3xl font-bold text-navy tabular-nums">
+              {formatPrice(expedited.amountCents)}
+            </p>
+            <p className="mt-2 text-[11px] text-text-muted">{expedited.blurb}</p>
+          </button>
+        </form>
       </div>
 
       <p className="mt-6 text-center text-[10px] text-text-muted">

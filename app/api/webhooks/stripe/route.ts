@@ -141,10 +141,14 @@ export async function POST(request: NextRequest) {
       } else if (session.mode === "payment") {
         const skuId = session.metadata?.skuId;
         const companyId = session.client_reference_id;
+        // Quantity-priced SKUs (app_course) carry their quantity in session
+        // metadata, set by createCheckoutSession when real mode is wired.
+        const quantity = Number(session.metadata?.quantity ?? "1") || 1;
         if (skuId && companyId) {
           await handleCheckoutCompleted({
             skuId,
             companyId,
+            quantity,
             stripeEventId: event.id,
             stripePaymentId:
               typeof session.payment_intent === "string"

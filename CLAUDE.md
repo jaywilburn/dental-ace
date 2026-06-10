@@ -46,7 +46,8 @@ The SOW pre-dates the brand refresh. **The landing-page handoff (`logic/dentalac
 - **No em dashes (`—`)** in user-facing copy. Use commas, parentheses, or restructure the sentence. Page titles, button labels, marketing copy, in-app strings, email templates: all em-dash-free.
 - **Brand mark rendering:** "Dental" in white on dark / navy on light. "ACE" in gold (`--ace` token).
 - **Operator framing (client feedback, 2026-06-09):** DentalACE One is **operated by the American Association of Dental Boards (AADB)**. Never "Powered by CE Exchange" and never "Dental Exchange, Inc. d/b/a CE Exchange" in user-facing copy, including the footer copyright and Privacy Policy §1. (Superseded the earlier "An AADB Program · Powered by CE Exchange" tagline.)
-- **No "Free Forever"** anywhere in user-facing copy. ProTrack has a Free plan and a paid Pro plan ($7/mo or $79/yr, `lib/billing/pro-plans.ts`); call the free tier "Free".
+- **No "Free Forever"** anywhere in user-facing copy. ProTrack has a Free plan and a paid Pro plan ($7/mo or $67/yr, `lib/billing/pro-plans.ts`); call the free tier "Free".
+- **VerifyIQ** (one word, capital V + IQ) is a board-facing add-on to Verify, priced $499/mo or $5,000/yr. As of June 2026 it exists only as pricing-page copy (no product build yet).
 - **No emojis** in marketing/landing copy (client feedback, 2026-06-09). Status glyphs (✓ ⚠ ✗ arrows) in app UI are fine.
 - **Public email:** `info@dentalace.org`.
 - **Product accent colors:** DentalACE = gold (`--ace`), ProTrack = teal (`--pro`), Verify = blue (`--ver`). Use these only when product-color semantics matter (landing page, marketing). Internal app UI defaults to `--ace` for primary accent regardless of product.
@@ -92,7 +93,7 @@ DentalACE One is **one platform**; features are gated by **per-user entitlements
 - **Never expose the service-role key client-side.** Client uploads use server-issued signed-upload URLs. Reads use short-lived signed download URLs.
 
 ### Stripe
-- **10 SKUs**, not 14. Catalog is the single source of truth at `lib/billing/catalog.ts`. PRD §6 updated May 2026; do not regenerate the 14-SKU table.
+- **Catalog is the single source of truth at `lib/billing/catalog.ts`** (June 2026 client pricing sheet; supersedes the earlier 10-SKU table and the SOW's 14-SKU table). Course applications are **volume-tiered by quantity** via the `app_course` SKU (`APP_COURSE_TIERS`: $99 / $95 / $90 / $85 per course); the webhook multiplies the per-unit grant by the clamped quantity and always recomputes the amount server-side. Expedited stays the fixed `app_1_exp` SKU. 7 cert bundles (50–1,500). ProTrack Pro plans live separately in `lib/billing/pro-plans.ts` ($7/mo, $67/yr).
 - **Idempotency** — every webhook handler dedupes on `event.id`, persisted as `billing_transactions.stripeEventId` (unique). `INSERT ... ON CONFLICT DO NOTHING` is the idempotency check; the balance increment only runs if the insert succeeded.
 - **Mock mode** — when `STRIPE_SECRET_KEY` is absent (or `STRIPE_MOCK_MODE=true`), `lib/billing/checkout-mode.ts` reports mock mode. The Buy pages route to `/dev/stripe-mock-checkout`, which POSTs to `/api/dev/mock-stripe-webhook`. Both routes call into the same `handleCheckoutCompleted` in `lib/billing/webhook-core.ts` that the real `/api/webhooks/stripe` will. When a real Stripe account lands, only env vars + the session-creation function change.
 - **Local testing (real mode)** — `stripe listen --forward-to localhost:3000/api/webhooks/stripe`.

@@ -2,7 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth/session";
-import { getSku } from "@/lib/billing/catalog";
+import { clampAppCourseQty, getSku } from "@/lib/billing/catalog";
 import { isMockMode } from "@/lib/billing/checkout-mode";
 
 /*
@@ -25,8 +25,14 @@ export async function startCheckout(formData: FormData) {
     throw new Error("Authenticated company user required to start checkout");
   }
 
+  // Quantity only applies to quantity-priced SKUs (course applications);
+  // fixed packs always check out as a single unit.
+  const quantity = sku.quantityPriced
+    ? clampAppCourseQty(Number(formData.get("quantity") ?? 1))
+    : 1;
+
   if (isMockMode()) {
-    redirect(`/dev/stripe-mock-checkout?sku=${sku.id}`);
+    redirect(`/dev/stripe-mock-checkout?sku=${sku.id}&qty=${quantity}`);
   }
 
   throw new Error(

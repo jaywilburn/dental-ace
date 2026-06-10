@@ -44,7 +44,12 @@ export async function POST(request: Request) {
     );
   }
 
-  let body: { skuId?: string; companyId?: string; stripeEventId?: string } = {};
+  let body: {
+    skuId?: string;
+    companyId?: string;
+    stripeEventId?: string;
+    quantity?: number;
+  } = {};
   try {
     body = await request.json();
   } catch {
@@ -70,6 +75,7 @@ export async function POST(request: Request) {
     skuId,
     companyId,
     stripeEventId,
+    quantity: typeof body.quantity === "number" ? body.quantity : undefined,
     stripePaymentId: `mock_${stripeEventId}`,
   });
 

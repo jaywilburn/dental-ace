@@ -1,7 +1,13 @@
 import "server-only";
 
 import { prisma } from "@/lib/prisma";
-import { getSku, type Sku, type SkuId } from "@/lib/billing/catalog";
+import {
+  appCourseTotalCents,
+  clampAppCourseQty,
+  getSku,
+  type Sku,
+  type SkuId,
+} from "@/lib/billing/catalog";
 import { BillingTransactionType } from "@prisma/client";
 
 /*
@@ -22,6 +28,8 @@ export type CheckoutCompletedInput = {
   stripePaymentId?: string | null;
   skuId: SkuId | string;
   companyId: string;
+  /** Units purchased for quantity-priced SKUs (app_course); ignored otherwise. */
+  quantity?: number;
 };
 
 export type CheckoutCompletedOutcome =
@@ -51,11 +59,22 @@ export async function handleCheckoutCompleted(
       ? BillingTransactionType.CERT_BUNDLE
       : BillingTransactionType.APP_CREDIT;
 
+  // Quantity-priced SKUs (app_course) multiply their per-unit grant and price
+  // by the purchased quantity; everything else is a fixed pack (units = 1).
+  // The amount is always recomputed server-side from the catalog tiers, never
+  // trusted from the caller.
+  const units = sku.quantityPriced ? clampAppCourseQty(input.quantity ?? 1) : 1;
+  const granted = {
+    applicationCredits: (sku.grants.applicationCredits ?? 0) * units,
+    expeditedCredits: (sku.grants.expeditedCredits ?? 0) * units,
+    certBalance: (sku.grants.certBalance ?? 0) * units,
+  };
+  const amountCents = sku.quantityPriced
+    ? appCourseTotalCents(units)
+    : sku.amountCents;
+
   const quantity =
-    sku.grants.applicationCredits ??
-    sku.grants.expeditedCredits ??
-    sku.grants.certBalance ??
-    0;
+    granted.applicationCredits || granted.expeditedCredits || granted.certBalance || 0;
 
   try {
     await prisma.$transaction(async (tx) => {
@@ -65,7 +84,7 @@ export async function handleCheckoutCompleted(
           companyId: input.companyId,
           type: txnType,
           quantity,
-          amountCents: sku.amountCents,
+          amountCents,
           stripePaymentId: input.stripePaymentId ?? null,
           stripeEventId: input.stripeEventId,
           isExpedited: sku.id === "app_1_exp",
@@ -75,24 +94,24 @@ export async function handleCheckoutCompleted(
       // Lock the company row + apply the grant atomically.
       await tx.$executeRaw`select id from public.companies where id = ${input.companyId}::uuid for update`;
 
-      if (sku.grants.applicationCredits) {
+      if (granted.applicationCredits) {
         await tx.company.update({
           where: { id: input.companyId },
           data: {
-            applicationCredits: { increment: sku.grants.applicationCredits },
+            applicationCredits: { increment: granted.applicationCredits },
           },
         });
-      } else if (sku.grants.expeditedCredits) {
+      } else if (granted.expeditedCredits) {
         await tx.company.update({
           where: { id: input.companyId },
           data: {
-            expeditedCredits: { increment: sku.grants.expeditedCredits },
+            expeditedCredits: { increment: granted.expeditedCredits },
           },
         });
-      } else if (sku.grants.certBalance) {
+      } else if (granted.certBalance) {
         await tx.company.update({
           where: { id: input.companyId },
-          data: { certBalance: { increment: sku.grants.certBalance } },
+          data: { certBalance: { increment: granted.certBalance } },
         });
       }
     });

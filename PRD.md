@@ -35,7 +35,7 @@ Every user is a DentalACE One user; the three features are gated by per-user ent
 **Access:** included free with **every** DentalACE One account (the platform's free baseline); ProTrack Pro is a paid upgrade.
 **Replaces:** Spreadsheets, shoeboxes of paper certs, board-renewal anxiety.
 **Core flow:** Every account includes ProTrack Free → ACE-issued certificates auto-sync to the dashboard → upload other CE certificates (ADA CERP, AGD PACE, Other Accredited) → see real-time progress against the user's state CE requirements → Pro tier unlocks audit-ready PDF export, renewal reminders, and multi-state licensure.
-**Revenue:** Free for every account (baseline) + ProTrack Pro at $7/mo or $79/yr.
+**Revenue:** Free for every account (baseline) + ProTrack Pro at $7/mo or $67/yr.
 **Launch:** Week 16.
 
 ### Verify — Board Auditing
@@ -64,7 +64,7 @@ A single account can hold several features at once, so login lands on a **platfo
 ### Registration & access
 - **Sign-up (public, self-serve):** creates the account and activates ProTrack Free. One funnel for everyone.
 - **DentalACE:** added in-app by creating or joining a provider company and purchasing credits (sets `company_id`).
-- **ProTrack Pro:** a paid upgrade ($7/mo or $79/yr) on the existing account; no separate sign-up.
+- **ProTrack Pro:** a paid upgrade ($7/mo or $67/yr) on the existing account; no separate sign-up.
 - **Verify:** the state board signs up like any user; an admin then grants `verify_access`.
 - **Reviewer / Admin:** provisioned by an admin (not public sign-up); `staff_role` is set on their account.
 

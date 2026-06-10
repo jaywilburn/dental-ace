@@ -2,7 +2,14 @@ import { redirect } from "next/navigation";
 import { randomUUID } from "node:crypto";
 import { getCurrentUser } from "@/lib/auth/session";
 import { isMockMode } from "@/lib/billing/checkout-mode";
-import { CATALOG, formatPrice, getSku, type SkuId } from "@/lib/billing/catalog";
+import {
+  appCourseTotalCents,
+  appCourseUnitCents,
+  clampAppCourseQty,
+  formatPrice,
+  getSku,
+  type Sku,
+} from "@/lib/billing/catalog";
 import { handleCheckoutCompleted } from "@/lib/billing/webhook-core";
 import { BrandMark } from "@/components/brand-mark";
 
@@ -17,18 +24,22 @@ import { BrandMark } from "@/components/brand-mark";
 export default async function StripeMockCheckoutPage({
   searchParams,
 }: {
-  searchParams: Promise<{ sku?: string }>;
+  searchParams: Promise<{ sku?: string; qty?: string }>;
 }) {
   if (!isMockMode()) redirect("/company/buy/credits");
 
-  const { sku: skuId } = await searchParams;
+  const { sku: skuId, qty } = await searchParams;
   const sku = skuId ? getSku(skuId) : null;
   if (!sku) redirect("/company/buy/credits");
 
   const user = await getCurrentUser();
   if (!user || !user.companyId) redirect("/login");
 
-  const grants = formatGrants(sku.id);
+  const quantity = sku.quantityPriced ? clampAppCourseQty(Number(qty ?? 1)) : 1;
+  const totalCents = sku.quantityPriced
+    ? appCourseTotalCents(quantity)
+    : sku.amountCents;
+  const grants = formatGrants(sku, quantity);
   const stripeEventId = `evt_mock_${randomUUID()}`;
 
   return (
@@ -51,15 +62,23 @@ export default async function StripeMockCheckoutPage({
 
           <div className="mt-5 border-t border-border pt-4 text-sm">
             <div className="flex justify-between font-medium text-navy">
-              <span>{sku.name}</span>
-              <span>{formatPrice(sku.amountCents)}</span>
+              <span>
+                {sku.quantityPriced ? `${quantity} × ${sku.name}` : sku.name}
+              </span>
+              <span>{formatPrice(totalCents)}</span>
             </div>
+            {sku.quantityPriced ? (
+              <p className="mt-1 text-xs text-text-muted">
+                {formatPrice(appCourseUnitCents(quantity))} per course at this
+                volume
+              </p>
+            ) : null}
             <p className="mt-1 text-xs text-text-muted">Grants: {grants}</p>
           </div>
 
           <div className="mt-4 border-t border-border pt-4 flex justify-between text-base font-bold text-navy">
             <span>Total</span>
-            <span>{formatPrice(sku.amountCents)}</span>
+            <span>{formatPrice(totalCents)}</span>
           </div>
 
           <form
@@ -70,6 +89,7 @@ export default async function StripeMockCheckoutPage({
             className="mt-6"
           >
             <input type="hidden" name="skuId" value={sku.id} />
+            <input type="hidden" name="quantity" value={quantity} />
             <input type="hidden" name="stripeEventId" value={stripeEventId} />
             <button
               type="submit"
@@ -97,10 +117,11 @@ export default async function StripeMockCheckoutPage({
   );
 }
 
-function formatGrants(skuId: SkuId): string {
-  const sku = CATALOG[skuId];
+function formatGrants(sku: Sku, quantity: number): string {
+  const units = sku.quantityPriced ? quantity : 1;
   if (sku.grants.applicationCredits) {
-    return `+${sku.grants.applicationCredits} application credit${sku.grants.applicationCredits === 1 ? "" : "s"}`;
+    const n = sku.grants.applicationCredits * units;
+    return `+${n} application credit${n === 1 ? "" : "s"}`;
   }
   if (sku.grants.expeditedCredits) {
     return `+${sku.grants.expeditedCredits} expedited application credit`;
@@ -126,6 +147,7 @@ async function completeMockCheckout(formData: FormData) {
   if (!user || !user.companyId) redirect("/login");
 
   const skuId = String(formData.get("skuId") ?? "");
+  const quantity = Number(formData.get("quantity") ?? 1);
   const stripeEventId = String(formData.get("stripeEventId") ?? "");
 
   // Call the shared handler directly. The webhook route stays in place for
@@ -134,6 +156,7 @@ async function completeMockCheckout(formData: FormData) {
   // server-to-server fetch + cookie-forwarding problem.
   const outcome = await handleCheckoutCompleted({
     skuId,
+    quantity,
     stripeEventId,
     companyId: user.companyId,
     stripePaymentId: `mock_${stripeEventId}`,
