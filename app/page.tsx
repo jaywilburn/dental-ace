@@ -1,6 +1,7 @@
 import { LandingNav } from "@/components/landing/landing-nav";
 import { LandingHero } from "@/components/landing/landing-hero";
 import { HowItWorks } from "@/components/landing/how-it-works";
+import { VideoSection } from "@/components/landing/video-section";
 import { SuiteTitleBar } from "@/components/landing/suite-title-bar";
 import { ProductDetail } from "@/components/landing/product-detail";
 import { MockupAce } from "@/components/landing/mockup-ace";
@@ -21,6 +22,7 @@ export default function LandingPage() {
       <LandingNav />
       <main>
         <LandingHero />
+        <VideoSection />
         <HowItWorks />
         <SuiteTitleBar />
 

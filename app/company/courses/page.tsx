@@ -166,7 +166,7 @@ export default async function MyCoursesPage({
                         href={`/api/courses/${course.id}/badge`}
                         className="text-ace underline"
                       >
-                        Badge
+                        Marketing Logo
                       </a>
                     </div>
                   </td>

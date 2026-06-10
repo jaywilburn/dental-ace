@@ -37,7 +37,9 @@ export async function GET(
   return new NextResponse(new Uint8Array(png), {
     headers: {
       "Content-Type": "image/png",
-      "Content-Disposition": `attachment; filename="${course.courseIdNumber}-ace-badge.png"`,
+      // User-facing name is "Marketing Logo" (client feedback, 2026-06); the
+      // /badge route path and render module keep the internal name.
+      "Content-Disposition": `attachment; filename="${course.courseIdNumber}-marketing-logo.png"`,
     },
   });
 }
