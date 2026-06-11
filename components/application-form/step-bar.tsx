@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 export type StepStatus = "done" | "active" | "todo";
 
 const stepLabels = [
+  "Organization",
   "Course Info",
   "Creator",
   "Presenters",
@@ -15,11 +16,15 @@ const stepLabels = [
   "Review",
 ];
 
-export function ApplicationStepBar({ currentStep }: { currentStep: 1 | 2 | 3 | 4 | 5 }) {
+export function ApplicationStepBar({
+  currentStep,
+}: {
+  currentStep: 1 | 2 | 3 | 4 | 5 | 6;
+}) {
   return (
     <ol className="mb-6 flex items-center gap-2 overflow-x-auto">
       {stepLabels.map((label, i) => {
-        const index = (i + 1) as 1 | 2 | 3 | 4 | 5;
+        const index = (i + 1) as 1 | 2 | 3 | 4 | 5 | 6;
         const status: StepStatus =
           index < currentStep ? "done" : index === currentStep ? "active" : "todo";
         return (
