@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { PageHeader } from "@/components/portal-shell";
-import { requireDentalAce } from "@/lib/auth/session";
+import { requireCertificateLogAccess } from "@/lib/company/credit-guards";
 import { prisma } from "@/lib/prisma";
 import { createSignedUrl } from "@/lib/storage";
 import { buildCertWhere } from "@/lib/certificates/query";
@@ -19,7 +19,9 @@ export default async function CertificateLogPage({
 }: {
   searchParams: Promise<{ q?: string; page?: string }>;
 }) {
-  const user = await requireDentalAce();
+  // Redirects to /company/buy/credits when the company has neither credits
+  // nor any issued certificates.
+  const { user } = await requireCertificateLogAccess();
   const { q, page } = await searchParams;
   const pageNum = Math.max(1, Number(page ?? "1") || 1);
   const query = (q ?? "").trim();

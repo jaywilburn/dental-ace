@@ -9,20 +9,25 @@ import {
   FormLabel,
   FormNav,
 } from "@/components/application-form/form-controls";
-import { requireDentalAce } from "@/lib/auth/session";
 import { ensureDraft, getDraftData, saveStep2 } from "@/lib/forms/application/actions";
+import { requireApplicationCredits } from "@/lib/company/credit-guards";
+import { sanitizeRichText } from "@/lib/forms/application/rich-text";
 import { FileUploadField } from "@/components/application-form/file-upload-field";
+import { RichTextEditor } from "@/components/application-form/rich-text-editor";
 
 export default async function ApplicationStep2Page({
   searchParams,
 }: {
   searchParams: Promise<{ error?: string; detail?: string }>;
 }) {
-  await requireDentalAce();
+  await requireApplicationCredits();
   const { error, detail } = await searchParams;
   const applicationId = await ensureDraft();
   const draft = await getDraftData(applicationId);
   if (!draft.courseTitle) redirect("/company/applications/new");
+
+  // Re-sanitize before seeding the editor: the editor renders this as HTML.
+  const bioHtml = draft.detailedBioHtml ? sanitizeRichText(draft.detailedBioHtml) : "";
 
   return (
     <>
@@ -67,12 +72,13 @@ export default async function ApplicationStep2Page({
             />
           </FormField>
           <FormField fullWidth>
-            <FileUploadField
-              applicationId={applicationId}
-              field="detailedBio"
-              label="Attached detailed bio."
-              required
-              existingFilename={draft.detailedBio?.filename}
+            <FormLabel required hint="Formatting toolbar works on phones too">
+              Detailed Bio
+            </FormLabel>
+            <RichTextEditor
+              name="detailedBioHtml"
+              defaultHtml={bioHtml}
+              placeholder="Education, credentials, clinical experience, teaching history..."
             />
           </FormField>
           <FormField fullWidth>

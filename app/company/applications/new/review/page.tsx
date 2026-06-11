@@ -2,14 +2,14 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/portal-shell";
 import { ApplicationStepBar } from "@/components/application-form/step-bar";
-import { requireDentalAce } from "@/lib/auth/session";
-import { prisma } from "@/lib/prisma";
+import { requireApplicationCredits } from "@/lib/company/credit-guards";
 import {
   ensureDraft,
   getDraftData,
   submitApplication,
 } from "@/lib/forms/application/actions";
 import { applicationDataSchema, isLiveFormat } from "@/lib/forms/application/schemas";
+import { sanitizeRichText } from "@/lib/forms/application/rich-text";
 import { resolveAttachmentLinks } from "@/lib/forms/application/attachments";
 import { AttachmentsCard } from "@/components/application-form/attachments-card";
 
@@ -19,7 +19,8 @@ import { AttachmentsCard } from "@/components/application-form/attachments-card"
   the draft from DRAFT to PENDING.
 */
 export default async function ApplicationStep5Page() {
-  const user = await requireDentalAce();
+  // Redirects to /company/buy/credits when the company holds no credits.
+  const { credits: company } = await requireApplicationCredits();
   const applicationId = await ensureDraft();
   const draft = await getDraftData(applicationId);
 
@@ -28,11 +29,6 @@ export default async function ApplicationStep5Page() {
     redirect("/company/applications/new");
   }
   const data = parsed.data;
-
-  const company = await prisma.company.findUniqueOrThrow({
-    where: { id: user.companyId! },
-    select: { applicationCredits: true, expeditedCredits: true },
-  });
 
   const attachments = await resolveAttachmentLinks(data);
 
@@ -79,9 +75,10 @@ export default async function ApplicationStep5Page() {
             { label: "Credentials", value: data.credentials },
             { label: "Current Position", value: data.currentPosition },
             {
-              label: "Attached detailed bio.",
-              value: data.detailedBio.filename,
+              label: "Detailed Bio",
+              value: sanitizeRichText(data.detailedBioHtml),
               full: true,
+              html: true,
             },
           ]}
         />
@@ -183,7 +180,8 @@ function ReviewCard({
 }: {
   title: string;
   editHref: string;
-  rows: { label: string; value: string; full?: boolean }[];
+  // html rows must contain ONLY sanitizeRichText() output (see rich-text.ts).
+  rows: { label: string; value: string; full?: boolean; html?: boolean }[];
 }) {
   return (
     <div className="overflow-hidden rounded-lg border border-border bg-white">
@@ -202,9 +200,16 @@ function ReviewCard({
             <dt className="text-[10px] font-semibold uppercase tracking-wide text-text-muted">
               {row.label}
             </dt>
-            <dd className="mt-0.5 whitespace-pre-line text-[13px] text-navy">
-              {row.value}
-            </dd>
+            {row.html ? (
+              <dd
+                className="mt-0.5 text-[13px] leading-relaxed text-navy [&_li]:ml-5 [&_ol]:list-decimal [&_ul]:list-disc"
+                dangerouslySetInnerHTML={{ __html: row.value }}
+              />
+            ) : (
+              <dd className="mt-0.5 whitespace-pre-line text-[13px] text-navy">
+                {row.value}
+              </dd>
+            )}
           </div>
         ))}
       </dl>

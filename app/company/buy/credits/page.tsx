@@ -10,8 +10,13 @@ import { AppCoursePurchase } from "@/components/billing/app-course-purchase";
   quantity picker (AppCoursePurchase); the expedited add-on stays a fixed SKU.
   Both start the checkout flow — mock or real depending on env.
 */
-export default async function BuyCreditsPage() {
+export default async function BuyCreditsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ need?: string }>;
+}) {
   const user = await requireDentalAce();
+  const { need } = await searchParams;
   const company = user.companyId
     ? await prisma.company.findUnique({
         where: { id: user.companyId },
@@ -32,6 +37,13 @@ export default async function BuyCreditsPage() {
         title="Buy Application Credits"
         subtitle={`Current balance: ${total} credit${total === 1 ? "" : "s"} · Credits never expire`}
       />
+
+      {need === "credits" ? (
+        <div className="mb-4 rounded-md border border-ace bg-ace-bg px-4 py-2.5 text-[13px] text-ace-dark">
+          You need at least one application credit before you can start a new
+          application. Pick a quantity below to get going.
+        </div>
+      ) : null}
 
       <div className="mb-5 rounded-lg border border-ace bg-ace-bg p-4">
         <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-ace-dark">

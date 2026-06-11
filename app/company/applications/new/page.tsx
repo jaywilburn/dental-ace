@@ -10,8 +10,7 @@ import {
   FormSelect,
   FormTextarea,
 } from "@/components/application-form/form-controls";
-import { requireDentalAce } from "@/lib/auth/session";
-import { prisma } from "@/lib/prisma";
+import { requireApplicationCredits } from "@/lib/company/credit-guards";
 import {
   DELIVERY_FORMATS,
   CATEGORIES,
@@ -30,19 +29,11 @@ export default async function ApplicationStep1Page({
 }: {
   searchParams: Promise<{ error?: string; detail?: string }>;
 }) {
-  const user = await requireDentalAce();
+  // Redirects to /company/buy/credits when the company holds no credits.
+  const { credits: totalCredits } = await requireApplicationCredits();
   const { error, detail } = await searchParams;
   const applicationId = await ensureDraft();
   const draft = await getDraftData(applicationId);
-
-  const totalCredits = user.companyId
-    ? (
-        await prisma.company.findUnique({
-          where: { id: user.companyId },
-          select: { applicationCredits: true, expeditedCredits: true },
-        })
-      ) ?? { applicationCredits: 0, expeditedCredits: 0 }
-    : { applicationCredits: 0, expeditedCredits: 0 };
 
   const isLive = isLiveFormat(draft.deliveryFormat);
 

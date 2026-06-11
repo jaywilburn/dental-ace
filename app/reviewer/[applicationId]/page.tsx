@@ -4,6 +4,7 @@ import { PageHeader } from "@/components/portal-shell";
 import { requireStaff } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { applicationDataReadSchema, isLiveFormat } from "@/lib/forms/application/schemas";
+import { sanitizeRichText } from "@/lib/forms/application/rich-text";
 import { resolveAttachmentLinks } from "@/lib/forms/application/attachments";
 import { AttachmentsCard } from "@/components/application-form/attachments-card";
 import { approveApplication, rejectApplication } from "@/lib/reviewer/actions";
@@ -108,8 +109,19 @@ export default async function ReviewerApplicationPage({
               { label: "Creator Name", value: data.creatorName },
               { label: "Credentials", value: data.credentials },
               { label: "Current Position", value: data.currentPosition, full: true },
-              // Typed bio only exists on applications saved before the
-              // 2026-06 switch to the uploaded detailed bio (see Attachments).
+              // Bio lineage: current applications carry rich text
+              // (detailedBioHtml); briefly-uploaded bios show under
+              // Attachments; pre-2026-06 applications carry plain text.
+              ...(data.detailedBioHtml
+                ? [
+                    {
+                      label: "Detailed Bio",
+                      value: sanitizeRichText(data.detailedBioHtml),
+                      full: true,
+                      html: true,
+                    },
+                  ]
+                : []),
               ...(data.professionalBio
                 ? [{ label: "Professional Bio", value: data.professionalBio, full: true }]
                 : []),
@@ -231,7 +243,8 @@ function Section({
   rows,
 }: {
   title: string;
-  rows: { label: string; value: string; full?: boolean }[];
+  // html rows must contain ONLY sanitizeRichText() output (see rich-text.ts).
+  rows: { label: string; value: string; full?: boolean; html?: boolean }[];
 }) {
   return (
     <div className="overflow-hidden rounded-lg border border-border bg-white">
@@ -244,9 +257,16 @@ function Section({
             <dt className="text-[10px] font-semibold uppercase tracking-wide text-text-muted">
               {row.label}
             </dt>
-            <dd className="mt-0.5 whitespace-pre-line text-[13px] text-navy">
-              {row.value}
-            </dd>
+            {row.html ? (
+              <dd
+                className="mt-0.5 text-[13px] leading-relaxed text-navy [&_li]:ml-5 [&_ol]:list-decimal [&_ul]:list-disc"
+                dangerouslySetInnerHTML={{ __html: row.value }}
+              />
+            ) : (
+              <dd className="mt-0.5 whitespace-pre-line text-[13px] text-navy">
+                {row.value}
+              </dd>
+            )}
           </div>
         ))}
       </dl>

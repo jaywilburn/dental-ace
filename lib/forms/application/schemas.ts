@@ -73,11 +73,11 @@ export const step2Schema = z.object({
   creatorName: z.string().min(2).max(200),
   credentials: z.string().min(2).max(200),
   currentPosition: z.string().min(2).max(200),
-  // The bio is an uploaded document ("Attached detailed bio.", client
-  // feedback 2026-06). Optional here because saveStep2 never posts it (the
-  // uploader persists it straight into applicationData); saveStep2 checks
-  // presence and the full schema below requires it at submit.
-  detailedBio: fileRef.optional(),
+  // Rich-text bio authored in the Step 2 editor (client feedback 2026-06:
+  // WYSIWYG, not an upload). Always sanitized through
+  // lib/forms/application/rich-text.ts before it reaches this schema;
+  // saveStep2 additionally enforces a minimum visible-text length.
+  detailedBioHtml: z.string().min(1, "Detailed bio is required").max(20_000),
   cvResume: fileRef.optional(),
 });
 
@@ -128,8 +128,7 @@ export const step4Schema = z.object({
 export const applicationDataSchema = step1Schema
   .merge(step2Schema)
   .merge(step3Schema)
-  .merge(step4Schema)
-  .extend({ detailedBio: fileRef });
+  .merge(step4Schema);
 
 /*
   Tolerant variant for READING persisted application_data. Applications saved
@@ -147,9 +146,12 @@ export const applicationDataReadSchema = applicationDataSchema
     targetAudience: z.string(),
     courseDurationHours: z.number().optional(),
     adaCerpCategory: z.string().optional(),
-    // Pre-2026-06 applications carry a typed bio instead of the uploaded one.
+    // Bio lineage: plain-text professionalBio (pre-2026-06), uploaded
+    // detailedBio file (briefly, June 2026), now rich-text detailedBioHtml.
+    // Readers display whichever the application carries.
     professionalBio: z.string().optional(),
     detailedBio: fileRef.optional(),
+    detailedBioHtml: z.string().optional(),
   })
   .passthrough();
 

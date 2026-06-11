@@ -25,6 +25,10 @@ import {
   buildAttachmentPath,
   type AttachmentField,
 } from "@/lib/forms/application/upload-schema";
+import {
+  sanitizeRichText,
+  richTextPlainLength,
+} from "@/lib/forms/application/rich-text";
 import { sendEmail } from "@/lib/email/send";
 import ApplicationSubmittedEmail from "@/emails/application-submitted";
 import { chooseCreditPool } from "@/lib/billing/credit-pool";
@@ -157,23 +161,27 @@ export async function saveStep1(formData: FormData) {
 export async function saveStep2(formData: FormData) {
   const applicationId = String(formData.get("applicationId") ?? "");
   if (!applicationId) throw new Error("Missing applicationId");
+  // The rich-text bio is sanitized before validation or storage; the visible
+  // text (tags stripped) must meet the same 20-character floor the old
+  // plain-text bio had.
+  const detailedBioHtml = sanitizeRichText(
+    String(formData.get("detailedBioHtml") ?? ""),
+  );
+  if (richTextPlainLength(detailedBioHtml) < 20) {
+    redirect(
+      `${STEP_ROUTES[1]}?error=validation&detail=${encodeURIComponent(
+        "Detailed bio: please write at least 20 characters.",
+      )}`,
+    );
+  }
+
   const raw = {
     creatorName: String(formData.get("creatorName") ?? ""),
     credentials: String(formData.get("credentials") ?? ""),
     currentPosition: String(formData.get("currentPosition") ?? ""),
+    detailedBioHtml,
   };
   await mergeStep(applicationId, step2Schema, raw, STEP_ROUTES[1]);
-
-  // The detailed bio is uploaded separately (straight into applicationData),
-  // so presence is checked after the merge rather than via the posted fields.
-  const draft = await getDraftData(applicationId);
-  if (!draft.detailedBio) {
-    redirect(
-      `${STEP_ROUTES[1]}?error=validation&detail=${encodeURIComponent(
-        "Attached detailed bio: please upload the bio document before continuing.",
-      )}`,
-    );
-  }
   redirect(STEP_ROUTES[2]);
 }
 

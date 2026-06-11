@@ -11,7 +11,7 @@ import {
   FormSelect,
   FormTextarea,
 } from "@/components/application-form/form-controls";
-import { requireDentalAce } from "@/lib/auth/session";
+import { requireApplicationCredits } from "@/lib/company/credit-guards";
 import { ensureDraft, getDraftData, saveStep3 } from "@/lib/forms/application/actions";
 import { FileUploadField } from "@/components/application-form/file-upload-field";
 
@@ -27,7 +27,7 @@ export default async function ApplicationStep3Page({
 }: {
   searchParams: Promise<{ error?: string; detail?: string }>;
 }) {
-  await requireDentalAce();
+  await requireApplicationCredits();
   const { error, detail } = await searchParams;
   const applicationId = await ensureDraft();
   const draft = await getDraftData(applicationId);

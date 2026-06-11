@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
-import { requireDentalAce } from "@/lib/auth/session";
+import { requireCertificateLogAccess } from "@/lib/company/credit-guards";
 import { prisma } from "@/lib/prisma";
 import { buildCertWhere } from "@/lib/certificates/query";
 
@@ -17,7 +17,9 @@ const EXPORT_CAP = 10_000;
 const querySchema = z.object({ q: z.string().trim().max(200).optional() });
 
 export async function GET(request: NextRequest) {
-  const user = await requireDentalAce();
+  // Same gate as the Certificate Log page: no credits + no issued certs
+  // redirects to Buy App Credits.
+  const { user } = await requireCertificateLogAccess();
 
   const parsed = querySchema.safeParse({
     q: request.nextUrl.searchParams.get("q") ?? undefined,
