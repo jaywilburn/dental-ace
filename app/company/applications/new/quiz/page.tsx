@@ -32,8 +32,8 @@ export default async function ApplicationStep4Page({
 
   return (
     <>
-      <PageHeader title="Course Application" subtitle="Step 4 of 5 — Quiz Builder · 5 questions required" />
-      <ApplicationStepBar currentStep={4} />
+      <PageHeader title="Course Application" subtitle="Step 5 of 6 — Quiz Builder · 5 questions required" />
+      <ApplicationStepBar currentStep={5} />
       {error === "validation" ? <FormErrorBanner detail={detail} /> : null}
       <div className="mb-4 rounded-md border border-ver bg-ver-bg p-3 text-[12px] text-ver-dark">
         <p className="mb-1 font-semibold">Quiz rules</p>
