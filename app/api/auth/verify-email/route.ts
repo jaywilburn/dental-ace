@@ -3,6 +3,9 @@ import { prisma } from "@/lib/prisma";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { verifyEmailVerificationToken } from "@/lib/auth/verification-token";
 import { syncIssuedCertsForLicensee } from "@/lib/protrack/ace-sync";
+import { sendEmail } from "@/lib/email/send";
+import { appBaseUrl } from "@/lib/app-url";
+import ProtrackWelcomeEmail from "@/emails/protrack-welcome";
 
 /*
   GET /api/auth/verify-email?token=... — the link in the verification email.
@@ -31,7 +34,17 @@ export async function GET(request: NextRequest) {
 
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { id: true, emailVerifiedAt: true },
+    select: {
+      id: true,
+      email: true,
+      firstName: true,
+      emailVerifiedAt: true,
+      licenses: {
+        where: { isPrimary: true },
+        select: { state: true, licenseType: true },
+        take: 1,
+      },
+    },
   });
   if (!user) return fail();
 
@@ -47,6 +60,20 @@ export async function GET(request: NextRequest) {
       .catch(() => {});
     // Email is now proven — backfill any matching DentalACE-issued certificates.
     await syncIssuedCertsForLicensee(userId).catch(() => {});
+    // The account is now active: send the ProTrack welcome. Fires once (inside
+    // the first-verification block), so re-clicks / scanner pre-fetches don't
+    // resend it. Best-effort — a send failure must not break verification.
+    const primary = user.licenses[0];
+    await sendEmail({
+      to: user.email,
+      subject: ProtrackWelcomeEmail.subject(),
+      react: ProtrackWelcomeEmail({
+        firstName: user.firstName ?? "there",
+        state: primary?.state ?? null,
+        licenseType: primary?.licenseType ?? null,
+        dashboardUrl: `${appBaseUrl(origin)}/protrack`,
+      }),
+    }).catch(() => {});
   }
 
   // No session minted (see SECURITY note above). Send them to sign in.

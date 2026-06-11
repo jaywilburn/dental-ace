@@ -10,6 +10,7 @@ import { getCurrentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import {
+  orgStepSchema,
   step1Schema,
   step2Schema,
   step3Schema,
@@ -46,11 +47,12 @@ import { chooseCreditPool } from "@/lib/billing/credit-pool";
 */
 
 const STEP_ROUTES = [
-  "/company/applications/new",
-  "/company/applications/new/creator",
-  "/company/applications/new/presenters",
-  "/company/applications/new/quiz",
-  "/company/applications/new/review",
+  "/company/applications/new", // 0 — Organization & Contact (entry)
+  "/company/applications/new/course", // 1 — Course Info
+  "/company/applications/new/creator", // 2 — Creator
+  "/company/applications/new/presenters", // 3 — Presenters
+  "/company/applications/new/quiz", // 4 — Quiz
+  "/company/applications/new/review", // 5 — Review
 ] as const;
 
 async function getCustomerCompanyId(): Promise<string> {
@@ -134,6 +136,21 @@ async function mergeStep<T>(
   return parsed;
 }
 
+export async function saveOrgStep(formData: FormData) {
+  const applicationId = String(formData.get("applicationId") ?? "");
+  if (!applicationId) throw new Error("Missing applicationId");
+
+  const raw = {
+    organizationName: String(formData.get("organizationName") ?? ""),
+    organizationAddress: String(formData.get("organizationAddress") ?? ""),
+    adminName: String(formData.get("adminName") ?? ""),
+    adminEmail: String(formData.get("adminEmail") ?? ""),
+    adminPhone: String(formData.get("adminPhone") ?? ""),
+  };
+  await mergeStep(applicationId, orgStepSchema, raw, STEP_ROUTES[0]);
+  redirect(STEP_ROUTES[1]);
+}
+
 export async function saveStep1(formData: FormData) {
   const applicationId = String(formData.get("applicationId") ?? "");
   if (!applicationId) throw new Error("Missing applicationId");
@@ -143,6 +160,8 @@ export async function saveStep1(formData: FormData) {
     ceCreditHours: Number(formData.get("ceCreditHours") ?? 0),
     subjectMatter: String(formData.get("subjectMatter") ?? ""),
     deliveryFormat: String(formData.get("deliveryFormat") ?? ""),
+    primaryDistributionFormat: String(formData.get("primaryDistributionFormat") ?? ""),
+    shortDescription: String(formData.get("shortDescription") ?? ""),
     combinedCert: formData.get("combinedCert") === "yes" ? true : formData.get("combinedCert") === "no" ? false : undefined,
     submitSessionsSeparately:
       formData.get("submitSessionsSeparately") === "yes"
@@ -154,8 +173,8 @@ export async function saveStep1(formData: FormData) {
     courseObjectives: String(formData.get("courseObjectives") ?? ""),
     targetAudience: String(formData.get("targetAudience") ?? ""),
   };
-  await mergeStep(applicationId, step1Schema, raw, STEP_ROUTES[0]);
-  redirect(STEP_ROUTES[1]);
+  await mergeStep(applicationId, step1Schema, raw, STEP_ROUTES[1]);
+  redirect(STEP_ROUTES[2]);
 }
 
 export async function saveStep2(formData: FormData) {
@@ -169,7 +188,7 @@ export async function saveStep2(formData: FormData) {
   );
   if (richTextPlainLength(detailedBioHtml) < 20) {
     redirect(
-      `${STEP_ROUTES[1]}?error=validation&detail=${encodeURIComponent(
+      `${STEP_ROUTES[2]}?error=validation&detail=${encodeURIComponent(
         "Detailed bio: please write at least 20 characters.",
       )}`,
     );
@@ -180,9 +199,18 @@ export async function saveStep2(formData: FormData) {
     credentials: String(formData.get("credentials") ?? ""),
     currentPosition: String(formData.get("currentPosition") ?? ""),
     detailedBioHtml,
+    creatorEmail: String(formData.get("creatorEmail") ?? ""),
+    creatorPhone: String(formData.get("creatorPhone") ?? ""),
+    creatorAddress: String(formData.get("creatorAddress") ?? ""),
+    highestDegree: String(formData.get("highestDegree") ?? ""),
+    educationPart1: String(formData.get("educationPart1") ?? ""),
+    educationPart2: String(formData.get("educationPart2") ?? "") || undefined,
+    educationPart3: String(formData.get("educationPart3") ?? "") || undefined,
+    educationPart4: String(formData.get("educationPart4") ?? "") || "N/A",
+    creatorExperience: String(formData.get("creatorExperience") ?? ""),
   };
-  await mergeStep(applicationId, step2Schema, raw, STEP_ROUTES[1]);
-  redirect(STEP_ROUTES[2]);
+  await mergeStep(applicationId, step2Schema, raw, STEP_ROUTES[2]);
+  redirect(STEP_ROUTES[3]);
 }
 
 export async function saveStep3(formData: FormData) {
@@ -196,10 +224,13 @@ export async function saveStep3(formData: FormData) {
       name: String(formData.get("presenter_0_name") ?? ""),
       role: String(formData.get("presenter_0_role") ?? "Primary Presenter"),
       commercialDisclosure: String(formData.get("presenter_0_commercialDisclosure") ?? ""),
+      experience: String(formData.get("presenter_0_experience") ?? ""),
+      training: String(formData.get("presenter_0_training") ?? ""),
+      bio: String(formData.get("presenter_0_bio") ?? ""),
     },
   ];
-  await mergeStep(applicationId, step3Schema, { presenters }, STEP_ROUTES[2]);
-  redirect(STEP_ROUTES[3]);
+  await mergeStep(applicationId, step3Schema, { presenters }, STEP_ROUTES[3]);
+  redirect(STEP_ROUTES[4]);
 }
 
 export async function saveStep4(formData: FormData) {
@@ -229,8 +260,8 @@ export async function saveStep4(formData: FormData) {
     })),
   ];
 
-  await mergeStep(applicationId, step4Schema, { quiz }, STEP_ROUTES[3]);
-  redirect(STEP_ROUTES[4]);
+  await mergeStep(applicationId, step4Schema, { quiz }, STEP_ROUTES[4]);
+  redirect(STEP_ROUTES[5]);
 }
 
 /**

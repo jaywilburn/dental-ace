@@ -74,6 +74,17 @@ export default async function ReviewerApplicationPage({
       <div className="grid gap-5 lg:grid-cols-[2fr_1fr]">
         <div className="space-y-5">
           <Section
+            title="Organization & Contact"
+            rows={[
+              ...(data.organizationName ? [{ label: "Organization", value: data.organizationName, full: true }] : []),
+              ...(data.organizationAddress ? [{ label: "Address", value: data.organizationAddress, full: true }] : []),
+              ...(data.adminName ? [{ label: "Process Administrator", value: data.adminName }] : []),
+              ...(data.adminEmail ? [{ label: "Admin Email", value: data.adminEmail }] : []),
+              ...(data.adminPhone ? [{ label: "Admin Phone", value: data.adminPhone }] : []),
+            ]}
+          />
+
+          <Section
             title="Section A — Course Information (Fields 1-12)"
             rows={[
               { label: "Course Title", value: data.courseTitle, full: true },
@@ -84,8 +95,14 @@ export default async function ReviewerApplicationPage({
                 ? [{ label: "Course Duration", value: `${data.courseDurationHours.toFixed(1)} hours` }]
                 : []),
               { label: "Category", value: data.subjectMatter },
-              { label: "Delivery Format", value: data.deliveryFormat },
+              { label: "Course Format", value: data.deliveryFormat },
+              ...(data.primaryDistributionFormat
+                ? [{ label: "Most-Used Format", value: data.primaryDistributionFormat }]
+                : []),
               { label: "Target Audience", value: data.targetAudience },
+              ...(data.shortDescription
+                ? [{ label: "Short Description", value: data.shortDescription, full: true }]
+                : []),
               ...(data.adaCerpCategory
                 ? [{ label: "ADA CERP Category", value: data.adaCerpCategory }]
                 : []),
@@ -109,6 +126,15 @@ export default async function ReviewerApplicationPage({
               { label: "Creator Name", value: data.creatorName },
               { label: "Credentials", value: data.credentials },
               { label: "Current Position", value: data.currentPosition, full: true },
+              ...(data.creatorEmail ? [{ label: "Creator Email", value: data.creatorEmail }] : []),
+              ...(data.creatorPhone ? [{ label: "Creator Phone", value: data.creatorPhone }] : []),
+              ...(data.creatorAddress ? [{ label: "Creator Address", value: data.creatorAddress, full: true }] : []),
+              ...(data.highestDegree ? [{ label: "Highest Degree", value: data.highestDegree }] : []),
+              ...(data.educationPart1 ? [{ label: "Education Part 1", value: data.educationPart1, full: true }] : []),
+              ...(data.educationPart2 ? [{ label: "Education Part 2", value: data.educationPart2, full: true }] : []),
+              ...(data.educationPart3 ? [{ label: "Education Part 3", value: data.educationPart3, full: true }] : []),
+              ...(data.educationPart4 ? [{ label: "Education Part 4", value: data.educationPart4, full: true }] : []),
+              ...(data.creatorExperience ? [{ label: "Experience Relative to Subject", value: data.creatorExperience, full: true }] : []),
               // Bio lineage: current applications carry rich text
               // (detailedBioHtml); briefly-uploaded bios show under
               // Attachments; pre-2026-06 applications carry plain text.
@@ -130,9 +156,12 @@ export default async function ReviewerApplicationPage({
 
           <Section
             title="Section C — Presenters (Fields 21-28)"
-            rows={data.presenters.flatMap((p, i) => [
+            rows={(data.presenters ?? []).flatMap((p, i) => [
               { label: `Presenter ${i + 1}`, value: `${p.name} · ${p.role}` },
-              { label: "Commercial Disclosure", value: p.commercialDisclosure, full: true },
+              ...(p.commercialDisclosure ? [{ label: "Commercial Disclosure", value: p.commercialDisclosure, full: true }] : []),
+              ...(p.experience ? [{ label: "Experience", value: p.experience, full: true }] : []),
+              ...(p.training ? [{ label: "Training Received", value: p.training, full: true }] : []),
+              ...(p.bio ? [{ label: "Bio", value: p.bio, full: true }] : []),
             ])}
           />
 

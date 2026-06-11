@@ -28,8 +28,8 @@ export default async function AdminCompaniesPage({
       skip: (pageNum - 1) * PAGE_SIZE,
       take: PAGE_SIZE,
       select: {
-        id: true, name: true, applicationCredits: true, expeditedCredits: true,
-        certBalance: true, totalCertsIssued: true,
+        id: true, name: true, contactEmail: true, applicationCredits: true,
+        expeditedCredits: true, certBalance: true, totalCertsIssued: true,
       },
     }),
   ]);
@@ -50,6 +50,7 @@ export default async function AdminCompaniesPage({
             <thead>
               <tr className="border-b border-border bg-surface text-left text-[10px] uppercase tracking-wide text-text-muted">
                 <th className="px-4 py-2 font-semibold">Company</th>
+                <th className="px-4 py-2 font-semibold">Contact</th>
                 <th className="px-4 py-2 font-semibold">App Credits</th>
                 <th className="px-4 py-2 font-semibold">Cert Balance</th>
                 <th className="px-4 py-2 font-semibold">Certs Issued</th>
@@ -61,6 +62,7 @@ export default async function AdminCompaniesPage({
                   <td className="px-4 py-2 font-medium text-navy">
                     <Link href={`/admin/companies/${c.id}`} className="text-ace underline">{c.name}</Link>
                   </td>
+                  <td className="px-4 py-2 text-text-muted">{c.contactEmail ?? "·"}</td>
                   <td className="px-4 py-2 text-text-mid tabular-nums">
                     {c.applicationCredits}{c.expeditedCredits > 0 ? ` (+${c.expeditedCredits} exp)` : ""}
                   </td>

@@ -29,7 +29,7 @@ export default function CertificateIssuedEmail({
   return (
     <BrandEmail
       preview={`Your certificate for ${courseTitle}`}
-      subject="🎓 Your CE Certificate"
+      subject="Your CE Certificate"
     >
       <Text style={{ margin: 0, fontSize: 14, color: emailColors.navy }}>
         Congratulations {attendeeName},
