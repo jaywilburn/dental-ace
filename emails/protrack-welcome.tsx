@@ -3,8 +3,9 @@ import { BrandEmail, DetailGrid, CtaButton, emailColors } from "./_brand";
 
 export type ProtrackWelcomeProps = {
   firstName: string;
-  state: string;
-  licenseType: string;
+  /** Omitted when the account was created without a license at sign-up. */
+  state?: string | null;
+  licenseType?: string | null;
   dashboardUrl: string;
 };
 
@@ -14,6 +15,13 @@ export default function ProtrackWelcomeEmail({
   licenseType,
   dashboardUrl,
 }: ProtrackWelcomeProps) {
+  // Only show license rows the account actually has; everyone gets the Plan row.
+  const rows = [
+    ...(state ? [{ label: "State", value: state }] : []),
+    ...(licenseType ? [{ label: "License Type", value: licenseType }] : []),
+    { label: "Plan", value: "Free" },
+  ];
+
   return (
     <BrandEmail
       product="pro"
@@ -35,14 +43,10 @@ export default function ProtrackWelcomeEmail({
         against your state requirements, and DentalACE certificates show up here
         automatically.
       </Text>
-      <DetailGrid
-        rows={[
-          { label: "State", value: state },
-          { label: "License Type", value: licenseType },
-          { label: "Plan", value: "Free" },
-        ]}
-      />
+      <DetailGrid rows={rows} />
       <CtaButton href={dashboardUrl} label="Open your CE dashboard" />
     </BrandEmail>
   );
 }
+
+ProtrackWelcomeEmail.subject = () => "Welcome to ProTrack";
