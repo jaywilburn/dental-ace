@@ -8,9 +8,12 @@ import {
   FormInput,
   FormLabel,
   FormNav,
+  FormSelect,
+  FormTextarea,
 } from "@/components/application-form/form-controls";
 import { ensureDraft, getDraftData, saveStep2 } from "@/lib/forms/application/actions";
 import { requireApplicationCredits } from "@/lib/company/credit-guards";
+import { HIGHEST_DEGREES } from "@/lib/forms/application/schemas";
 import { sanitizeRichText } from "@/lib/forms/application/rich-text";
 import { FileUploadField } from "@/components/application-form/file-upload-field";
 import { RichTextEditor } from "@/components/application-form/rich-text-editor";
@@ -24,7 +27,7 @@ export default async function ApplicationStep2Page({
   const { error, detail } = await searchParams;
   const applicationId = await ensureDraft();
   const draft = await getDraftData(applicationId);
-  if (!draft.courseTitle) redirect("/company/applications/new");
+  if (!draft.courseTitle) redirect("/company/applications/new/course");
 
   // Re-sanitize before seeding the editor: the editor renders this as HTML.
   const bioHtml = draft.detailedBioHtml ? sanitizeRichText(draft.detailedBioHtml) : "";
@@ -33,9 +36,9 @@ export default async function ApplicationStep2Page({
     <>
       <PageHeader
         title="Course Application"
-        subtitle="Step 2 of 5 — Course Creator"
+        subtitle="Step 3 of 6 — Course Creator"
       />
-      <ApplicationStepBar currentStep={2} />
+      <ApplicationStepBar currentStep={3} />
       {error === "validation" ? <FormErrorBanner detail={detail} /> : null}
       <form action={saveStep2} className="space-y-5">
         <input type="hidden" name="applicationId" value={applicationId} />
@@ -71,6 +74,52 @@ export default async function ApplicationStep2Page({
               maxLength={200}
             />
           </FormField>
+          <FormField>
+            <FormLabel required>Course Creator Email</FormLabel>
+            <FormInput type="email" name="creatorEmail" defaultValue={draft.creatorEmail ?? ""} required />
+          </FormField>
+          <FormField>
+            <FormLabel required>Course Creator Phone</FormLabel>
+            <FormInput type="tel" name="creatorPhone" defaultValue={draft.creatorPhone ?? ""} required minLength={7} maxLength={40} />
+          </FormField>
+          <FormField fullWidth>
+            <FormLabel required hint="City, State, Zip">Course Creator Address</FormLabel>
+            <FormInput name="creatorAddress" defaultValue={draft.creatorAddress ?? ""} required minLength={5} maxLength={400} />
+          </FormField>
+          <FormField>
+            <FormLabel required>Highest Earned Educational Degree</FormLabel>
+            <FormSelect name="highestDegree" defaultValue={draft.highestDegree ?? HIGHEST_DEGREES[0]} options={HIGHEST_DEGREES} />
+          </FormField>
+          <FormField fullWidth>
+            <FormLabel required hint="Universities/colleges attended, degree(s) and graduation date(s)">
+              Education Part 1
+            </FormLabel>
+            <FormTextarea name="educationPart1" defaultValue={draft.educationPart1 ?? ""} required minLength={2} maxLength={1000} />
+          </FormField>
+          <FormField fullWidth>
+            <FormLabel hint="Other training relevant to mentoring this course (optional)">
+              Education Part 2
+            </FormLabel>
+            <FormTextarea name="educationPart2" defaultValue={draft.educationPart2 ?? ""} maxLength={1000} />
+          </FormField>
+          <FormField fullWidth>
+            <FormLabel hint="Technical degree(s), college(s) attended, date(s) of graduation (optional)">
+              Education Part 3
+            </FormLabel>
+            <FormTextarea name="educationPart3" defaultValue={draft.educationPart3 ?? ""} maxLength={1000} />
+          </FormField>
+          <FormField fullWidth>
+            <FormLabel hint="Other applicable info. If none, type N/A">
+              Education Part 4
+            </FormLabel>
+            <FormTextarea name="educationPart4" defaultValue={draft.educationPart4 ?? "N/A"} maxLength={1000} />
+          </FormField>
+          <FormField fullWidth>
+            <FormLabel required hint="e.g. Research department working on dental materials for 6 years">
+              Experience Relative to Course Subject Matter
+            </FormLabel>
+            <FormTextarea name="creatorExperience" defaultValue={draft.creatorExperience ?? ""} required minLength={10} maxLength={2000} />
+          </FormField>
           <FormField fullWidth>
             <FormLabel required hint="Formatting toolbar works on phones too">
               Detailed Bio
@@ -91,7 +140,7 @@ export default async function ApplicationStep2Page({
           </FormField>
         </FormCard>
         <FormNav
-          back={{ href: "/company/applications/new", label: "Back" }}
+          back={{ href: "/company/applications/new/course", label: "Back" }}
           nextLabel="Next: Presenters"
         />
       </form>
