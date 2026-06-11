@@ -37,8 +37,8 @@ export default async function ApplicationStep3Page({
 
   return (
     <>
-      <PageHeader title="Course Application" subtitle="Step 3 of 5 — Presenters" />
-      <ApplicationStepBar currentStep={3} />
+      <PageHeader title="Course Application" subtitle="Step 4 of 6 — Presenters" />
+      <ApplicationStepBar currentStep={4} />
       {error === "validation" ? <FormErrorBanner detail={detail} /> : null}
       <form action={saveStep3} className="space-y-5">
         <input type="hidden" name="applicationId" value={applicationId} />
@@ -69,6 +69,40 @@ export default async function ApplicationStep3Page({
               required
               minLength={2}
               maxLength={1000}
+            />
+          </FormField>
+          <FormField fullWidth>
+            <FormLabel required hint="Last Name, First Name, experience relative to course matter">
+              Experience Relative to Course Matter
+            </FormLabel>
+            <FormTextarea
+              name="presenter_0_experience"
+              defaultValue={primary?.experience ?? ""}
+              required
+              minLength={2}
+              maxLength={1000}
+            />
+          </FormField>
+          <FormField fullWidth>
+            <FormLabel required hint="How much time, and a description: live, paper, or digital?">
+              Training Received by Presenter
+            </FormLabel>
+            <FormTextarea
+              name="presenter_0_training"
+              defaultValue={primary?.training ?? ""}
+              required
+              minLength={2}
+              maxLength={1000}
+            />
+          </FormField>
+          <FormField fullWidth>
+            <FormLabel required hint="Include name and title">Presenter Bio</FormLabel>
+            <FormTextarea
+              name="presenter_0_bio"
+              defaultValue={primary?.bio ?? ""}
+              required
+              minLength={2}
+              maxLength={2000}
             />
           </FormField>
           <FormField fullWidth>
