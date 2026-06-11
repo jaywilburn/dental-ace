@@ -12,24 +12,26 @@ import { z } from "zod";
 
 export const DELIVERY_FORMATS = [
   "Live/In Person",
-  "Live/Virtual",
-  "Written Education",
-  "On Demand",
+  "Live/Online",
+  "On Demand Video",
+  "On Demand Audio",
+  "Printed Course",
 ] as const;
 
 /*
   Formats that count as a live event for the combined-certificate questions
-  and Event Setup eligibility. "Live Event" is the legacy value from
-  applications saved before the 2026-06 format rename; existing data is never
-  migrated, so the predicate must keep accepting it.
+  and Event Setup eligibility. "Live/Virtual" and "Live Event" are retired
+  values from applications saved before the 2026-06 format changes; existing
+  data is never migrated, so the predicate must keep accepting them.
 */
-export const LIVE_FORMATS = ["Live/In Person", "Live/Virtual"] as const;
+export const LIVE_FORMATS = ["Live/In Person", "Live/Online"] as const;
 
 export function isLiveFormat(format: string | undefined | null): boolean {
   if (!format) return false;
   return (
     (LIVE_FORMATS as readonly string[]).includes(format) ||
-    format === "Live Event"
+    format === "Live Event" ||
+    format === "Live/Virtual"
   );
 }
 
@@ -49,6 +51,14 @@ export const TARGET_AUDIENCES = [
   "Pediatric Dentists",
 ] as const;
 
+export const HIGHEST_DEGREES = [
+  "Associates",
+  "Bachelors",
+  "Masters",
+  "Doctoral",
+  "None of the Above",
+] as const;
+
 export const fileRef = z.object({
   storagePath: z.string(),
   filename: z.string(),
@@ -56,11 +66,27 @@ export const fileRef = z.object({
 });
 export type FileRef = z.infer<typeof fileRef>;
 
+export const orgStepSchema = z.object({
+  organizationName: z.string().min(2, "Organization name is required").max(200),
+  organizationAddress: z
+    .string()
+    .min(5, "Full address (City, State, Zip) is required")
+    .max(400),
+  adminName: z.string().min(2, "Process administrator name is required").max(200),
+  adminEmail: z.string().email("Enter a valid email"),
+  adminPhone: z.string().min(7, "Enter a valid phone number").max(40),
+});
+
 export const step1Schema = z.object({
   courseTitle: z.string().min(3, "Course title is required").max(200),
   ceCreditHours: z.number().min(0.5).max(40),
   subjectMatter: z.enum(CATEGORIES),
   deliveryFormat: z.enum(DELIVERY_FORMATS),
+  primaryDistributionFormat: z.enum(DELIVERY_FORMATS),
+  shortDescription: z
+    .string()
+    .min(20, "Add a short description (up to 2 paragraphs)")
+    .max(1500),
   combinedCert: z.boolean().optional(),
   submitSessionsSeparately: z.boolean().optional(),
   publicProtectionStatement: z.string().min(20, "Please describe how this course benefits patient safety").max(2000),
@@ -78,6 +104,21 @@ export const step2Schema = z.object({
   // lib/forms/application/rich-text.ts before it reaches this schema;
   // saveStep2 additionally enforces a minimum visible-text length.
   detailedBioHtml: z.string().min(1, "Detailed bio is required").max(20_000),
+  creatorEmail: z.string().email("Enter a valid email"),
+  creatorPhone: z.string().min(7, "Enter a valid phone number").max(40),
+  creatorAddress: z.string().min(5, "Address (City, State, Zip) is required").max(400),
+  highestDegree: z.enum(HIGHEST_DEGREES),
+  educationPart1: z
+    .string()
+    .min(2, "List universities/colleges, degrees, and graduation dates")
+    .max(1000),
+  educationPart2: z.string().max(1000).optional(),
+  educationPart3: z.string().max(1000).optional(),
+  educationPart4: z.string().max(1000).default("N/A"),
+  creatorExperience: z
+    .string()
+    .min(10, "Describe experience relative to the course subject")
+    .max(2000),
   cvResume: fileRef.optional(),
 });
 
@@ -85,6 +126,9 @@ export const presenterSchema = z.object({
   name: z.string().min(2).max(200),
   role: z.enum(["Primary Presenter", "Co-Presenter", "Moderator"]),
   commercialDisclosure: z.string().min(2).max(1000),
+  experience: z.string().min(2, "Experience is required").max(1000),
+  training: z.string().min(2, "Training received is required").max(1000),
+  bio: z.string().min(2, "Bio is required").max(2000),
 });
 
 export const step3Schema = z.object({
@@ -125,7 +169,8 @@ export const step4Schema = z.object({
     }),
 });
 
-export const applicationDataSchema = step1Schema
+export const applicationDataSchema = orgStepSchema
+  .merge(step1Schema)
   .merge(step2Schema)
   .merge(step3Schema)
   .merge(step4Schema);
@@ -152,6 +197,37 @@ export const applicationDataReadSchema = applicationDataSchema
     professionalBio: z.string().optional(),
     detailedBio: fileRef.optional(),
     detailedBioHtml: z.string().optional(),
+    // New 2026-06 fields — optional on read so applications created before this
+    // change remain viewable/approvable in the reviewer detail view.
+    organizationName: z.string().optional(),
+    organizationAddress: z.string().optional(),
+    adminName: z.string().optional(),
+    adminEmail: z.string().optional(),
+    adminPhone: z.string().optional(),
+    shortDescription: z.string().optional(),
+    primaryDistributionFormat: z.string().optional(),
+    creatorEmail: z.string().optional(),
+    creatorPhone: z.string().optional(),
+    creatorAddress: z.string().optional(),
+    highestDegree: z.string().optional(),
+    educationPart1: z.string().optional(),
+    educationPart2: z.string().optional(),
+    educationPart3: z.string().optional(),
+    educationPart4: z.string().optional(),
+    creatorExperience: z.string().optional(),
+    // Legacy presenter arrays lack experience/training/bio; keep them readable.
+    presenters: z
+      .array(
+        z.object({
+          name: z.string(),
+          role: z.string(),
+          commercialDisclosure: z.string().optional(),
+          experience: z.string().optional(),
+          training: z.string().optional(),
+          bio: z.string().optional(),
+        }),
+      )
+      .optional(),
   })
   .passthrough();
 
