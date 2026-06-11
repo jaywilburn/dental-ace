@@ -6,7 +6,7 @@ import { BrandMark } from "@/components/brand-mark";
   picks a feature it has access to. Features are derived from entitlements:
   ProTrack is always available; DentalACE/staff/Verify areas appear per entitlement.
 */
-type Feature = { href: string; title: string; desc: string; tag?: string };
+type Feature = { href: string; title: string; desc: string; tag?: string; cta?: string };
 
 export default async function HomeHub() {
   const user = await requireUser();
@@ -25,6 +25,14 @@ export default async function HomeHub() {
       href: "/company",
       title: "DentalACE",
       desc: "Submit courses for accreditation and issue certificates.",
+    });
+  } else {
+    features.push({
+      href: "/company/register",
+      title: "DentalACE",
+      desc: "Register your organization to submit courses for accreditation and issue certificates.",
+      tag: "New",
+      cta: "Create your organization",
     });
   }
   if (user.verifyAccess) {
@@ -92,7 +100,7 @@ export default async function HomeHub() {
                 {f.desc}
               </p>
               <span className="mt-3 inline-block text-[12px] font-semibold text-ace-dark">
-                Open →
+                {f.cta ?? "Open"} →
               </span>
             </a>
           ))}

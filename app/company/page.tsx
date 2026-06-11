@@ -11,7 +11,12 @@ import { prisma } from "@/lib/prisma";
 
   Layout mirrors logic/dentalace-dev-mockup-suite-v3.html #co-dashboard.
 */
-export default async function CompanyDashboard() {
+export default async function CompanyDashboard({
+  searchParams,
+}: {
+  searchParams: Promise<{ just?: string }>;
+}) {
+  const { just } = await searchParams;
   const user = await requireDentalAce();
   if (!user.companyId) {
     return (
@@ -53,6 +58,13 @@ export default async function CompanyDashboard() {
       where: { companyId: user.companyId },
       orderBy: { createdAt: "desc" },
       take: 6,
+      select: {
+        id: true,
+        type: true,
+        quantity: true,
+        amountCents: true,
+        createdAt: true,
+      },
     }),
   ]);
 
@@ -61,6 +73,15 @@ export default async function CompanyDashboard() {
 
   return (
     <>
+      {just === "registered" ? (
+        <div className="mb-4 rounded-md border border-emerald-400 bg-emerald-50 px-4 py-2.5 text-[13px] text-emerald-700">
+          ✓ Welcome, {company.name} is registered with DentalACE. Buy
+          application credits to submit your first course for accreditation.{" "}
+          <Link href="/company/buy/credits" className="font-semibold underline">
+            Buy App Credits
+          </Link>
+        </div>
+      ) : null}
       <PageHeader
         title="Company Dashboard"
         subtitle={`${company.name} · ${activeCount} active course${activeCount === 1 ? "" : "s"}${

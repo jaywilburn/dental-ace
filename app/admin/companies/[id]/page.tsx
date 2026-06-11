@@ -20,6 +20,8 @@ export default async function AdminCompanyDetailPage({
     select: {
       id: true, name: true, applicationCredits: true, expeditedCredits: true,
       certBalance: true, certAlertThreshold: true, totalCertsIssued: true,
+      contactEmail: true, contactPhone: true, addressLine1: true,
+      addressLine2: true, city: true, state: true, zip: true,
       billingTransactions: { orderBy: { createdAt: "desc" }, take: 15 },
     },
   });
@@ -55,6 +57,34 @@ export default async function AdminCompanyDetailPage({
           <p className="font-serif text-2xl font-bold text-navy tabular-nums">{company.totalCertsIssued}</p>
         </div>
       </div>
+
+      {company.contactEmail || company.addressLine1 ? (
+        <div className="mt-5 rounded-lg border border-border bg-white p-4">
+          <p className="mb-2 text-[12px] font-semibold text-navy">Contact</p>
+          <div className="grid gap-2 text-[12px] text-text-mid sm:grid-cols-2">
+            <div>
+              <p className="text-[10px] uppercase tracking-wide text-text-muted">Email</p>
+              <p>{company.contactEmail ?? "Not provided"}</p>
+            </div>
+            <div>
+              <p className="text-[10px] uppercase tracking-wide text-text-muted">Phone</p>
+              <p>{company.contactPhone ?? "Not provided"}</p>
+            </div>
+            <div className="sm:col-span-2">
+              <p className="text-[10px] uppercase tracking-wide text-text-muted">Address</p>
+              <p>
+                {[
+                  company.addressLine1,
+                  company.addressLine2,
+                  [company.city, company.state, company.zip].filter(Boolean).join(", "),
+                ]
+                  .filter(Boolean)
+                  .join(", ") || "Not provided"}
+              </p>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <div className="mt-5 grid gap-4 sm:grid-cols-2">
         <form action={grantAppCredits} className="rounded-lg border border-border bg-white p-4 space-y-3">
