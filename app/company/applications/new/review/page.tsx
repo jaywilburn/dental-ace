@@ -38,19 +38,33 @@ export default async function ApplicationStep5Page() {
         title="Review & Submit"
         subtitle="Read every field carefully. Submitting consumes 1 application credit."
       />
-      <ApplicationStepBar currentStep={5} />
+      <ApplicationStepBar currentStep={6} />
 
       <section className="space-y-5">
         <ReviewCard
-          title="Section A — Course Information"
+          title="Section A — Organization & Contact"
           editHref="/company/applications/new"
+          rows={[
+            { label: "Organization", value: data.organizationName },
+            { label: "Address", value: data.organizationAddress, full: true },
+            { label: "Process Administrator", value: data.adminName },
+            { label: "Admin Email", value: data.adminEmail },
+            { label: "Admin Phone", value: data.adminPhone },
+          ]}
+        />
+
+        <ReviewCard
+          title="Section B — Course Information"
+          editHref="/company/applications/new/course"
           rows={[
             { label: "Course Title", value: data.courseTitle },
             { label: "CE Credit Hours", value: `${data.ceCreditHours.toFixed(1)} hours` },
             { label: "Category", value: data.subjectMatter },
-            { label: "Delivery Format", value: data.deliveryFormat },
+            { label: "Course Format", value: data.deliveryFormat },
+            { label: "Most-Used Format", value: data.primaryDistributionFormat },
             { label: "Target Audience", value: data.targetAudience },
             { label: "Public Protection Statement", value: data.publicProtectionStatement, full: true },
+            { label: "Short Description", value: data.shortDescription, full: true },
             { label: "Course Objectives", value: data.courseObjectives, full: true },
             ...(isLiveFormat(data.deliveryFormat)
               ? [
@@ -68,12 +82,21 @@ export default async function ApplicationStep5Page() {
         />
 
         <ReviewCard
-          title="Section B — Course Creator"
+          title="Section C — Course Creator"
           editHref="/company/applications/new/creator"
           rows={[
             { label: "Creator Name", value: data.creatorName },
             { label: "Credentials", value: data.credentials },
             { label: "Current Position", value: data.currentPosition },
+            { label: "Creator Email", value: data.creatorEmail },
+            { label: "Creator Phone", value: data.creatorPhone },
+            { label: "Creator Address", value: data.creatorAddress, full: true },
+            { label: "Highest Degree", value: data.highestDegree },
+            { label: "Education Part 1", value: data.educationPart1, full: true },
+            ...(data.educationPart2 ? [{ label: "Education Part 2", value: data.educationPart2, full: true }] : []),
+            ...(data.educationPart3 ? [{ label: "Education Part 3", value: data.educationPart3, full: true }] : []),
+            { label: "Education Part 4", value: data.educationPart4, full: true },
+            { label: "Experience Relative to Subject", value: data.creatorExperience, full: true },
             {
               label: "Detailed Bio",
               value: sanitizeRichText(data.detailedBioHtml),
@@ -84,16 +107,19 @@ export default async function ApplicationStep5Page() {
         />
 
         <ReviewCard
-          title="Section C — Presenters"
+          title="Section D — Presenters"
           editHref="/company/applications/new/presenters"
           rows={data.presenters.flatMap((p, i) => [
             { label: `Presenter ${i + 1}`, value: `${p.name} · ${p.role}` },
             { label: "Commercial Disclosure", value: p.commercialDisclosure, full: true },
+            { label: "Experience", value: p.experience, full: true },
+            { label: "Training Received", value: p.training, full: true },
+            { label: "Bio", value: p.bio, full: true },
           ])}
         />
 
         <ReviewCard
-          title="Section D — Quiz (5 questions)"
+          title="Section E — Quiz (5 questions)"
           editHref="/company/applications/new/quiz"
           rows={data.quiz.map((q, i) => ({
             label: `Q${i + 1} (${q.type})`,
@@ -106,7 +132,7 @@ export default async function ApplicationStep5Page() {
         />
 
         {attachments.length > 0 ? (
-          <AttachmentsCard title="Section E — Attachments" links={attachments} />
+          <AttachmentsCard title="Section F — Attachments" links={attachments} />
         ) : null}
       </section>
 
