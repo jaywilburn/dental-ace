@@ -5,7 +5,7 @@
   lazy-loads, so it costs nothing above the fold.
 */
 
-const VIDEO_ID = "DS8iSl91hA0";
+const VIDEO_ID = "0co1H-NKqu4";
 
 export function VideoSection() {
   return (
