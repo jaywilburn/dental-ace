@@ -57,16 +57,17 @@ describe("orgStepSchema", () => {
 });
 
 describe("step1Schema additions", () => {
+  const base = {
+    courseTitle: "Infection Control",
+    ceCreditHours: 1.5,
+    subjectMatter: "Scientific",
+    deliveryFormat: "Live/Online",
+    publicProtectionStatement: "x".repeat(20),
+    courseObjectives: "x".repeat(20),
+    courseOutline: "1. Introduction\n2. Protocols\n3. Q&A",
+  };
+
   it("requires shortDescription and primaryDistributionFormat", () => {
-    const base = {
-      courseTitle: "Infection Control",
-      ceCreditHours: 1.5,
-      subjectMatter: "Scientific",
-      deliveryFormat: "Live/Online",
-      publicProtectionStatement: "x".repeat(20),
-      courseObjectives: "x".repeat(20),
-      targetAudience: "General Dentists",
-    };
     expect(step1Schema.safeParse(base).success).toBe(false);
     expect(
       step1Schema.safeParse({
@@ -75,6 +76,21 @@ describe("step1Schema additions", () => {
         primaryDistributionFormat: "Live/Online",
       }).success,
     ).toBe(true);
+  });
+
+  it("requires the course outline as text (no longer an upload)", () => {
+    const full = {
+      ...base,
+      shortDescription: "y".repeat(20),
+      primaryDistributionFormat: "Live/Online",
+    };
+    expect(step1Schema.safeParse({ ...full, courseOutline: "" }).success).toBe(false);
+    expect(
+      step1Schema.safeParse({
+        ...full,
+        courseOutline: { storagePath: "p", filename: "f.pdf", uploadedAt: "now" },
+      }).success,
+    ).toBe(false);
   });
 });
 
@@ -90,10 +106,21 @@ describe("step2Schema additions", () => {
     highestDegree: "Doctoral",
     educationPart1: "DDS, Baylor, 2005",
     creatorExperience: "Ten years of clinical research.",
+    cvResume: "DDS Baylor 2005. Professor of Periodontics since 2012.",
   };
 
   it("accepts when only Part 1 of education is provided", () => {
     expect(step2Schema.safeParse(base).success).toBe(true);
+  });
+
+  it("requires the CV / resume as text (no longer an upload)", () => {
+    expect(step2Schema.safeParse({ ...base, cvResume: "" }).success).toBe(false);
+    expect(
+      step2Schema.safeParse({
+        ...base,
+        cvResume: { storagePath: "p", filename: "cv.pdf", uploadedAt: "now" },
+      }).success,
+    ).toBe(false);
   });
 
   it("defaults educationPart4 to N/A", () => {
@@ -136,6 +163,7 @@ describe("applicationDataReadSchema tolerance", () => {
       ceCreditHours: 2,
       subjectMatter: "Scientific",
       deliveryFormat: "Live Event",
+      // Retired 2026-06; pre-removal applications still carry it.
       targetAudience: "General Dentists",
       publicProtectionStatement: "x".repeat(20),
       courseObjectives: "x".repeat(20),
@@ -156,6 +184,57 @@ describe("applicationDataReadSchema tolerance", () => {
       ],
     };
     expect(applicationDataReadSchema.safeParse(legacy).success).toBe(true);
+
+    // The retired targetAudience field is optional on read: current
+    // applications omit it entirely.
+    const withoutTargetAudience: Record<string, unknown> = { ...legacy };
+    delete withoutTargetAudience.targetAudience;
+    expect(
+      applicationDataReadSchema.safeParse(withoutTargetAudience).success,
+    ).toBe(true);
+  });
+
+  it("accepts legacy uploaded outline/CV fileRefs and current text values", () => {
+    const base = {
+      courseTitle: "Old Course",
+      ceCreditHours: 2,
+      subjectMatter: "Scientific",
+      deliveryFormat: "Live Event",
+      publicProtectionStatement: "x".repeat(20),
+      courseObjectives: "x".repeat(20),
+      creatorName: "Dr. Old",
+      credentials: "DDS",
+      currentPosition: "Retired",
+      detailedBioHtml: "<p>bio</p>",
+      quiz: [
+        { type: "TF", question: "Question one?", correctAnswer: "True" },
+        { type: "TF", question: "Question two?", correctAnswer: "False" },
+        { type: "MC", question: "Question three?", options: ["a", "b", "c", "d"], correctIndex: 0 },
+        { type: "MC", question: "Question four?", options: ["a", "b", "c", "d"], correctIndex: 1 },
+        { type: "MC", question: "Question five?", options: ["a", "b", "c", "d"], correctIndex: 2 },
+      ],
+    };
+    const fileRef = {
+      storagePath: "applications/x/courseOutline/1-outline.pdf",
+      filename: "outline.pdf",
+      uploadedAt: "2026-05-01T00:00:00.000Z",
+    };
+    // Legacy upload form.
+    expect(
+      applicationDataReadSchema.safeParse({
+        ...base,
+        courseOutline: fileRef,
+        cvResume: fileRef,
+      }).success,
+    ).toBe(true);
+    // Current text form.
+    expect(
+      applicationDataReadSchema.safeParse({
+        ...base,
+        courseOutline: "1. Intro\n2. Protocols",
+        cvResume: "DDS Baylor 2005.",
+      }).success,
+    ).toBe(true);
   });
 
   it("exposes HIGHEST_DEGREES options", () => {

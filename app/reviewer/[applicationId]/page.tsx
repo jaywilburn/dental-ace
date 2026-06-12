@@ -3,10 +3,19 @@ import Link from "next/link";
 import { PageHeader } from "@/components/portal-shell";
 import { requireStaff } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
-import { applicationDataReadSchema, isLiveFormat } from "@/lib/forms/application/schemas";
-import { sanitizeRichText } from "@/lib/forms/application/rich-text";
+import { applicationDataReadSchema } from "@/lib/forms/application/schemas";
+import {
+  courseInfoRows,
+  creatorRows,
+  organizationRows,
+  presenterRows,
+} from "@/lib/forms/application/detail-rows";
 import { resolveAttachmentLinks } from "@/lib/forms/application/attachments";
 import { AttachmentsCard } from "@/components/application-form/attachments-card";
+import {
+  DetailSection,
+  QuizPreviewCard,
+} from "@/components/application-form/detail-section";
 import { approveApplication, rejectApplication } from "@/lib/reviewer/actions";
 
 /*
@@ -73,124 +82,28 @@ export default async function ReviewerApplicationPage({
 
       <div className="grid gap-5 lg:grid-cols-[2fr_1fr]">
         <div className="space-y-5">
-          <Section
-            title="Organization & Contact"
-            rows={[
-              ...(data.organizationName ? [{ label: "Organization", value: data.organizationName, full: true }] : []),
-              ...(data.organizationAddress ? [{ label: "Address", value: data.organizationAddress, full: true }] : []),
-              ...(data.adminName ? [{ label: "Process Administrator", value: data.adminName }] : []),
-              ...(data.adminEmail ? [{ label: "Admin Email", value: data.adminEmail }] : []),
-              ...(data.adminPhone ? [{ label: "Admin Phone", value: data.adminPhone }] : []),
-            ]}
-          />
+          <DetailSection title="Organization & Contact" rows={organizationRows(data)} />
 
-          <Section
+          <DetailSection
             title="Section A — Course Information (Fields 1-12)"
-            rows={[
-              { label: "Course Title", value: data.courseTitle, full: true },
-              { label: "CE Credit Hours", value: `${data.ceCreditHours.toFixed(1)} hours` },
-              // Legacy fields: only present on applications saved before the
-              // 2026-06 form changes.
-              ...(data.courseDurationHours != null
-                ? [{ label: "Course Duration", value: `${data.courseDurationHours.toFixed(1)} hours` }]
-                : []),
-              { label: "Category", value: data.subjectMatter },
-              { label: "Course Format", value: data.deliveryFormat },
-              ...(data.primaryDistributionFormat
-                ? [{ label: "Most-Used Format", value: data.primaryDistributionFormat }]
-                : []),
-              { label: "Target Audience", value: data.targetAudience },
-              ...(data.shortDescription
-                ? [{ label: "Short Description", value: data.shortDescription, full: true }]
-                : []),
-              ...(data.adaCerpCategory
-                ? [{ label: "ADA CERP Category", value: data.adaCerpCategory }]
-                : []),
-              ...(isLiveFormat(data.deliveryFormat)
-                ? [
-                    { label: "Combined Cert?", value: data.combinedCert ? "Yes" : "No" },
-                    {
-                      label: "Sessions submitted separately?",
-                      value: data.submitSessionsSeparately ? "Yes" : "No",
-                    },
-                  ]
-                : []),
-              { label: "Public Protection Statement", value: data.publicProtectionStatement, full: true },
-              { label: "Course Objectives", value: data.courseObjectives, full: true },
-            ]}
+            rows={courseInfoRows(data)}
           />
 
-          <Section
+          <DetailSection
             title="Section B — Course Creator (Fields 13-20)"
-            rows={[
-              { label: "Creator Name", value: data.creatorName },
-              { label: "Credentials", value: data.credentials },
-              { label: "Current Position", value: data.currentPosition, full: true },
-              ...(data.creatorEmail ? [{ label: "Creator Email", value: data.creatorEmail }] : []),
-              ...(data.creatorPhone ? [{ label: "Creator Phone", value: data.creatorPhone }] : []),
-              ...(data.creatorAddress ? [{ label: "Creator Address", value: data.creatorAddress, full: true }] : []),
-              ...(data.highestDegree ? [{ label: "Highest Degree", value: data.highestDegree }] : []),
-              ...(data.educationPart1 ? [{ label: "Education Part 1", value: data.educationPart1, full: true }] : []),
-              ...(data.educationPart2 ? [{ label: "Education Part 2", value: data.educationPart2, full: true }] : []),
-              ...(data.educationPart3 ? [{ label: "Education Part 3", value: data.educationPart3, full: true }] : []),
-              ...(data.educationPart4 ? [{ label: "Education Part 4", value: data.educationPart4, full: true }] : []),
-              ...(data.creatorExperience ? [{ label: "Experience Relative to Subject", value: data.creatorExperience, full: true }] : []),
-              // Bio lineage: current applications carry rich text
-              // (detailedBioHtml); briefly-uploaded bios show under
-              // Attachments; pre-2026-06 applications carry plain text.
-              ...(data.detailedBioHtml
-                ? [
-                    {
-                      label: "Detailed Bio",
-                      value: sanitizeRichText(data.detailedBioHtml),
-                      full: true,
-                      html: true,
-                    },
-                  ]
-                : []),
-              ...(data.professionalBio
-                ? [{ label: "Professional Bio", value: data.professionalBio, full: true }]
-                : []),
-            ]}
+            rows={creatorRows(data)}
           />
 
-          <Section
+          <DetailSection
             title="Section C — Presenters (Fields 21-28)"
-            rows={(data.presenters ?? []).flatMap((p, i) => [
-              { label: `Presenter ${i + 1}`, value: `${p.name} · ${p.role}` },
-              ...(p.commercialDisclosure ? [{ label: "Commercial Disclosure", value: p.commercialDisclosure, full: true }] : []),
-              ...(p.experience ? [{ label: "Experience", value: p.experience, full: true }] : []),
-              ...(p.training ? [{ label: "Training Received", value: p.training, full: true }] : []),
-              ...(p.bio ? [{ label: "Bio", value: p.bio, full: true }] : []),
-            ])}
+            rows={presenterRows(data)}
           />
 
           <AttachmentsCard title="Attachments" links={attachments} />
         </div>
 
         <div className="space-y-5">
-          <div className="rounded-lg border border-border bg-surface p-4">
-            <p className="mb-2 text-[12px] font-semibold text-navy">
-              Quiz Preview (Fields 29-32)
-            </p>
-            {data.quiz.map((q, i) => (
-              <div key={i} className="mt-3 text-[11px] text-text-mid">
-                <p>
-                  <strong>
-                    Q{i + 1} ({q.type}):
-                  </strong>{" "}
-                  {q.question}
-                </p>
-                {q.type === "TF" ? (
-                  <p className="pl-3 text-emerald-700">Correct: {q.correctAnswer}</p>
-                ) : (
-                  <p className="pl-3 text-emerald-700">
-                    Correct: {q.options[q.correctIndex]}
-                  </p>
-                )}
-              </div>
-            ))}
-          </div>
+          <QuizPreviewCard title="Quiz Preview (Fields 29-32)" quiz={data.quiz} />
 
           {app.status === "PENDING" ? (
             <div className="space-y-3">
@@ -264,42 +177,6 @@ export default async function ReviewerApplicationPage({
         </div>
       </div>
     </>
-  );
-}
-
-function Section({
-  title,
-  rows,
-}: {
-  title: string;
-  // html rows must contain ONLY sanitizeRichText() output (see rich-text.ts).
-  rows: { label: string; value: string; full?: boolean; html?: boolean }[];
-}) {
-  return (
-    <div className="overflow-hidden rounded-lg border border-border bg-white">
-      <div className="border-b border-border bg-surface px-4 py-2.5">
-        <p className="text-[12px] font-semibold text-navy">{title}</p>
-      </div>
-      <dl className="grid grid-cols-1 gap-x-6 gap-y-3 px-4 py-4 sm:grid-cols-2">
-        {rows.map((row, i) => (
-          <div key={i} className={row.full ? "sm:col-span-2" : undefined}>
-            <dt className="text-[10px] font-semibold uppercase tracking-wide text-text-muted">
-              {row.label}
-            </dt>
-            {row.html ? (
-              <dd
-                className="mt-0.5 text-[13px] leading-relaxed text-navy [&_li]:ml-5 [&_ol]:list-decimal [&_ul]:list-disc"
-                dangerouslySetInnerHTML={{ __html: row.value }}
-              />
-            ) : (
-              <dd className="mt-0.5 whitespace-pre-line text-[13px] text-navy">
-                {row.value}
-              </dd>
-            )}
-          </div>
-        ))}
-      </dl>
-    </div>
   );
 }
 

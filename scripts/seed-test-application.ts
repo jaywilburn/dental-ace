@@ -25,11 +25,21 @@ const prisma = new PrismaClient({
 });
 
 const APPLICATION_DATA = {
-  // Step 1 — course info
+  // Step 1 — organization & contact
+  organizationName: "Texas Dental Association",
+  organizationAddress: "1946 S IH-35, Suite 400, Austin, TX 78704",
+  adminName: "Pat Coordinator",
+  adminEmail: "pat.coordinator@example.com",
+  adminPhone: "512-555-0100",
+
+  // Step 2 — course info
   courseTitle: "Advanced Periodontal Therapy: Evidence-Based Approaches",
   ceCreditHours: 4,
   subjectMatter: "Scientific",
   deliveryFormat: "Live/In Person",
+  primaryDistributionFormat: "Live/In Person",
+  shortDescription:
+    "A four-hour live course covering the 2017 periodontitis classification, evidence-based non-surgical therapy, and systemic-periodontal relationships, with case-based discussion throughout.",
   // Makes the course Event-Setup eligible once approved (live format +
   // combined cert + sessions submitted separately).
   combinedCert: true,
@@ -38,26 +48,44 @@ const APPLICATION_DATA = {
     "This course reduces patient risk by training clinicians on current evidence-based protocols for diagnosing and managing periodontitis, leading to better long-term clinical outcomes and fewer adverse events.",
   courseObjectives:
     "1. Identify the stages and grades of periodontitis per the 2017 classification.\n2. Apply evidence-based non-surgical periodontal therapy protocols.\n3. Recognize systemic-periodontal disease relationships and refer appropriately.",
-  targetAudience: "General Dentists",
+  // Text field since 2026-06 (was an upload).
+  courseOutline:
+    "Hour 1: 2017 classification system, staging and grading workshop.\nHour 2: Non-surgical therapy protocols and instrumentation review.\nHour 3: Systemic-periodontal relationships and referral criteria.\nHour 4: Case-based discussion, re-evaluation intervals, and Q&A.",
 
-  // Step 2 — creator
+  // Step 3 — creator
   creatorName: "Dr. Alex Morgan",
   credentials: "DDS, MS, Diplomate ABP",
   currentPosition: "Director of Periodontics, Texas Dental Association",
-  professionalBio:
-    "Dr. Morgan has practiced periodontics for 18 years, serving as faculty at two dental schools and authoring 24 peer-reviewed papers on periodontal regeneration. They are a past president of the State Periodontal Society.",
+  detailedBioHtml:
+    "<p>Dr. Morgan has practiced periodontics for 18 years, serving as faculty at two dental schools and authoring 24 peer-reviewed papers on periodontal regeneration. They are a past president of the State Periodontal Society.</p>",
+  creatorEmail: "alex.morgan@example.com",
+  creatorPhone: "512-555-0101",
+  creatorAddress: "1946 S IH-35, Suite 400, Austin, TX 78704",
+  highestDegree: "Doctoral",
+  educationPart1: "DDS, Baylor College of Dentistry, 2002; MS Periodontics, UT Health San Antonio, 2005",
+  educationPart4: "N/A",
+  creatorExperience:
+    "Eighteen years of clinical periodontics practice plus dental school faculty appointments focused on periodontal therapy.",
+  // Text field since 2026-06 (was an upload).
+  cvResume:
+    "Dr. Alex Morgan, DDS, MS, Diplomate ABP.\nDirector of Periodontics, Texas Dental Association (2018-present).\nAssociate Professor, UT Health San Antonio (2010-2018).\nPrivate periodontics practice, Austin, TX (2005-2010).\n24 peer-reviewed publications on periodontal regeneration.",
 
-  // Step 3 — presenters
+  // Step 4 — presenters
   presenters: [
     {
       name: "Dr. Alex Morgan",
       role: "Primary Presenter",
       commercialDisclosure:
         "No relevant financial relationships with ineligible companies. Receives research support from a university grant unrelated to this content.",
+      experience:
+        "Eighteen years presenting periodontal CE for state associations and dental schools.",
+      training:
+        "Faculty development and train-the-trainer programs at two dental schools.",
+      bio: "Board-certified periodontist, past president of the State Periodontal Society.",
     },
   ],
 
-  // Step 4 — quiz (Q1+Q2 TF, Q3-Q5 MC)
+  // Step 5 — quiz (Q1+Q2 TF, Q3-Q5 MC)
   quiz: [
     {
       type: "TF",

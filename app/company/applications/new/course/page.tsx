@@ -15,11 +15,9 @@ import { requireApplicationCredits } from "@/lib/company/credit-guards";
 import {
   DELIVERY_FORMATS,
   CATEGORIES,
-  TARGET_AUDIENCES,
   isLiveFormat,
 } from "@/lib/forms/application/schemas";
 import { ensureDraft, getDraftData, saveStep1 } from "@/lib/forms/application/actions";
-import { FileUploadField } from "@/components/application-form/file-upload-field";
 
 // Category display labels: stored values stay "Scientific"/"Business..." for
 // data compatibility; the UI shows "Scientific (Clinical)".
@@ -222,20 +220,19 @@ export default async function ApplicationCourseInfoPage({
               className="min-h-[110px]"
             />
           </FormField>
-          <FormField>
-            <FormLabel required>Target Audience</FormLabel>
-            <FormSelect
-              name="targetAudience"
-              defaultValue={draft.targetAudience ?? TARGET_AUDIENCES[0]}
-              options={TARGET_AUDIENCES}
-            />
-          </FormField>
           <FormField fullWidth>
-            <FileUploadField
-              applicationId={applicationId}
-              field="courseOutline"
-              label="Course Outline"
-              existingFilename={draft.courseOutline?.filename}
+            <FormLabel required hint="Paste or type the full outline, including section timings">
+              Course Outline
+            </FormLabel>
+            <FormTextarea
+              name="courseOutline"
+              defaultValue={
+                typeof draft.courseOutline === "string" ? draft.courseOutline : ""
+              }
+              required
+              minLength={1}
+              maxLength={20000}
+              className="min-h-[140px]"
             />
           </FormField>
         </FormCard>

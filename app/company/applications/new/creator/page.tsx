@@ -15,7 +15,6 @@ import { ensureDraft, getDraftData, saveStep2 } from "@/lib/forms/application/ac
 import { requireApplicationCredits } from "@/lib/company/credit-guards";
 import { HIGHEST_DEGREES } from "@/lib/forms/application/schemas";
 import { sanitizeRichText } from "@/lib/forms/application/rich-text";
-import { FileUploadField } from "@/components/application-form/file-upload-field";
 import { RichTextEditor } from "@/components/application-form/rich-text-editor";
 
 export default async function ApplicationStep2Page({
@@ -131,11 +130,16 @@ export default async function ApplicationStep2Page({
             />
           </FormField>
           <FormField fullWidth>
-            <FileUploadField
-              applicationId={applicationId}
-              field="cvResume"
-              label="CV / Resume"
-              existingFilename={draft.cvResume?.filename}
+            <FormLabel required hint="Paste or type the creator's CV or resume">
+              CV / Resume
+            </FormLabel>
+            <FormTextarea
+              name="cvResume"
+              defaultValue={typeof draft.cvResume === "string" ? draft.cvResume : ""}
+              required
+              minLength={1}
+              maxLength={20000}
+              className="min-h-[140px]"
             />
           </FormField>
         </FormCard>

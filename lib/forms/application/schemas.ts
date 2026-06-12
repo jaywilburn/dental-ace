@@ -42,15 +42,6 @@ export const CATEGORIES = [
   "Scientific",
 ] as const;
 
-export const TARGET_AUDIENCES = [
-  "General Dentists",
-  "Dental Hygienists",
-  "Dental Assistants",
-  "All Dental Professionals",
-  "Periodontists",
-  "Pediatric Dentists",
-] as const;
-
 export const HIGHEST_DEGREES = [
   "Associates",
   "Bachelors",
@@ -91,8 +82,13 @@ export const step1Schema = z.object({
   submitSessionsSeparately: z.boolean().optional(),
   publicProtectionStatement: z.string().min(20, "Please describe how this course benefits patient safety").max(2000),
   courseObjectives: z.string().min(20, "List at least 3 objectives").max(2000),
-  targetAudience: z.enum(TARGET_AUDIENCES),
-  courseOutline: fileRef.optional(),
+  // Text since 2026-06 (client feedback: type/paste the outline, not upload).
+  // Applications saved before the change carry a fileRef under this key; the
+  // read schema below keeps those parseable.
+  courseOutline: z
+    .string()
+    .min(1, "Course outline is required")
+    .max(20_000),
 });
 
 export const step2Schema = z.object({
@@ -119,7 +115,13 @@ export const step2Schema = z.object({
     .string()
     .min(10, "Describe experience relative to the course subject")
     .max(2000),
-  cvResume: fileRef.optional(),
+  // Text since 2026-06 (client feedback: type/paste the CV, not upload).
+  // Applications saved before the change carry a fileRef under this key; the
+  // read schema below keeps those parseable.
+  cvResume: z
+    .string()
+    .min(1, "CV / resume is required")
+    .max(20_000),
 });
 
 export const presenterSchema = z.object({
@@ -188,7 +190,9 @@ export const applicationDataReadSchema = applicationDataSchema
   .extend({
     subjectMatter: z.string(),
     deliveryFormat: z.string(),
-    targetAudience: z.string(),
+    // Removed from the form 2026-06; applications saved before then still
+    // carry a value, which stays inert in the JSON.
+    targetAudience: z.string().optional(),
     courseDurationHours: z.number().optional(),
     adaCerpCategory: z.string().optional(),
     // Bio lineage: plain-text professionalBio (pre-2026-06), uploaded
@@ -197,6 +201,11 @@ export const applicationDataReadSchema = applicationDataSchema
     professionalBio: z.string().optional(),
     detailedBio: fileRef.optional(),
     detailedBioHtml: z.string().optional(),
+    // Outline + CV lineage: uploaded files until 2026-06, text since. Readers
+    // accept either form (string = current text, fileRef = legacy upload
+    // shown via resolveAttachmentLinks) or absence.
+    courseOutline: z.union([z.string(), fileRef]).optional(),
+    cvResume: z.union([z.string(), fileRef]).optional(),
     // New 2026-06 fields — optional on read so applications created before this
     // change remain viewable/approvable in the reviewer detail view.
     organizationName: z.string().optional(),

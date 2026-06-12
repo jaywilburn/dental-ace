@@ -3,10 +3,14 @@ import { createSignedUrl } from "@/lib/storage";
 import type { FileRef } from "@/lib/forms/application/schemas";
 
 /*
-  Resolve the three optional application attachments into short-lived signed
+  Resolve the optional application attachments into short-lived signed
   download links for display on the review + reviewer screens. A null url means
   the file is recorded but the signed URL could not be issued (still surfaced so
   the reviewer knows something was uploaded).
+
+  Course outline and CV/resume became text fields in 2026-06; on applications
+  saved since then those keys hold strings, which are rendered as text rows
+  elsewhere. Legacy fileRef objects still resolve to download links here.
 */
 
 export type AttachmentLink = {
@@ -16,19 +20,24 @@ export type AttachmentLink = {
 };
 
 type AttachmentSource = {
-  courseOutline?: FileRef;
+  courseOutline?: FileRef | string;
   detailedBio?: FileRef;
-  cvResume?: FileRef;
+  cvResume?: FileRef | string;
   headshot?: FileRef;
 };
+
+/** Narrow a legacy-or-text field to its fileRef form (undefined for text). */
+function asFileRef(value: FileRef | string | undefined): FileRef | undefined {
+  return typeof value === "object" && value !== null ? value : undefined;
+}
 
 export async function resolveAttachmentLinks(
   data: AttachmentSource,
 ): Promise<AttachmentLink[]> {
   const entries: [string, FileRef | undefined][] = [
-    ["Course Outline", data.courseOutline],
+    ["Course Outline", asFileRef(data.courseOutline)],
     ["Detailed Bio", data.detailedBio],
-    ["CV / Resume", data.cvResume],
+    ["CV / Resume", asFileRef(data.cvResume)],
     ["Presenter Headshot", data.headshot],
   ];
 

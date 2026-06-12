@@ -2,15 +2,17 @@ import Link from "next/link";
 import { PageHeader } from "@/components/portal-shell";
 import { requireDentalAce } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
-import { createSignedUrl } from "@/lib/storage";
+import { courseAssetUrls } from "@/lib/courses/course-assets";
 
 /*
   My Courses — lists every application + accredited course for the company.
   Pending applications show their submitted timestamp; approved courses show
   Course ID, title, expiry, cert-issued count, and the four deliverables:
   Course ID, attendee link, QR code, and approval letter (QR + letter via
-  short-lived signed URLs from the uploads bucket, same pattern as the
-  certificate log).
+  short-lived signed URLs from the uploads bucket; if the recorded object is
+  missing because the post-approval upload failed, courseAssetUrls regenerates
+  it on demand). The attendee link is same-origin, so it is rendered as a
+  relative href and never depends on env configuration.
 */
 
 export default async function MyCoursesPage({
@@ -40,28 +42,32 @@ export default async function MyCoursesPage({
       where: { companyId: user.companyId },
       orderBy: { approvedAt: "desc" },
       take: 50,
-      include: { application: { select: { courseTitle: true } } },
+      include: {
+        application: { select: { courseTitle: true, ceHours: true } },
+        company: { select: { name: true } },
+      },
     }),
   ]);
 
-  const appBase = (
-    process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"
-  ).replace(/\/+$/, "");
-
-  // Signed download URLs expire after 5 minutes; a null means the asset has
-  // not been rendered (pre-feature course or a failed asset job).
+  // Signed download URLs expire after 5 minutes; a missing object behind a
+  // recorded path is regenerated on demand. A null means the asset path was
+  // never recorded (pre-feature course) or regeneration failed (logged).
   const courses = await Promise.all(
     accreditedCourses.map(async (course) => ({
       ...course,
-      attendeeUrl: `${appBase}/attend/${course.attendeeLinkToken}`,
-      qrDownloadUrl: course.qrCodeUrl
-        ? await createSignedUrl("uploads", course.qrCodeUrl).catch(() => null)
-        : null,
-      letterDownloadUrl: course.approvalLetterUrl
-        ? await createSignedUrl("uploads", course.approvalLetterUrl).catch(
-            () => null,
-          )
-        : null,
+      attendeeUrl: `/attend/${course.attendeeLinkToken}`,
+      ...(await courseAssetUrls({
+        attendeeLinkToken: course.attendeeLinkToken,
+        qrCodeUrl: course.qrCodeUrl,
+        approvalLetterUrl: course.approvalLetterUrl,
+        courseIdNumber: course.courseIdNumber,
+        approvedAt: course.approvedAt,
+        expiresAt: course.expiresAt,
+        companyName: course.company.name,
+        courseTitle:
+          course.application.courseTitle ?? `Course ${course.courseIdNumber}`,
+        ceHours: Number(course.application.ceHours ?? 0),
+      })),
     })),
   );
 
@@ -148,7 +154,7 @@ export default async function MyCoursesPage({
                           QR Code
                         </a>
                       ) : (
-                        <span className="text-text-muted">QR processing</span>
+                        <span className="text-text-muted">QR unavailable</span>
                       )}
                       {course.letterDownloadUrl ? (
                         <a
@@ -160,7 +166,7 @@ export default async function MyCoursesPage({
                           Approval Letter
                         </a>
                       ) : (
-                        <span className="text-text-muted">Letter processing</span>
+                        <span className="text-text-muted">Letter unavailable</span>
                       )}
                       <a
                         href={`/api/courses/${course.id}/badge`}
@@ -168,6 +174,12 @@ export default async function MyCoursesPage({
                       >
                         Marketing Logo
                       </a>
+                      <Link
+                        href={`/company/applications/${course.applicationId}`}
+                        className="text-ace underline"
+                      >
+                        Application
+                      </Link>
                     </div>
                   </td>
                 </tr>
@@ -192,6 +204,9 @@ export default async function MyCoursesPage({
                 <th className="px-4 py-2 font-semibold">CE Hours</th>
                 <th className="px-4 py-2 font-semibold">Format</th>
                 <th className="px-4 py-2 font-semibold">Status</th>
+                <th className="px-4 py-2 font-semibold">
+                  <span className="sr-only">View application</span>
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -229,6 +244,14 @@ export default async function MyCoursesPage({
                         Rejected
                       </span>
                     )}
+                  </td>
+                  <td className="px-4 py-2 text-right">
+                    <Link
+                      href={`/company/applications/${app.id}`}
+                      className="whitespace-nowrap text-ace underline"
+                    >
+                      View
+                    </Link>
                   </td>
                 </tr>
               ))}

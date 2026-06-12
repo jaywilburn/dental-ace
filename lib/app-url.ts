@@ -11,10 +11,14 @@ import "server-only";
   Use ONLY for outbound/emailed URLs. Plain server redirects back to the same
   origin can keep using the request origin (a spoofed host there only redirects
   the attacker's own request).
+
+  requestOrigin is optional for callers with no request in scope (server
+  actions, background jobs): production still pins to NEXT_PUBLIC_APP_URL or
+  the canonical domain, and dev falls back to localhost.
 */
-export function appBaseUrl(requestOrigin: string): string {
+export function appBaseUrl(requestOrigin?: string): string {
   const configured = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/+$/, "");
   if (configured) return configured;
   if (process.env.NODE_ENV === "production") return "https://dentalace.org";
-  return requestOrigin;
+  return requestOrigin ?? "http://localhost:3000";
 }
