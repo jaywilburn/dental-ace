@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import { Prisma } from "@prisma/client";
 import { getCurrentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
+import { appBaseUrl } from "@/lib/app-url";
 import { uploadToStorage } from "@/lib/storage";
 import { renderApprovalLetterPdf } from "@/lib/pdf/approval-letter";
 import { renderQrPng } from "@/lib/qrcode";
@@ -81,7 +82,7 @@ export async function approveApplication(formData: FormData) {
   expiresAt.setFullYear(expiresAt.getFullYear() + 3);
   const year = approvedAt.getFullYear();
   const attendeeLinkToken = randomUUID();
-  const appBase = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+  const appBase = appBaseUrl();
 
   // Storage paths are keyed by applicationId, not Course ID — that way a
   // retried approval or a race between two reviewers on different applications
@@ -129,37 +130,48 @@ export async function approveApplication(formData: FormData) {
   });
 
   // 2) Render and upload assets AFTER the row is committed. Using deterministic
-  //    paths means an upload failure is fully retryable — a follow-up approval
-  //    of the same applicationId is blocked (unique constraint), so the only
-  //    retry path is a maintenance job that re-renders for this applicationId.
+  //    paths means an upload failure is fully retryable: the My Courses page
+  //    self-heals via lib/courses/course-assets.ts when it finds a recorded
+  //    path with no object behind it. A failure here must NOT fail the
+  //    approval (the DB transition is already committed), but it must be
+  //    loudly observable in server logs.
   const attendeeUrl = `${appBase}/attend/${attendeeLinkToken}`;
-  const [qrPng, letterPdf] = await Promise.all([
-    renderQrPng(attendeeUrl),
-    renderApprovalLetterPdf({
-      companyName: application.company.name,
-      courseTitle: data.courseTitle,
-      courseIdNumber,
-      ceHours: data.ceCreditHours,
-      approvedAt,
-      expiresAt,
-      reviewerName: reviewer.email.split("@")[0],
-    }),
-  ]);
+  let qrPng: Buffer | null = null;
+  let letterPdf: Buffer | null = null;
+  try {
+    [qrPng, letterPdf] = await Promise.all([
+      renderQrPng(attendeeUrl),
+      renderApprovalLetterPdf({
+        companyName: application.company.name,
+        courseTitle: data.courseTitle,
+        courseIdNumber,
+        ceHours: data.ceCreditHours,
+        approvedAt,
+        expiresAt,
+        reviewerName: reviewer.email.split("@")[0],
+      }),
+    ]);
 
-  await Promise.all([
-    uploadToStorage({
-      kind: "uploads",
-      path: qrStoragePath,
-      body: qrPng,
-      contentType: "image/png",
-    }),
-    uploadToStorage({
-      kind: "uploads",
-      path: pdfStoragePath,
-      body: letterPdf,
-      contentType: "application/pdf",
-    }),
-  ]);
+    await Promise.all([
+      uploadToStorage({
+        kind: "uploads",
+        path: qrStoragePath,
+        body: qrPng,
+        contentType: "image/png",
+      }),
+      uploadToStorage({
+        kind: "uploads",
+        path: pdfStoragePath,
+        body: letterPdf,
+        contentType: "application/pdf",
+      }),
+    ]);
+  } catch (err) {
+    console.error(
+      `[approveApplication] asset render/upload failed (applicationId=${application.id}, courseId=${courseIdNumber}) - My Courses will regenerate on demand`,
+      err,
+    );
+  }
 
   // Approval email — log mode unless Resend is configured.
   const customerEmail = application.company.users[0]?.email;
@@ -186,10 +198,15 @@ export async function approveApplication(formData: FormData) {
         to: customerEmail,
         subject: ApplicationApprovedEmail.subject(emailProps),
         react: ApplicationApprovedEmail(emailProps),
-        attachments: [
-          { filename: `${courseIdNumber}-approval-letter.pdf`, content: letterPdf },
-          { filename: `${courseIdNumber}-attendee-qr.png`, content: qrPng },
-        ],
+        // If asset rendering failed, send the approval email without
+        // attachments; the deliverables stay downloadable from My Courses.
+        attachments:
+          qrPng && letterPdf
+            ? [
+                { filename: `${courseIdNumber}-approval-letter.pdf`, content: letterPdf },
+                { filename: `${courseIdNumber}-attendee-qr.png`, content: qrPng },
+              ]
+            : undefined,
       });
     } catch (err) {
       console.error("[approveApplication] email failed", err);

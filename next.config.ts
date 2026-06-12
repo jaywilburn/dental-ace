@@ -4,7 +4,10 @@ const nextConfig: NextConfig = {
   /* config options here */
   reactCompiler: true,
   // Puppeteer + serverless Chromium must not be bundled by Turbopack/webpack.
-  serverExternalPackages: ["@sparticuz/chromium", "puppeteer-core"],
+  // pdfkit must stay external too: when bundled, its runtime fs.readFileSync of
+  // the .afm standard-font data resolves to a fake /ROOT/... path and every PDF
+  // render (approval letters, certificates) throws ENOENT.
+  serverExternalPackages: ["@sparticuz/chromium", "puppeteer-core", "pdfkit"],
 };
 
 export default nextConfig;

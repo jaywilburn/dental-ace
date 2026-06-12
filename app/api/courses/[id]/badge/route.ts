@@ -28,11 +28,20 @@ export async function GET(
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const png = await renderAceBadgePng({
-    courseIdNumber: course.courseIdNumber,
-    courseTitle: course.application.courseTitle ?? "Accredited Course",
-    approvedAt: course.approvedAt,
-  });
+  let png: Buffer;
+  try {
+    png = await renderAceBadgePng({
+      courseIdNumber: course.courseIdNumber,
+      courseTitle: course.application.courseTitle ?? "Accredited Course",
+      approvedAt: course.approvedAt,
+    });
+  } catch (err) {
+    console.error(`[badge] render failed (courseId=${id})`, err);
+    return NextResponse.json(
+      { error: "Marketing logo could not be generated. Please try again later." },
+      { status: 500 },
+    );
+  }
 
   return new NextResponse(new Uint8Array(png), {
     headers: {

@@ -171,7 +171,7 @@ export async function saveStep1(formData: FormData) {
           : undefined,
     publicProtectionStatement: String(formData.get("publicProtectionStatement") ?? ""),
     courseObjectives: String(formData.get("courseObjectives") ?? ""),
-    targetAudience: String(formData.get("targetAudience") ?? ""),
+    courseOutline: String(formData.get("courseOutline") ?? ""),
   };
   await mergeStep(applicationId, step1Schema, raw, STEP_ROUTES[1]);
   redirect(STEP_ROUTES[2]);
@@ -208,6 +208,7 @@ export async function saveStep2(formData: FormData) {
     educationPart3: String(formData.get("educationPart3") ?? "") || undefined,
     educationPart4: String(formData.get("educationPart4") ?? "") || "N/A",
     creatorExperience: String(formData.get("creatorExperience") ?? ""),
+    cvResume: String(formData.get("cvResume") ?? ""),
   };
   await mergeStep(applicationId, step2Schema, raw, STEP_ROUTES[2]);
   redirect(STEP_ROUTES[3]);
@@ -395,9 +396,10 @@ export async function submitApplication(formData: FormData) {
 }
 
 /**
- * Upload a draft attachment (course outline, CV/resume, presenter headshot) via
- * the service-role Supabase client. Client posts a multipart form to the route
- * handler at /api/uploads/draft-attachment, which calls into this. Re-validates
+ * Upload a draft attachment (presenter headshot, the only remaining upload
+ * field) via the service-role Supabase client. Client posts a multipart form
+ * to the route handler at /api/uploads/draft-attachment, which calls into
+ * this. Re-validates
  * field + MIME/size (defense in depth) and sanitizes the filename before it
  * reaches the storage path. The fileRef is persisted straight into
  * applicationData; mergeStep preserves it because no step writes these keys.

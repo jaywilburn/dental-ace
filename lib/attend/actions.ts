@@ -8,6 +8,7 @@ import { scoreQuiz, type AttendeeAnswer } from "@/lib/attend/scoring";
 import { decideAttempt } from "@/lib/attend/lockout";
 import { issueCertificateTx, CertBalanceExhaustedError } from "@/lib/attend/issue";
 import { rateLimit } from "@/lib/rate-limit";
+import { appBaseUrl } from "@/lib/app-url";
 import { renderCertificatePdf } from "@/lib/pdf/certificate";
 import { uploadToStorage } from "@/lib/storage";
 import { sendEmail } from "@/lib/email/send";
@@ -186,7 +187,7 @@ export async function submitAttendance(input: unknown): Promise<AttendResult> {
       data: { certPdfUrl: pdfPath },
     });
 
-    const appBase = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+    const appBase = appBaseUrl();
     const emailProps = {
       attendeeName: sub.attendeeName,
       courseTitle: course.application.courseTitle ?? "Accredited Course",

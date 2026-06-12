@@ -15,8 +15,17 @@ const quizArraySchema = z.array(quizQuestionSchema).length(5);
 function Notice({ title, body }: { title: string; body: string }) {
   return (
     <main className="mx-auto max-w-md px-4 py-16 text-center">
-      <h1 className="text-lg font-semibold text-slate-900">{title}</h1>
-      <p className="mt-2 text-sm text-slate-600">{body}</p>
+      <p className="text-2xl font-bold tracking-tight">
+        <span className="text-navy">Dental</span>
+        <span className="text-ace">ACE</span>
+      </p>
+      <div className="mt-6 rounded-lg border border-border bg-white px-6 py-8">
+        <h1 className="text-lg font-semibold text-navy">{title}</h1>
+        <p className="mt-2 text-sm text-text-mid">{body}</p>
+      </div>
+      <p className="mt-6 text-xs text-text-muted">
+        Questions? Contact info@dentalace.org
+      </p>
     </main>
   );
 }
@@ -27,6 +36,14 @@ export default async function AttendPage({
   params: Promise<{ token: string }>;
 }) {
   const { token } = await params;
+
+  // attendee_link_token is a UUID column; querying with a malformed token
+  // makes Prisma throw (and the page crash) instead of falling through to
+  // the not-found notice. Validate before touching the DB. z.guid() matches
+  // lib/attend/schemas.ts (Zod v4's z.uuid() is stricter than our tokens).
+  if (!z.guid().safeParse(token).success) {
+    return <Notice title="Course not found" body="This certificate link is not valid." />;
+  }
 
   const course = await prisma.accreditedCourse.findUnique({
     where: { attendeeLinkToken: token },

@@ -62,10 +62,10 @@ export default async function ApplicationStep5Page() {
             { label: "Category", value: data.subjectMatter },
             { label: "Course Format", value: data.deliveryFormat },
             { label: "Most-Used Format", value: data.primaryDistributionFormat },
-            { label: "Target Audience", value: data.targetAudience },
             { label: "Public Protection Statement", value: data.publicProtectionStatement, full: true },
             { label: "Short Description", value: data.shortDescription, full: true },
             { label: "Course Objectives", value: data.courseObjectives, full: true },
+            { label: "Course Outline", value: data.courseOutline, full: true },
             ...(isLiveFormat(data.deliveryFormat)
               ? [
                   {
@@ -97,6 +97,7 @@ export default async function ApplicationStep5Page() {
             ...(data.educationPart3 ? [{ label: "Education Part 3", value: data.educationPart3, full: true }] : []),
             { label: "Education Part 4", value: data.educationPart4, full: true },
             { label: "Experience Relative to Subject", value: data.creatorExperience, full: true },
+            { label: "CV / Resume", value: data.cvResume, full: true },
             {
               label: "Detailed Bio",
               value: sanitizeRichText(data.detailedBioHtml),
