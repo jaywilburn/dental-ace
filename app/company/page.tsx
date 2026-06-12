@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { PageHeader } from "@/components/portal-shell";
 import { PortalStatCard } from "@/components/portal-stat-card";
+import { TrainingVideoCta } from "@/components/company/training-video-cta";
 import { requireDentalAce } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 
@@ -88,12 +89,15 @@ export default async function CompanyDashboard({
           pendingCount > 0 ? ` · ${pendingCount} pending review` : ""
         }`}
         action={
-          <Link
-            href="/company/applications/new"
-            className="rounded-md bg-navy px-3.5 py-2 text-[12px] font-semibold text-white transition-colors hover:bg-navy/90"
-          >
-            + New Application
-          </Link>
+          <div className="flex shrink-0 flex-col items-stretch gap-2 sm:flex-row sm:items-center">
+            <TrainingVideoCta />
+            <Link
+              href="/company/applications/new"
+              className="rounded-md bg-navy px-3.5 py-2 text-center text-[12px] font-semibold text-white transition-colors hover:bg-navy/90"
+            >
+              + New Application
+            </Link>
+          </div>
         }
       />
 
