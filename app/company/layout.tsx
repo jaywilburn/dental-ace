@@ -1,14 +1,23 @@
+import { redirect } from "next/navigation";
 import { PortalShell } from "@/components/portal-shell";
 import { navFor, otherProductLinks, BACK_TO_HOME } from "@/lib/nav/portal-nav";
-import { requireDentalAce } from "@/lib/auth/session";
+import { requireUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
+import { AccessPendingGate } from "@/components/access/access-pending-gate";
+import { pendingKindsFor } from "@/lib/auth/access-requests";
 
 export default async function CompanyLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const user = await requireDentalAce();
+  const user = await requireUser();
+  if (!user.companyId) {
+    if ((await pendingKindsFor(user.id)).has("COMPANY")) {
+      return <AccessPendingGate area="DentalACE" />;
+    }
+    redirect("/home");
+  }
 
   const company = user.companyId
     ? await prisma.company.findUnique({

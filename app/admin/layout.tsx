@@ -1,13 +1,23 @@
+import { redirect } from "next/navigation";
 import { PortalShell } from "@/components/portal-shell";
 import { navFor } from "@/lib/nav/portal-nav";
-import { requireStaff } from "@/lib/auth/session";
+import { requireUser } from "@/lib/auth/session";
+import { AccessPendingGate } from "@/components/access/access-pending-gate";
+import { pendingKindsFor } from "@/lib/auth/access-requests";
 
 export default async function AdminLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const user = await requireStaff("ADMIN");
+  const user = await requireUser();
+  const entitled = user.staffRole === "ADMIN";
+  if (!entitled) {
+    if ((await pendingKindsFor(user.id)).has("ADMIN")) {
+      return <AccessPendingGate area="AADB admin" />;
+    }
+    redirect("/home");
+  }
 
   return (
     <PortalShell

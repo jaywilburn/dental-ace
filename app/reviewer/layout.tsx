@@ -1,13 +1,23 @@
+import { redirect } from "next/navigation";
 import { PortalShell } from "@/components/portal-shell";
 import { navFor } from "@/lib/nav/portal-nav";
-import { requireStaff } from "@/lib/auth/session";
+import { requireUser } from "@/lib/auth/session";
+import { AccessPendingGate } from "@/components/access/access-pending-gate";
+import { pendingKindsFor } from "@/lib/auth/access-requests";
 
 export default async function ReviewerLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const user = await requireStaff("REVIEWER");
+  const user = await requireUser();
+  const entitled = user.staffRole === "REVIEWER" || user.staffRole === "ADMIN";
+  if (!entitled) {
+    if ((await pendingKindsFor(user.id)).has("REVIEWER")) {
+      return <AccessPendingGate area="the review queue" />;
+    }
+    redirect("/home");
+  }
 
   return (
     <PortalShell
