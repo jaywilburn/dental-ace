@@ -14,6 +14,10 @@ import {
   up without one). Plain HTML form posting to /api/auth/register, which sets the
   session cookie and redirects (server actions can't reliably set cookies under
   Next 16 + Turbopack). Validation errors come back via ?error=.
+
+  Step 0: When ?as= is absent or invalid, a role-picker chooser is shown so the
+  user can declare what they're here to do. The `as` param is display-only and is
+  NOT posted to /api/auth/register.
 */
 
 const fieldClass =
@@ -24,16 +28,26 @@ const STATES_BY_NAME = [...STATE_CODES].sort((a, b) =>
   US_STATES[a]!.localeCompare(US_STATES[b]!),
 );
 
+type ValidRole = "individual" | "company";
+
+function isValidRole(as: string | undefined): as is ValidRole {
+  return as === "individual" || as === "company";
+}
+
 export default async function SignupPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; sent?: string }>;
+  searchParams: Promise<{ error?: string; sent?: string; as?: string }>;
 }) {
   const user = await getCurrentUser();
   if (user) redirect("/home");
 
-  const { error, sent } = await searchParams;
+  const { error, sent, as } = await searchParams;
   if (sent) return <CheckYourEmail email={sent} />;
+
+  if (!isValidRole(as)) {
+    return <RoleChooser />;
+  }
 
   return (
     <main className="flex min-h-dvh items-center justify-center bg-navy px-4 py-10">
@@ -44,12 +58,22 @@ export default async function SignupPage({
             Create your DentalACE One account
           </h1>
           <p className="mt-1 max-w-sm text-[12px] text-white/55 text-pretty">
-            Every account includes ProTrack Free, so you can track your CE right
-            away. DentalACE and Verify can be added later.
+            {as === "individual"
+              ? "Track your CE with ProTrack Free. You can add DentalACE or Verify later."
+              : "Create your account first. After you confirm your email and sign in, you'll request CE Company access from your home screen."}
           </p>
         </div>
 
         <div className="rounded-xl border border-border bg-white p-6 shadow-sm">
+          <div className="mb-4">
+            <Link
+              href="/signup"
+              className="text-[11px] font-semibold text-text-muted hover:text-navy"
+            >
+              ← Change
+            </Link>
+          </div>
+
           {error ? (
             <p className="mb-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[12px] text-red-700 text-pretty">
               {error}
@@ -116,75 +140,77 @@ export default async function SignupPage({
               </p>
             </div>
 
-            <fieldset className="rounded-lg border border-border bg-surface/40 p-3">
-              <legend className="px-1 text-[11px] font-semibold text-text-mid">
-                Track your CE{" "}
-                <span className="font-normal text-text-muted">
-                  (optional, add it now or later)
-                </span>
-              </legend>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div>
-                  <label htmlFor="licenseType" className={labelClass}>
-                    License type
-                  </label>
-                  <select
-                    id="licenseType"
-                    name="licenseType"
-                    className={fieldClass}
-                    defaultValue=""
-                  >
-                    <option value="">Not now</option>
-                    {LICENSE_TYPE_OPTIONS.map((o) => (
-                      <option key={o.value} value={o.value}>
-                        {o.label}
-                      </option>
-                    ))}
-                  </select>
+            {as === "individual" ? (
+              <fieldset className="rounded-lg border border-border bg-surface/40 p-3">
+                <legend className="px-1 text-[11px] font-semibold text-text-mid">
+                  Track your CE{" "}
+                  <span className="font-normal text-text-muted">
+                    (optional, add it now or later)
+                  </span>
+                </legend>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <label htmlFor="licenseType" className={labelClass}>
+                      License type
+                    </label>
+                    <select
+                      id="licenseType"
+                      name="licenseType"
+                      className={fieldClass}
+                      defaultValue=""
+                    >
+                      <option value="">Not now</option>
+                      {LICENSE_TYPE_OPTIONS.map((o) => (
+                        <option key={o.value} value={o.value}>
+                          {o.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label htmlFor="primaryState" className={labelClass}>
+                      Primary state
+                    </label>
+                    <select
+                      id="primaryState"
+                      name="primaryState"
+                      className={fieldClass}
+                      defaultValue=""
+                    >
+                      <option value="">Not now</option>
+                      {STATES_BY_NAME.map((code) => (
+                        <option key={code} value={code}>
+                          {US_STATES[code]}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
-                <div>
-                  <label htmlFor="primaryState" className={labelClass}>
-                    Primary state
-                  </label>
-                  <select
-                    id="primaryState"
-                    name="primaryState"
-                    className={fieldClass}
-                    defaultValue=""
-                  >
-                    <option value="">Not now</option>
-                    {STATES_BY_NAME.map((code) => (
-                      <option key={code} value={code}>
-                        {US_STATES[code]}
-                      </option>
-                    ))}
-                  </select>
+                <div className="mt-3 grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <label htmlFor="licenseNumber" className={labelClass}>
+                      License number
+                    </label>
+                    <input
+                      id="licenseNumber"
+                      name="licenseNumber"
+                      className={fieldClass}
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="inviteCode" className={labelClass}>
+                      Board invite code{" "}
+                      <span className="font-normal text-text-muted">(optional)</span>
+                    </label>
+                    <input
+                      id="inviteCode"
+                      name="inviteCode"
+                      className={fieldClass}
+                    />
+                  </div>
                 </div>
-              </div>
-              <div className="mt-3 grid gap-4 sm:grid-cols-2">
-                <div>
-                  <label htmlFor="licenseNumber" className={labelClass}>
-                    License number
-                  </label>
-                  <input
-                    id="licenseNumber"
-                    name="licenseNumber"
-                    className={fieldClass}
-                  />
-                </div>
-                <div>
-                  <label htmlFor="inviteCode" className={labelClass}>
-                    Board invite code{" "}
-                    <span className="font-normal text-text-muted">(optional)</span>
-                  </label>
-                  <input
-                    id="inviteCode"
-                    name="inviteCode"
-                    className={fieldClass}
-                  />
-                </div>
-              </div>
-            </fieldset>
+              </fieldset>
+            ) : null}
 
             <button
               type="submit"
@@ -193,6 +219,76 @@ export default async function SignupPage({
               Create Free Account
             </button>
           </form>
+        </div>
+
+        <p className="mt-4 text-center text-[12px] text-white/55">
+          Already have an account?{" "}
+          <Link href="/login" className="font-semibold text-ace-light hover:underline">
+            Sign in
+          </Link>
+        </p>
+      </div>
+    </main>
+  );
+}
+
+function RoleChooser() {
+  return (
+    <main className="flex min-h-dvh items-center justify-center bg-navy px-4 py-10">
+      <div className="w-full max-w-lg">
+        <div className="mb-5 flex flex-col items-center text-center text-white">
+          <BrandMark tag="AADB" size="lg" />
+          <h1 className="mt-3 font-serif text-2xl font-bold text-balance">
+            Create your DentalACE One account
+          </h1>
+          <p className="mt-1 max-w-sm text-[12px] text-white/55 text-pretty">
+            First, what brings you here?
+          </p>
+        </div>
+
+        <div className="rounded-xl border border-border bg-white p-6 shadow-sm">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Link
+              href="/signup?as=individual"
+              className="rounded-xl border border-border bg-white p-5 transition hover:border-ace hover:shadow-sm"
+            >
+              <h2 className="font-serif text-base font-semibold text-navy">
+                Track my CE
+              </h2>
+              <p className="mt-1 text-[12px] text-text-muted text-pretty">
+                Log and track your continuing education with ProTrack.
+              </p>
+            </Link>
+
+            <Link
+              href="/signup?as=company"
+              className="rounded-xl border border-border bg-white p-5 transition hover:border-ace hover:shadow-sm"
+            >
+              <h2 className="font-serif text-base font-semibold text-navy">
+                Accredit courses
+              </h2>
+              <p className="mt-1 text-[12px] text-text-muted text-pretty">
+                Submit courses for accreditation as a CE provider.
+              </p>
+            </Link>
+
+            <Link
+              href="/signup/board"
+              className="rounded-xl border border-border bg-white p-5 transition hover:border-ace hover:shadow-sm sm:col-span-2"
+            >
+              <h2 className="font-serif text-base font-semibold text-navy">
+                State board
+              </h2>
+              <p className="mt-1 text-[12px] text-text-muted text-pretty">
+                Run random CE audits with Verify.
+              </p>
+            </Link>
+          </div>
+
+          <p className="mt-5 rounded-lg bg-surface px-4 py-3 text-[11px] text-text-muted text-pretty">
+            AADB staff? Reviewers and admins are added by invitation. Create an
+            account, then request access from your home screen.
+          </p>
         </div>
 
         <p className="mt-4 text-center text-[12px] text-white/55">
