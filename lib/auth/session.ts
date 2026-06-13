@@ -98,3 +98,20 @@ export async function requireVerify(): Promise<SessionUser> {
 export function homePathFor(): string {
   return "/home";
 }
+
+/**
+ * Post-login destination derived from entitlements. Priority: staff areas,
+ * then DentalACE, then Verify, then the /home hub (ProTrack floor + request
+ * entry points). Pure + synchronous so it's unit-testable.
+ */
+export function landingPathFor(e: {
+  staffRole: StaffRole;
+  companyId: string | null;
+  verifyAccess: boolean;
+}): string {
+  if (e.staffRole === "ADMIN") return "/admin";
+  if (e.staffRole === "REVIEWER") return "/reviewer";
+  if (e.companyId) return "/company";
+  if (e.verifyAccess) return "/board";
+  return "/home";
+}

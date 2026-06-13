@@ -7,6 +7,7 @@ export default defineConfig({
   resolve: {
     alias: {
       "server-only": fileURLToPath(new URL("./test/stubs/server-only.ts", import.meta.url)),
+      "@/lib/prisma": fileURLToPath(new URL("./test/stubs/prisma.ts", import.meta.url)),
     },
   },
   test: {
