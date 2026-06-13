@@ -1,5 +1,4 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { createHash } from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { boardSignupSchema } from "@/lib/board/signup-schema";
@@ -31,21 +30,12 @@ import VerifyEmail from "@/emails/verify-email";
    2. Reject if state already has a boards row (with friendly explanation).
    3. Reject if email domain isn't .gov (first-claim gate).
    4. Create the Supabase Auth user (service-role, email NOT confirmed).
-   5. In a tx with a state-scoped advisory lock: re-check the boards row
-      doesn't exist (closes the race between step 2 and now), create it,
-      insert the users row with verify_access=true + board_id.
+   5. In a tx: create the users row + a PENDING BOARD AccessRequest.
+      Board row + verify_access are granted at admin approval (applyBoardGrant).
    6. Email a signed verification link; no session is minted until verified.
 */
 
 export const runtime = "nodejs";
-
-function stateLockKey(state: string): bigint {
-  // Postgres advisory lock keys are bigint. Hash the state code to a stable
-  // signed 64-bit int so two registrations for the same state serialize.
-  const buf = createHash("sha256").update(state).digest();
-  // Top 8 bytes -> signed bigint
-  return buf.readBigInt64BE(0);
-}
 
 function isGovernmentEmail(email: string): boolean {
   // Accept any subdomain of .gov. Covers state-board domains like
@@ -57,8 +47,6 @@ function isGovernmentEmail(email: string): boolean {
   const domain = email.slice(at + 1).toLowerCase();
   return domain === "gov" || domain.endsWith(".gov");
 }
-
-const STATE_CLAIMED_SENTINEL = "STATE_ALREADY_CLAIMED";
 
 export async function POST(request: NextRequest) {
   const origin = request.nextUrl.origin;
@@ -88,7 +76,9 @@ export async function POST(request: NextRequest) {
   }
 
   // Pre-check: is this state already claimed? Fail fast before we burn an
-  // auth user. We re-check inside the tx below to close the race window.
+  // auth user. This only catches states with an already-APPROVED board row;
+  // the real first-claim race is resolved at approval time in applyBoardGrant
+  // (advisory lock + re-check).
   const existingBoard = await prisma.board.findUnique({
     where: { state: data.state },
     select: { id: true },
@@ -118,53 +108,28 @@ export async function POST(request: NextRequest) {
   }
   const userId = created.user.id;
 
-  let alreadyClaimed = false;
+  // Create the user row + a PENDING BOARD AccessRequest.
+  // Board row + verify_access are granted at admin approval (applyBoardGrant);
+  // the .gov gate + claim pre-check above are request-time filters.
+  // The request is created unverified; the user can't sign in until they confirm their email.
   try {
     await prisma.$transaction(async (tx) => {
-      // Serialize per-state board-row creation so two simultaneous signups for
-      // the same state don't race the find-or-create.
-      await tx.$executeRaw`select pg_advisory_xact_lock(${stateLockKey(data.state)})`;
-
-      // Re-check inside the lock — closes the window between the pre-check and
-      // now. If two .gov registrants for the same state arrived in parallel,
-      // exactly one wins; the other gets the same "already claimed" message.
-      const existing = await tx.board.findUnique({
-        where: { state: data.state },
-        select: { id: true },
-      });
-      if (existing) {
-        throw new Error(STATE_CLAIMED_SENTINEL);
-      }
-
-      const board = await tx.board.create({
-        data: { state: data.state, name: data.boardName },
-        select: { id: true },
-      });
-
       await tx.user.create({
+        data: { id: userId, email: data.email, firstName: data.firstName, lastName: data.lastName },
+      });
+      await tx.accessRequest.create({
         data: {
-          id: userId,
-          email: data.email,
-          firstName: data.firstName,
-          lastName: data.lastName,
-          verifyAccess: true,
-          boardId: board.id,
+          userId,
+          kind: "BOARD",
+          payload: { state: data.state, boardName: data.boardName },
+          label: `${US_STATES[data.state]}, ${data.boardName}`,
         },
       });
     });
-  } catch (err) {
+  } catch {
     // Always roll back the orphaned auth user so the email can be retried.
     await admin.auth.admin.deleteUser(userId).catch(() => {});
-    if (err instanceof Error && err.message === STATE_CLAIMED_SENTINEL) {
-      alreadyClaimed = true;
-    } else {
-      return back("Something went wrong creating your account. Please try again.");
-    }
-  }
-  if (alreadyClaimed) {
-    return back(
-      `${US_STATES[data.state]} was just registered by someone else. If you're a board admin who needs access, contact info@dentalace.org to be added.`,
-    );
+    return back("Something went wrong creating your account. Please try again.");
   }
 
   const token = signEmailVerificationToken(userId);
