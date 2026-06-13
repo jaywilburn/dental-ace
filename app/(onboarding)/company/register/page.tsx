@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { BrandMark } from "@/components/brand-mark";
@@ -10,7 +11,6 @@ import {
 import { requireUser } from "@/lib/auth/session";
 import { STATE_CODES, US_STATES } from "@/lib/protrack/reference";
 import { registerCompany } from "@/lib/company/register-actions";
-import { DUPLICATE_COMPANY_MESSAGE } from "@/lib/company/register-core";
 
 /*
   Self-serve company (CE provider) registration at /company/register.
@@ -20,9 +20,9 @@ import { DUPLICATE_COMPANY_MESSAGE } from "@/lib/company/register-core";
   companyId to /home before they could ever register. Same URL, no portal
   shell, requireUser() floor.
 
-  Instant access by design: the new company starts with zero credits, so the
-  credit gate (lib/company/credit-gate.ts) is the real barrier to submitting
-  applications.
+  Submitting the form creates a PENDING AccessRequest; an AADB admin must
+  approve it before the company is created and the user's companyId is set.
+  Users with an open request land on the submitted state instead of the form.
 */
 
 const selectClass =
@@ -35,20 +35,56 @@ const STATES_BY_NAME = [...STATE_CODES].sort((a, b) =>
 export default async function CompanyRegisterPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; detail?: string }>;
+  searchParams: Promise<{ error?: string; detail?: string; submitted?: string }>;
 }) {
   const user = await requireUser();
   if (user.companyId) redirect("/company");
 
-  const { error, detail } = await searchParams;
+  const { error, detail, submitted } = await searchParams;
   const errorMessage =
-    error === "duplicate"
-      ? DUPLICATE_COMPANY_MESSAGE
-      : error === "rate_limited"
-        ? "Too many attempts. Please wait a bit and try again."
-        : error === "validation"
-          ? (detail ?? "Check that every required field is filled in, then try again.")
-          : null;
+    error === "rate_limited"
+      ? "Too many attempts. Please wait a bit and try again."
+      : error === "validation"
+        ? (detail ?? "Check that every required field is filled in, then try again.")
+        : null;
+
+  const shell = (children: ReactNode) => (
+    <main className="min-h-dvh bg-surface">
+      <header className="flex items-center justify-between bg-navy px-6 py-4 text-white">
+        <BrandMark tag="AADB" />
+        <Link
+          href="/home"
+          className="rounded-md border border-white/15 px-3 py-1.5 text-[11px] font-semibold text-white/70 transition hover:border-white/30 hover:text-white"
+        >
+          Back to home
+        </Link>
+      </header>
+      <div className="mx-auto max-w-2xl px-4 py-10 sm:px-6">{children}</div>
+    </main>
+  );
+
+  if (submitted) {
+    return shell(
+      <div className="rounded-lg border border-border bg-white px-6 py-8 text-center shadow-sm">
+        <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-ace/10 text-ace">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+          </svg>
+        </div>
+        <h1 className="font-serif text-2xl font-bold text-navy">Request submitted</h1>
+        <p className="mt-3 text-[13px] text-text-muted text-pretty max-w-sm mx-auto">
+          Your CE Company access is under review. We will email you when an AADB admin approves it.
+          You can keep using ProTrack from your home screen.
+        </p>
+        <Link
+          href="/home"
+          className="mt-6 inline-block rounded-md bg-navy px-5 py-2 text-[13px] font-semibold text-white transition-colors hover:bg-navy/90"
+        >
+          Go to home
+        </Link>
+      </div>,
+    );
+  }
 
   return (
     <main className="min-h-dvh bg-surface">

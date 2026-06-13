@@ -4,44 +4,33 @@ import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { rateLimit } from "@/lib/rate-limit";
 import { requireUser } from "@/lib/auth/session";
-import { prisma } from "@/lib/prisma";
 import { companyRegisterSchema } from "@/lib/company/register-schema";
-import {
-  companyNameLockKey,
-  isUniqueNameViolation,
-} from "@/lib/company/register-core";
-import { sendEmail } from "@/lib/email/send";
-import { appBaseUrl } from "@/lib/app-url";
-import CompanyRegisteredEmail from "@/emails/company-registered";
+import { createRequest, pendingKindsFor } from "@/lib/auth/access-requests";
 
 /*
   Server action for self-serve company (CE provider) registration.
 
-  Trust model (per the approved plan): INSTANT ACCESS, no AADB approval step.
-  A new company starts with zero credits, so the existing credit gate
-  (lib/company/credit-gate.ts) is the real barrier; nothing can be submitted
-  until credits are purchased. Duplicate organization names are REJECTED with
-  a contact-AADB message, and AADB gets a notification email per registration.
+  As of Task 8, registration no longer grants instant access. Instead it
+  creates a PENDING AccessRequest of kind "COMPANY". The actual company
+  creation and companyId linkage happens when an AADB admin approves the
+  request via approveRequest() -> applyCompanyGrant().
 
   Flow:
    1. requireUser(); accounts that already belong to a company go to /company.
-   2. Rate limit by IP + userId.
-   3. Zod-parse the form; bounce validation errors back as a banner.
-   4. In a tx with a name-scoped advisory lock: case-insensitive duplicate
-      check (the lock serializes same-name registrations, so this check is
-      race-free), create the company, and link the user's companyId
-      atomically. A P2002 race lands on the same duplicate message.
-   5. Notify AADB (AADB_ADMIN_EMAIL) in a try/catch so an email hiccup never
-      blocks the registration.
+   2. Accounts with an open COMPANY request see the submitted state.
+   3. Rate limit by IP + userId.
+   4. Zod-parse the form; bounce validation errors back as a banner.
+   5. createRequest() validates the payload a second time (backstop), inserts
+      the AccessRequest row, and fires the confirmation + admin-notify emails.
+   6. Redirect to the submitted state.
 */
 
 const REGISTER_ROUTE = "/company/register";
-const DUPLICATE_SENTINEL = "COMPANY_NAME_TAKEN";
-const ALREADY_LINKED_SENTINEL = "USER_ALREADY_LINKED";
 
 export async function registerCompany(formData: FormData): Promise<void> {
   const user = await requireUser();
   if (user.companyId) redirect("/company");
+  if ((await pendingKindsFor(user.id)).has("COMPANY")) redirect(`${REGISTER_ROUTE}?submitted=1`);
 
   const ip = ((await headers()).get("x-forwarded-for") ?? "unknown")
     .split(",")[0]
@@ -75,93 +64,24 @@ export async function registerCompany(formData: FormData): Promise<void> {
   }
   const data = result.data;
 
-  let duplicate = false;
-  let companyId: string | null = null;
-  try {
-    await prisma.$transaction(async (tx) => {
-      // Serialize same-name registrations (case-insensitive) so two
-      // simultaneous submissions don't race the find-or-create.
-      await tx.$executeRaw`select pg_advisory_xact_lock(${companyNameLockKey(data.name)})`;
-
-      const taken = await tx.company.findFirst({
-        where: { name: { equals: data.name, mode: "insensitive" } },
-        select: { id: true },
-      });
-      if (taken) throw new Error(DUPLICATE_SENTINEL);
-
-      const company = await tx.company.create({
-        data: {
-          name: data.name,
-          contactEmail: data.contactEmail,
-          contactPhone: data.contactPhone ?? null,
-          addressLine1: data.addressLine1,
-          addressLine2: data.addressLine2 ?? null,
-          city: data.city,
-          state: data.state,
-          zip: data.zip,
-        },
-        select: { id: true },
-      });
-
-      // Scoped by companyId IS NULL so a double-submit (second tab, rapid
-      // re-click) can't relink an account that just got a company.
-      const linked = await tx.user.updateMany({
-        where: { id: user.id, companyId: null },
-        data: { companyId: company.id },
-      });
-      if (linked.count !== 1) throw new Error(ALREADY_LINKED_SENTINEL);
-
-      companyId = company.id;
-    });
-  } catch (err) {
-    if (err instanceof Error && err.message === DUPLICATE_SENTINEL) {
-      duplicate = true;
-    } else if (isUniqueNameViolation(err)) {
-      duplicate = true;
-    } else if (err instanceof Error && err.message === ALREADY_LINKED_SENTINEL) {
-      redirect("/company");
-    } else {
-      throw err;
-    }
+  const created = await createRequest(
+    { id: user.id, email: user.email, firstName: user.firstName },
+    "COMPANY",
+    {
+      name: data.name,
+      contactEmail: data.contactEmail,
+      contactPhone: data.contactPhone,
+      addressLine1: data.addressLine1,
+      addressLine2: data.addressLine2,
+      city: data.city,
+      state: data.state,
+      zip: data.zip,
+    },
+    undefined,
+    (await headers()).get("origin") ?? "https://dentalace.org",
+  );
+  if (!created.ok) {
+    redirect(`${REGISTER_ROUTE}?error=validation&detail=${encodeURIComponent(created.message)}`);
   }
-  if (duplicate) {
-    redirect(`${REGISTER_ROUTE}?error=duplicate`);
-  }
-
-  // Notify AADB. Email failure never blocks the registration.
-  const adminEmail = process.env.AADB_ADMIN_EMAIL;
-  if (adminEmail && companyId) {
-    try {
-      const h = await headers();
-      const proto = h.get("x-forwarded-proto") ?? "https";
-      const host = h.get("host") ?? "dentalace.org";
-      const adminUrl = `${appBaseUrl(`${proto}://${host}`)}/admin/companies/${companyId}`;
-      const props = {
-        companyName: data.name,
-        contactEmail: data.contactEmail,
-        contactPhone: data.contactPhone,
-        address: [
-          data.addressLine1,
-          data.addressLine2,
-          `${data.city}, ${data.state} ${data.zip}`,
-        ]
-          .filter(Boolean)
-          .join(", "),
-        registrantName:
-          [user.firstName, user.lastName].filter(Boolean).join(" ") || user.email,
-        registrantEmail: user.email,
-        registeredAt: new Date().toLocaleString(),
-        adminUrl,
-      };
-      await sendEmail({
-        to: adminEmail,
-        subject: CompanyRegisteredEmail.subject(props),
-        react: CompanyRegisteredEmail(props),
-      });
-    } catch (err) {
-      console.error("[registerCompany] AADB notification email failed", err);
-    }
-  }
-
-  redirect("/company?just=registered");
+  redirect(`${REGISTER_ROUTE}?submitted=1`);
 }
