@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { headers } from "next/headers";
 import { prisma } from "@/lib/prisma";
-import { homePathFor } from "@/lib/auth/session";
+import { landingPathFor } from "@/lib/auth/session";
 import { rateLimit } from "@/lib/rate-limit";
 import {
   signSession,
@@ -59,7 +59,14 @@ export async function POST(request: NextRequest) {
 
   const row = await prisma.user.findUnique({
     where: { id: data.user.id },
-    select: { id: true, emailVerifiedAt: true, disabledAt: true },
+    select: {
+      id: true,
+      emailVerifiedAt: true,
+      disabledAt: true,
+      staffRole: true,
+      companyId: true,
+      verifyAccess: true,
+    },
   });
   if (!row) return redirectTo("/login?error=noaccount");
   // Block accounts whose email has not been verified (no harvest, no access).
@@ -67,7 +74,7 @@ export async function POST(request: NextRequest) {
   // Block suspended accounts (admin-disabled; reversible).
   if (row.disabledAt) return redirectTo("/login?error=suspended");
 
-  const response = redirectTo(homePathFor());
+  const response = redirectTo(landingPathFor(row));
   response.cookies.set({
     name: SESSION_COOKIE_NAME,
     value: signSession({ userId: data.user.id }),
