@@ -145,6 +145,10 @@ model User {
   board            Board?    @relation(fields: [boardId], references: [id])
   reminderSettings Json      @default("{}") @map("reminder_settings") // {d90,d60,d30,d7,categoryGap}
   emailVerifiedAt  DateTime? @map("email_verified_at") // null until the signup email is confirmed
+  // Set by an app admin to suspend the account: blocks sign-in (route + session
+  // guard) and is reversible. We never hard-delete a user (compliance/audit), so
+  // suspension is the terminal lifecycle state. See lib/admin/users.ts.
+  disabledAt       DateTime? @map("disabled_at")
   createdAt        DateTime  @default(now()) @map("created_at")
   lastLogin        DateTime? @map("last_login")
 
@@ -154,8 +158,48 @@ model User {
   subscription          ProSubscription?
   initiatedAuditBatches AuditBatch[]        @relation("InitiatedBy")
   sentNotices           NoticeSent[]        @relation("SentBy")
+  adminActionsPerformed AdminAuditLog[]     @relation("AdminActor")
+  adminActionsTargeting AdminAuditLog[]     @relation("AdminTarget")
 
   @@map("users")
+}
+
+// Append-only ledger of app-admin actions on users (role/entitlement changes,
+// suspensions, profile edits, verification/password resets). ADMIN-readable
+// (RLS in sql-migrations). Written in-transaction with the mutation it records
+// via lib/admin/audit.ts recordAdminAction(). targetUserId is null for actions
+// whose target row no longer exists; the target's identity is kept in details.
+enum AdminAuditAction {
+  PROFILE_UPDATED
+  STAFF_ROLE_CHANGED
+  COMPANY_LINKED
+  COMPANY_UNLINKED
+  PROTRACK_TIER_CHANGED
+  VERIFY_ACCESS_CHANGED
+  ACCOUNT_SUSPENDED
+  ACCOUNT_UNSUSPENDED
+  WORK_REASSIGNED
+  EMAIL_VERIFIED_MANUALLY
+  VERIFICATION_RESENT
+  SET_PASSWORD_LINK_SENT
+  STAFF_ACCOUNT_CREATED
+}
+
+model AdminAuditLog {
+  id           String           @id @default(uuid()) @db.Uuid
+  actorUserId  String           @map("actor_user_id") @db.Uuid
+  actor        User             @relation("AdminActor", fields: [actorUserId], references: [id])
+  targetUserId String?          @map("target_user_id") @db.Uuid
+  target       User?            @relation("AdminTarget", fields: [targetUserId], references: [id])
+  action       AdminAuditAction
+  summary      String
+  details      Json             @default("{}")
+  createdAt    DateTime         @default(now()) @map("created_at")
+
+  @@index([createdAt])
+  @@index([targetUserId, createdAt])
+  @@index([actorUserId, createdAt])
+  @@map("admin_audit_log")
 }
 
 model Company {

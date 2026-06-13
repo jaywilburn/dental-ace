@@ -54,7 +54,13 @@ export const portalNav: Record<PortalArea, NavSection[]> = {
       items: [
         { label: "Dashboard", href: "/admin", icon: "📊" },
         { label: "Companies", href: "/admin/companies", icon: "🏢" },
-        { label: "Staff Users", href: "/admin/users", icon: "👥" },
+        { label: "Users", href: "/admin/users", icon: "👥" },
+      ],
+    },
+    {
+      label: "Governance",
+      items: [
+        { label: "Audit Log", href: "/admin/audit", icon: "🧾" },
       ],
     },
   ],

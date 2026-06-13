@@ -58,8 +58,23 @@ const prisma = new PrismaClient({
 });
 
 const SEEDS = [
+  // The three named app admins. Resend's sending domain isn't verified yet, so
+  // invite emails won't deliver — they get a known dev password here and can
+  // sign in immediately. Rotate these before any client demo / repo transfer.
   {
     email: "jay@wilburncreative.com",
+    password: "ChangeMeNow!2026",
+    staffRole: StaffRole.ADMIN,
+    companyName: null,
+  },
+  {
+    email: "john@johnstampermedia.com",
+    password: "ChangeMeNow!2026",
+    staffRole: StaffRole.ADMIN,
+    companyName: null,
+  },
+  {
+    email: "christy@johnstampermedia.com",
     password: "ChangeMeNow!2026",
     staffRole: StaffRole.ADMIN,
     companyName: null,

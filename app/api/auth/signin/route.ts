@@ -59,11 +59,13 @@ export async function POST(request: NextRequest) {
 
   const row = await prisma.user.findUnique({
     where: { id: data.user.id },
-    select: { id: true, emailVerifiedAt: true },
+    select: { id: true, emailVerifiedAt: true, disabledAt: true },
   });
   if (!row) return redirectTo("/login?error=noaccount");
   // Block accounts whose email has not been verified (no harvest, no access).
   if (!row.emailVerifiedAt) return redirectTo("/login?error=unverified");
+  // Block suspended accounts (admin-disabled; reversible).
+  if (row.disabledAt) return redirectTo("/login?error=suspended");
 
   const response = redirectTo(homePathFor());
   response.cookies.set({

@@ -50,11 +50,17 @@ export async function getCurrentUser(): Promise<SessionUser | null> {
       proExpiresAt: true,
       verifyAccess: true,
       boardId: true,
+      disabledAt: true,
     },
   });
   if (!user) return null;
 
-  return { id: payload.userId, ...user };
+  // Suspended accounts have no session: an admin can suspend a signed-in user and
+  // they're bounced on their next request (the 7-day cookie alone won't expire).
+  const { disabledAt, ...rest } = user;
+  if (disabledAt) return null;
+
+  return { id: payload.userId, ...rest };
 }
 
 /** Any signed-in account (the floor for ProTrack, which every account has). */

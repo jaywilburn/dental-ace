@@ -142,6 +142,8 @@ function errorMessageFor(error: string | undefined): string | null {
       return "Invalid email or password.";
     case "unverified":
       return "Please confirm your email address before signing in.";
+    case "suspended":
+      return "This account has been suspended. Contact an administrator.";
     case "verification":
       return "That verification link is invalid or expired. Resend it below.";
     case "noaccount":
