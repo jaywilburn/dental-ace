@@ -94,6 +94,19 @@ enum RequirementStatus {
   CONFIRMED // matches John's authoritative file
 }
 
+enum AccessRequestKind {
+  COMPANY
+  BOARD
+  REVIEWER
+  ADMIN
+}
+
+enum AccessRequestStatus {
+  PENDING
+  APPROVED
+  DENIED
+}
+
 // ── Phase 3 (Verify) enums ──────────────────────────────────────────────────
 
 enum BatchStatus {
@@ -160,6 +173,8 @@ model User {
   sentNotices           NoticeSent[]        @relation("SentBy")
   adminActionsPerformed AdminAuditLog[]     @relation("AdminActor")
   adminActionsTargeting AdminAuditLog[]     @relation("AdminTarget")
+  accessRequests        AccessRequest[]     @relation("AccessRequester")
+  accessRequestsDecided AccessRequest[]     @relation("AccessDecider")
 
   @@map("users")
 }
@@ -183,6 +198,8 @@ enum AdminAuditAction {
   VERIFICATION_RESENT
   SET_PASSWORD_LINK_SENT
   STAFF_ACCOUNT_CREATED
+  ACCESS_REQUEST_APPROVED
+  ACCESS_REQUEST_DENIED
 }
 
 model AdminAuditLog {
@@ -200,6 +217,32 @@ model AdminAuditLog {
   @@index([targetUserId, createdAt])
   @@index([actorUserId, createdAt])
   @@map("admin_audit_log")
+}
+
+model AccessRequest {
+  id              String              @id @default(uuid()) @db.Uuid
+  userId          String              @map("user_id") @db.Uuid
+  // FK ON DELETE RESTRICT: deleting a user who has access requests is blocked; deprovision via the admin user flow first.
+  // decidedBy below is SET NULL on admin deletion so historical requests are preserved.
+  user            User                @relation("AccessRequester", fields: [userId], references: [id])
+  kind            AccessRequestKind
+  status          AccessRequestStatus @default(PENDING)
+  // Kind-specific data. COMPANY -> full company-register form; BOARD -> {state, boardName}; staff -> {}.
+  payload         Json                @default("{}")
+  // Optional free-text justification (any kind).
+  note            String?
+  // Denormalized one-line description for the admin queue (no JSON parse needed).
+  label           String
+
+  decidedByUserId String?             @map("decided_by_user_id") @db.Uuid
+  decidedBy       User?               @relation("AccessDecider", fields: [decidedByUserId], references: [id])
+  decidedAt       DateTime?           @map("decided_at")
+  denyReason      String?             @map("deny_reason")
+  createdAt       DateTime            @default(now()) @map("created_at")
+
+  @@index([status, createdAt])
+  @@index([userId, status])
+  @@map("access_requests")
 }
 
 model Company {
