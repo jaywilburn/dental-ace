@@ -51,7 +51,7 @@ export default async function ApplicationCourseInfoPage({
         subtitle="Step 2 of 6 — Course Information"
         action={
           <span className="rounded-full bg-ace-bg px-2.5 py-1 text-[10px] font-bold text-ace-dark">
-            {totalCredits.applicationCredits + totalCredits.expeditedCredits} Credits Available
+            {totalCredits.applicationCredits} Credits Available
           </span>
         }
       />
@@ -107,7 +107,7 @@ export default async function ApplicationCourseInfoPage({
           <FormField fullWidth>
             <FormLabel
               required
-              hint="Live formats need a presenter available for Q&A; all formats require a 5-question quiz (built in a later step)."
+              hint="Just your primary format — this does not limit you. Once approved, you can deliver this course in any of the formats you were accredited for."
             >
               Format you will use MOST to distribute this course
             </FormLabel>

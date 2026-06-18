@@ -1,4 +1,4 @@
-import { Section, Text } from "@react-email/components";
+import { Text } from "@react-email/components";
 import { BrandEmail, DetailGrid, CtaButton, emailColors } from "./_brand";
 
 /*
@@ -16,7 +16,6 @@ export type ApplicationSubmittedProps = {
   ceHours: number;
   deliveryFormat: string;
   submittedAt: string;
-  isExpedited: boolean;
   reviewUrl: string;
 };
 
@@ -27,13 +26,12 @@ export default function ApplicationSubmittedEmail({
   ceHours,
   deliveryFormat,
   submittedAt,
-  isExpedited,
   reviewUrl,
 }: ApplicationSubmittedProps) {
   return (
     <BrandEmail
       preview={`New application: ${courseTitle}`}
-      subject={isExpedited ? "Expedited Application Submitted" : "New Application Submitted"}
+      subject="New Application Submitted"
     >
       <Text style={{ margin: 0, fontSize: 14, color: emailColors.navy }}>
         {recipientName},
@@ -54,7 +52,6 @@ export default function ApplicationSubmittedEmail({
           { label: "Course", value: courseTitle },
           { label: "CE Hours", value: `${ceHours.toFixed(1)} hours · ${deliveryFormat}` },
           { label: "Submitted", value: submittedAt },
-          { label: "Type", value: isExpedited ? "Expedited Review" : "Standard Review" },
         ]}
       />
       <CtaButton href={reviewUrl} label="Review Application →" />
@@ -66,14 +63,11 @@ export default function ApplicationSubmittedEmail({
           lineHeight: 1.6,
         }}
       >
-        Standard reviews complete within ~10 business days. Expedited reviews target
-        ~3 business days.
+        Reviews complete within about 10 business days.
       </Text>
     </BrandEmail>
   );
 }
 
-ApplicationSubmittedEmail.subject = ({ courseTitle, isExpedited }: ApplicationSubmittedProps) =>
-  isExpedited
-    ? `[EXPEDITED] New Application — ${courseTitle}`
-    : `New Application — ${courseTitle}`;
+ApplicationSubmittedEmail.subject = ({ courseTitle }: ApplicationSubmittedProps) =>
+  `New Application: ${courseTitle}`;

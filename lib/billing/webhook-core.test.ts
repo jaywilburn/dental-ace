@@ -102,7 +102,6 @@ describe("handleCheckoutCompleted idempotency", () => {
       data: expect.objectContaining({
         quantity: 5,
         amountCents: 45_000, // 5 courses at the $90 tier
-        isExpedited: false,
       }),
     });
     expect(tx.company.update).toHaveBeenCalledWith({

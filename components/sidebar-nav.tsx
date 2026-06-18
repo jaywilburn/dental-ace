@@ -35,19 +35,34 @@ export function SidebarNav({ nav }: { nav: NavSection[] }) {
           ) : null}
           {section.items.map((item) => {
             const isActive = item.href === activeHref;
-            return (
+            const className = cn(
+              "flex items-center gap-2 border-l-2 border-transparent px-4 py-1.5 text-[11px] font-medium text-white/50 transition hover:bg-white/[0.04] hover:text-white",
+              isActive && "border-ace bg-ace/[0.1] text-white hover:bg-ace/[0.15]",
+            );
+            const content = (
+              <>
+                <span className="text-sm">{item.icon}</span>
+                {item.label}
+              </>
+            );
+            return item.external ? (
+              <a
+                key={item.label}
+                href={item.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={className}
+              >
+                {content}
+              </a>
+            ) : (
               <Link
                 key={item.label}
                 href={item.href}
                 aria-current={isActive ? "page" : undefined}
-                className={cn(
-                  "flex items-center gap-2 border-l-2 border-transparent px-4 py-1.5 text-[11px] font-medium text-white/50 transition hover:bg-white/[0.04] hover:text-white",
-                  isActive &&
-                    "border-ace bg-ace/[0.1] text-white hover:bg-ace/[0.15]",
-                )}
+                className={className}
               >
-                <span className="text-sm">{item.icon}</span>
-                {item.label}
+                {content}
               </Link>
             );
           })}

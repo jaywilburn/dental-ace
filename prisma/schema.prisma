@@ -38,7 +38,6 @@ enum ApplicationStatus {
 enum BillingTransactionType {
   APP_CREDIT
   CERT_BUNDLE
-  EXPEDITE
   ADMIN_OVERRIDE
 }
 
@@ -257,7 +256,6 @@ model Company {
   zip                         String?
   stripeCustomerId            String?   @unique @map("stripe_customer_id")
   applicationCredits          Int       @default(0) @map("application_credits")
-  expeditedCredits            Int       @default(0) @map("expedited_credits")
   certBalance                 Int       @default(0) @map("cert_balance")
   certAlertThreshold          Int       @default(25) @map("cert_alert_threshold")
   totalCertsIssued            Int       @default(0) @map("total_certs_issued")
@@ -283,7 +281,6 @@ model CourseApplication {
   courseType      String?           @map("course_type")
   deliveryMethod  String?           @map("delivery_method")
   applicationData Json              @map("application_data") // all 34 fields per SOW
-  isExpedited     Boolean           @default(false) @map("is_expedited")
   submittedAt     DateTime?         @map("submitted_at")
   reviewedById    String?           @map("reviewed_by_id") @db.Uuid
   reviewedBy      User?             @relation("ReviewedBy", fields: [reviewedById], references: [id])
@@ -293,8 +290,14 @@ model CourseApplication {
 
   accreditedCourse AccreditedCourse?
 
+  // When set, this application is a renewal of an existing accredited course;
+  // approving it supersedes that course and issues a fresh 3-year accreditation.
+  renewalOfCourseId String?           @map("renewal_of_course_id") @db.Uuid
+  renewalOfCourse   AccreditedCourse? @relation("CourseRenewals", fields: [renewalOfCourseId], references: [id])
+
   @@index([companyId, status])
-  @@index([status, isExpedited, submittedAt])
+  @@index([status, submittedAt])
+  @@index([renewalOfCourseId])
   @@map("course_applications")
 }
 
@@ -312,10 +315,14 @@ model AccreditedCourse {
   approvalLetterUrl String?           @map("approval_letter_url")
   quizQuestions     Json              @map("quiz_questions") // 5-question quiz
   certsIssuedCount  Int               @default(0) @map("certs_issued_count")
+  // Set when a renewal of this course is approved; the old row is kept for
+  // history (issued certs still reference it) but is no longer the live course.
+  supersededAt      DateTime?         @map("superseded_at")
   createdAt         DateTime          @default(now()) @map("created_at")
 
-  issuedCertificates IssuedCertificate[]
-  eventSessions      EventSession[]
+  issuedCertificates  IssuedCertificate[]
+  eventSessions       EventSession[]
+  renewalApplications CourseApplication[] @relation("CourseRenewals")
 
   @@index([companyId])
   @@index([expiresAt])
@@ -385,7 +392,6 @@ model BillingTransaction {
   amountCents     Int                    @map("amount_cents")
   stripePaymentId String?                @map("stripe_payment_id")
   stripeEventId   String?                @unique @map("stripe_event_id") // webhook idempotency key
-  isExpedited     Boolean                @default(false) @map("is_expedited")
   performedById   String?                @map("performed_by_id") @db.Uuid // for ADMIN_OVERRIDE
   createdAt       DateTime               @default(now()) @map("created_at")
 

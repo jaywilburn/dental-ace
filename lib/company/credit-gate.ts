@@ -7,12 +7,11 @@
 
 export type CompanyCredits = {
   applicationCredits: number;
-  expeditedCredits: number;
 };
 
-/** True when the company holds at least one application credit of either pool. */
+/** True when the company holds at least one application credit. */
 export function hasAvailableCredits(credits: CompanyCredits): boolean {
-  return credits.applicationCredits + credits.expeditedCredits > 0;
+  return credits.applicationCredits > 0;
 }
 
 /**

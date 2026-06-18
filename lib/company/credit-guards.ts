@@ -24,7 +24,7 @@ export async function requireApplicationCredits(): Promise<{
 
   const credits = await prisma.company.findUnique({
     where: { id: user.companyId },
-    select: { applicationCredits: true, expeditedCredits: true },
+    select: { applicationCredits: true },
   });
   if (!credits || !hasAvailableCredits(credits)) {
     redirect("/company/buy/credits?need=credits");
@@ -41,7 +41,7 @@ export async function requireCertificateLogAccess(): Promise<{
   const [credits, issuedCertCount] = await Promise.all([
     prisma.company.findUnique({
       where: { id: user.companyId },
-      select: { applicationCredits: true, expeditedCredits: true },
+      select: { applicationCredits: true },
     }),
     prisma.issuedCertificate.count({ where: { companyId: user.companyId } }),
   ]);

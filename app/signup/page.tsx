@@ -2,11 +2,9 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { BrandMark } from "@/components/brand-mark";
 import { getCurrentUser } from "@/lib/auth/session";
-import {
-  LICENSE_TYPE_OPTIONS,
-  STATE_CODES,
-  US_STATES,
-} from "@/lib/protrack/reference";
+import { LICENSE_TYPE_OPTIONS } from "@/lib/protrack/reference";
+import { JurisdictionOptions } from "@/components/jurisdiction-options";
+import { SignupRoleSelect } from "@/components/auth/signup-role-select";
 
 /*
   Public platform sign-up. One account for DentalACE One; every new account gets
@@ -24,25 +22,27 @@ const fieldClass =
   "w-full rounded-md border border-border bg-white px-3 py-2 text-[13px] text-navy outline-none focus:border-ace";
 const labelClass = "mb-1 block text-[11px] font-semibold text-text-mid";
 
-const STATES_BY_NAME = [...STATE_CODES].sort((a, b) =>
-  US_STATES[a]!.localeCompare(US_STATES[b]!),
-);
 
-type ValidRole = "individual" | "company";
+type ValidRole = "individual" | "company" | "staff";
 
 function isValidRole(as: string | undefined): as is ValidRole {
-  return as === "individual" || as === "company";
+  return as === "individual" || as === "company" || as === "staff";
 }
 
 export default async function SignupPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; sent?: string; as?: string }>;
+  searchParams: Promise<{
+    error?: string;
+    sent?: string;
+    as?: string;
+    email?: string;
+  }>;
 }) {
   const user = await getCurrentUser();
   if (user) redirect("/home");
 
-  const { error, sent, as } = await searchParams;
+  const { error, sent, as, email } = await searchParams;
   if (sent) return <CheckYourEmail email={sent} />;
 
   if (!isValidRole(as)) {
@@ -60,7 +60,9 @@ export default async function SignupPage({
           <p className="mt-1 max-w-sm text-[12px] text-white/55 text-pretty">
             {as === "individual"
               ? "Track your CE with ProTrack Free. You can add DentalACE or Verify later."
-              : "Create your account first. After you confirm your email and sign in, you'll request CE Company access from your home screen."}
+              : as === "staff"
+                ? "Create your account first. After you confirm your email and sign in, request Reviewer or Admin access from your home screen."
+                : "Create your account first. After you confirm your email and sign in, you'll request CE Company access from your home screen."}
           </p>
         </div>
 
@@ -119,6 +121,7 @@ export default async function SignupPage({
                 className={fieldClass}
                 required
                 autoComplete="email"
+                defaultValue={email ?? ""}
               />
             </div>
 
@@ -169,7 +172,7 @@ export default async function SignupPage({
                   </div>
                   <div>
                     <label htmlFor="primaryState" className={labelClass}>
-                      Primary state
+                      Primary state/province
                     </label>
                     <select
                       id="primaryState"
@@ -178,11 +181,7 @@ export default async function SignupPage({
                       defaultValue=""
                     >
                       <option value="">Not now</option>
-                      {STATES_BY_NAME.map((code) => (
-                        <option key={code} value={code}>
-                          {US_STATES[code]}
-                        </option>
-                      ))}
+                      <JurisdictionOptions />
                     </select>
                   </div>
                 </div>
@@ -247,47 +246,12 @@ function RoleChooser() {
         </div>
 
         <div className="rounded-xl border border-border bg-white p-6 shadow-sm">
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Link
-              href="/signup?as=individual"
-              className="rounded-xl border border-border bg-white p-5 transition hover:border-ace hover:shadow-sm"
-            >
-              <h2 className="font-serif text-base font-semibold text-navy">
-                Track my CE
-              </h2>
-              <p className="mt-1 text-[12px] text-text-muted text-pretty">
-                Log and track your continuing education with ProTrack.
-              </p>
-            </Link>
-
-            <Link
-              href="/signup?as=company"
-              className="rounded-xl border border-border bg-white p-5 transition hover:border-ace hover:shadow-sm"
-            >
-              <h2 className="font-serif text-base font-semibold text-navy">
-                Accredit courses
-              </h2>
-              <p className="mt-1 text-[12px] text-text-muted text-pretty">
-                Submit courses for accreditation as a CE provider.
-              </p>
-            </Link>
-
-            <Link
-              href="/signup/board"
-              className="rounded-xl border border-border bg-white p-5 transition hover:border-ace hover:shadow-sm sm:col-span-2"
-            >
-              <h2 className="font-serif text-base font-semibold text-navy">
-                State board
-              </h2>
-              <p className="mt-1 text-[12px] text-text-muted text-pretty">
-                Run random CE audits with Verify.
-              </p>
-            </Link>
-          </div>
+          <SignupRoleSelect />
 
           <p className="mt-5 rounded-lg bg-surface px-4 py-3 text-[11px] text-text-muted text-pretty">
-            AADB staff? Reviewers and admins are added by invitation. Create an
-            account, then request access from your home screen.
+            Every account starts on ProTrack Free. DentalACE (CE provider) and
+            AADB staff access are granted after a quick approval; state boards
+            self-register with a .gov email.
           </p>
         </div>
 

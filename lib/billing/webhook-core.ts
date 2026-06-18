@@ -66,15 +66,13 @@ export async function handleCheckoutCompleted(
   const units = sku.quantityPriced ? clampAppCourseQty(input.quantity ?? 1) : 1;
   const granted = {
     applicationCredits: (sku.grants.applicationCredits ?? 0) * units,
-    expeditedCredits: (sku.grants.expeditedCredits ?? 0) * units,
     certBalance: (sku.grants.certBalance ?? 0) * units,
   };
   const amountCents = sku.quantityPriced
     ? appCourseTotalCents(units)
     : sku.amountCents;
 
-  const quantity =
-    granted.applicationCredits || granted.expeditedCredits || granted.certBalance || 0;
+  const quantity = granted.applicationCredits || granted.certBalance || 0;
 
   try {
     await prisma.$transaction(async (tx) => {
@@ -87,7 +85,6 @@ export async function handleCheckoutCompleted(
           amountCents,
           stripePaymentId: input.stripePaymentId ?? null,
           stripeEventId: input.stripeEventId,
-          isExpedited: sku.id === "app_1_exp",
         },
       });
 
@@ -99,13 +96,6 @@ export async function handleCheckoutCompleted(
           where: { id: input.companyId },
           data: {
             applicationCredits: { increment: granted.applicationCredits },
-          },
-        });
-      } else if (granted.expeditedCredits) {
-        await tx.company.update({
-          where: { id: input.companyId },
-          data: {
-            expeditedCredits: { increment: granted.expeditedCredits },
           },
         });
       } else if (granted.certBalance) {

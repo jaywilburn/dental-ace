@@ -17,16 +17,30 @@ const PAGE_SIZE = 25;
 export default async function CertificateLogPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; page?: string }>;
+  searchParams: Promise<{ q?: string; page?: string; course?: string }>;
 }) {
   // Redirects to /company/buy/credits when the company has neither credits
   // nor any issued certificates.
   const { user } = await requireCertificateLogAccess();
-  const { q, page } = await searchParams;
+  const { q, page, course } = await searchParams;
   const pageNum = Math.max(1, Number(page ?? "1") || 1);
   const query = (q ?? "").trim();
 
-  const where = buildCertWhere(user.companyId, query);
+  // Course filter options (this company's accredited courses).
+  const companyCourses = await prisma.accreditedCourse.findMany({
+    where: { companyId: user.companyId ?? "" },
+    orderBy: { approvedAt: "desc" },
+    select: {
+      id: true,
+      courseIdNumber: true,
+      application: { select: { courseTitle: true } },
+    },
+  });
+  const courseFilter = companyCourses.some((c) => c.id === course)
+    ? (course as string)
+    : "";
+
+  const where = buildCertWhere(user.companyId, query, courseFilter);
 
   const [total, certs] = await Promise.all([
     prisma.issuedCertificate.count({ where }),
@@ -35,6 +49,14 @@ export default async function CertificateLogPage({
       orderBy: { issuedAt: "desc" },
       skip: (pageNum - 1) * PAGE_SIZE,
       take: PAGE_SIZE,
+      include: {
+        course: {
+          select: {
+            courseIdNumber: true,
+            application: { select: { courseTitle: true, ceHours: true } },
+          },
+        },
+      },
     }),
   ]);
 
@@ -57,18 +79,47 @@ export default async function CertificateLogPage({
       />
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <form action="/company/certificates" method="get" className="flex-1">
+        <form
+          action="/company/certificates"
+          method="get"
+          className="flex flex-1 flex-wrap items-center gap-2"
+        >
           <input
             type="search"
             name="q"
             defaultValue={query}
             placeholder="Search attendee name or email"
-            className="w-full max-w-sm rounded-md border border-border px-3 py-2 text-[13px]"
+            className="min-w-[200px] max-w-sm flex-1 rounded-md border border-border px-3 py-2 text-[13px]"
           />
+          <select
+            name="course"
+            defaultValue={courseFilter}
+            className="rounded-md border border-border bg-white px-3 py-2 text-[13px] text-navy"
+          >
+            <option value="">All courses</option>
+            {companyCourses.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.application.courseTitle ?? c.courseIdNumber}
+              </option>
+            ))}
+          </select>
+          <button
+            type="submit"
+            className="rounded-md bg-navy px-3.5 py-2 text-[12px] font-semibold text-white hover:bg-navy/90"
+          >
+            Apply
+          </button>
         </form>
         {total > 0 ? (
           <a
-            href={`/api/company/certificates/export${query ? `?${new URLSearchParams({ q: query })}` : ""}`}
+            href={`/api/company/certificates/export${
+              query || courseFilter
+                ? `?${new URLSearchParams({
+                    ...(query ? { q: query } : {}),
+                    ...(courseFilter ? { course: courseFilter } : {}),
+                  })}`
+                : ""
+            }`}
             className="rounded-md border border-border bg-white px-3.5 py-2 text-[12px] font-semibold text-navy transition-colors hover:bg-surface"
           >
             Export CSV
@@ -87,7 +138,8 @@ export default async function CertificateLogPage({
               <tr className="border-b border-border bg-surface text-left text-[10px] uppercase tracking-wide text-text-muted">
                 <th className="px-4 py-2 font-semibold">Issued</th>
                 <th className="px-4 py-2 font-semibold">Attendee</th>
-                <th className="px-4 py-2 font-semibold">Email</th>
+                <th className="px-4 py-2 font-semibold">Course</th>
+                <th className="px-4 py-2 text-right font-semibold">CE Hours</th>
                 <th className="px-4 py-2 font-semibold">License</th>
                 <th className="px-4 py-2 font-semibold">Certificate</th>
               </tr>
@@ -98,8 +150,21 @@ export default async function CertificateLogPage({
                   <td className="px-4 py-2 text-text-muted">
                     {cert.issuedAt.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
                   </td>
-                  <td className="px-4 py-2 font-medium text-navy">{cert.attendeeName}</td>
-                  <td className="px-4 py-2 text-text-mid">{cert.attendeeEmail}</td>
+                  <td className="px-4 py-2 font-medium text-navy">
+                    {cert.attendeeName}
+                    <span className="block text-[11px] font-normal text-text-muted">
+                      {cert.attendeeEmail}
+                    </span>
+                  </td>
+                  <td className="px-4 py-2 text-text-mid">
+                    {cert.course.application.courseTitle ??
+                      cert.course.courseIdNumber}
+                  </td>
+                  <td className="px-4 py-2 text-right text-text-mid tabular-nums">
+                    {cert.course.application.ceHours
+                      ? Number(cert.course.application.ceHours).toFixed(1)
+                      : "—"}
+                  </td>
                   <td className="px-4 py-2 text-text-muted">
                     {cert.licenseType ?? ""} {cert.licenseNumber ?? ""}
                   </td>
@@ -124,12 +189,12 @@ export default async function CertificateLogPage({
           <span>Page {pageNum} of {totalPages}</span>
           <div className="flex gap-2">
             {pageNum > 1 && (
-              <Link className="rounded-md border border-border px-3 py-1" href={`/company/certificates?${new URLSearchParams({ ...(query ? { q: query } : {}), page: String(pageNum - 1) })}`}>
+              <Link className="rounded-md border border-border px-3 py-1" href={`/company/certificates?${new URLSearchParams({ ...(query ? { q: query } : {}), ...(courseFilter ? { course: courseFilter } : {}), page: String(pageNum - 1) })}`}>
                 Previous
               </Link>
             )}
             {pageNum < totalPages && (
-              <Link className="rounded-md border border-border px-3 py-1" href={`/company/certificates?${new URLSearchParams({ ...(query ? { q: query } : {}), page: String(pageNum + 1) })}`}>
+              <Link className="rounded-md border border-border px-3 py-1" href={`/company/certificates?${new URLSearchParams({ ...(query ? { q: query } : {}), ...(courseFilter ? { course: courseFilter } : {}), page: String(pageNum + 1) })}`}>
                 Next
               </Link>
             )}

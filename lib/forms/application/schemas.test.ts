@@ -106,21 +106,10 @@ describe("step2Schema additions", () => {
     highestDegree: "Doctoral",
     educationPart1: "DDS, Baylor, 2005",
     creatorExperience: "Ten years of clinical research.",
-    cvResume: "DDS Baylor 2005. Professor of Periodontics since 2012.",
   };
 
   it("accepts when only Part 1 of education is provided", () => {
     expect(step2Schema.safeParse(base).success).toBe(true);
-  });
-
-  it("requires the CV / resume as text (no longer an upload)", () => {
-    expect(step2Schema.safeParse({ ...base, cvResume: "" }).success).toBe(false);
-    expect(
-      step2Schema.safeParse({
-        ...base,
-        cvResume: { storagePath: "p", filename: "cv.pdf", uploadedAt: "now" },
-      }).success,
-    ).toBe(false);
   });
 
   it("defaults educationPart4 to N/A", () => {

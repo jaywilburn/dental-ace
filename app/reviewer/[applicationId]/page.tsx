@@ -119,7 +119,7 @@ export default async function ReviewerApplicationPage({
                 </label>
                 <textarea
                   name="reviewerNotes"
-                  defaultValue="Course materials are thorough. Objectives clearly meet ADA guidelines. Approve."
+                  defaultValue="Course materials are thorough. Objectives clearly meet AADB guidelines. Approve."
                   className="min-h-[80px] w-full rounded-md border border-border bg-white px-3 py-2 text-[12px] text-navy"
                 />
                 <button

@@ -123,9 +123,6 @@ function formatGrants(sku: Sku, quantity: number): string {
     const n = sku.grants.applicationCredits * units;
     return `+${n} application credit${n === 1 ? "" : "s"}`;
   }
-  if (sku.grants.expeditedCredits) {
-    return `+${sku.grants.expeditedCredits} expedited application credit`;
-  }
   if (sku.grants.certBalance) {
     return `+${sku.grants.certBalance} certificates`;
   }

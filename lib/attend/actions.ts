@@ -200,6 +200,10 @@ export async function submitAttendance(input: unknown): Promise<AttendResult> {
         year: "numeric",
       }),
       verifyUrl: `${appBase}/attend/${sub.token}`,
+      // Lands on sign-up prefilled with their email; ProTrack Free is created
+      // on registration and this cert is auto-claimed on email verification
+      // (syncIssuedCertsForLicensee). See lib/protrack/ace-sync.ts.
+      activateUrl: `${appBase}/signup?email=${encodeURIComponent(sub.attendeeEmail)}`,
     };
     await sendEmail({
       to: sub.attendeeEmail,

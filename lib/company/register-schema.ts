@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { US_STATES } from "@/lib/protrack/reference";
+import { JURISDICTIONS } from "@/lib/protrack/reference";
 
 /*
   Validation for the /company/register form (self-serve CE provider sign-up).
@@ -43,8 +43,8 @@ export const companyRegisterSchema = z.object({
     .string()
     .trim()
     .toUpperCase()
-    .length(2, "Pick a state")
-    .refine((code) => Boolean(US_STATES[code]), "Pick a valid US state"),
+    .length(2, "Pick a state or province")
+    .refine((code) => Boolean(JURISDICTIONS[code]), "Pick a valid state or province"),
   zip: z
     .string()
     .trim()

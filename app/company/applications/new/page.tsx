@@ -49,7 +49,7 @@ export default async function ApplicationOrgStepPage({
         subtitle="Step 1 of 6 — Organization & Contact"
         action={
           <span className="rounded-full bg-ace-bg px-2.5 py-1 text-[10px] font-bold text-ace-dark">
-            {totalCredits.applicationCredits + totalCredits.expeditedCredits} Credits Available
+            {totalCredits.applicationCredits} Credits Available
           </span>
         }
       />

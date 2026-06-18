@@ -129,19 +129,6 @@ export default async function ApplicationStep2Page({
               placeholder="Education, credentials, clinical experience, teaching history..."
             />
           </FormField>
-          <FormField fullWidth>
-            <FormLabel required hint="Paste or type the creator's CV or resume">
-              CV / Resume
-            </FormLabel>
-            <FormTextarea
-              name="cvResume"
-              defaultValue={typeof draft.cvResume === "string" ? draft.cvResume : ""}
-              required
-              minLength={1}
-              maxLength={20000}
-              className="min-h-[140px]"
-            />
-          </FormField>
         </FormCard>
         <FormNav
           back={{ href: "/company/applications/new/course", label: "Back" }}

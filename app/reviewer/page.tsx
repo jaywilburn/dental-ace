@@ -2,35 +2,97 @@ import Link from "next/link";
 import { PageHeader } from "@/components/portal-shell";
 import { requireStaff } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
+import { DELIVERY_FORMATS } from "@/lib/forms/application/schemas";
+import type { Prisma } from "@prisma/client";
 
 /*
-  Reviewer queue. Lists all PENDING applications across all companies.
-  Expedited rows are sorted to the top and highlighted gold.
+  Reviewer queue. Lists PENDING applications across all companies with a
+  company search, delivery-format filter, and oldest/newest sort.
 */
 export default async function ReviewerQueuePage({
   searchParams,
 }: {
-  searchParams: Promise<{ just?: string }>;
+  searchParams: Promise<{
+    just?: string;
+    q?: string;
+    format?: string;
+    sort?: string;
+  }>;
 }) {
   await requireStaff("REVIEWER");
-  const { just } = await searchParams;
+  const { just, q, format, sort } = await searchParams;
+
+  const query = (q ?? "").trim();
+  const formatFilter =
+    format && (DELIVERY_FORMATS as readonly string[]).includes(format)
+      ? format
+      : "";
+  const sortNewest = sort === "newest";
+
+  const where: Prisma.CourseApplicationWhereInput = {
+    status: "PENDING",
+    ...(query
+      ? { company: { name: { contains: query, mode: "insensitive" } } }
+      : {}),
+    ...(formatFilter ? { deliveryMethod: formatFilter } : {}),
+  };
 
   const pending = await prisma.courseApplication.findMany({
-    where: { status: "PENDING" },
-    orderBy: [{ isExpedited: "desc" }, { submittedAt: "asc" }],
+    where,
+    orderBy: [{ submittedAt: sortNewest ? "desc" : "asc" }],
     include: { company: { select: { name: true } } },
     take: 100,
   });
 
-  const expeditedCount = pending.filter((a) => a.isExpedited).length;
-  const now = Date.now();
+  const now = new Date().getTime();
+  const fieldClass =
+    "rounded-md border border-border bg-white px-3 py-1.5 text-[12px] text-navy outline-none focus:border-ace";
 
   return (
     <>
       <PageHeader
         title="Review Queue"
-        subtitle={`${pending.length} application${pending.length === 1 ? "" : "s"} pending${expeditedCount > 0 ? ` · ${expeditedCount} expedited` : ""}`}
+        subtitle={`${pending.length} application${pending.length === 1 ? "" : "s"} pending`}
       />
+
+      <form
+        method="get"
+        className="mb-4 flex flex-wrap items-center gap-2"
+      >
+        <input
+          type="search"
+          name="q"
+          defaultValue={query}
+          placeholder="Search company name"
+          className={`${fieldClass} min-w-[200px] flex-1`}
+        />
+        <select name="format" defaultValue={formatFilter} className={fieldClass}>
+          <option value="">All formats</option>
+          {DELIVERY_FORMATS.map((f) => (
+            <option key={f} value={f}>
+              {f}
+            </option>
+          ))}
+        </select>
+        <select name="sort" defaultValue={sortNewest ? "newest" : "oldest"} className={fieldClass}>
+          <option value="oldest">Oldest first</option>
+          <option value="newest">Newest first</option>
+        </select>
+        <button
+          type="submit"
+          className="rounded-md bg-navy px-3.5 py-1.5 text-[12px] font-semibold text-white hover:bg-navy/90"
+        >
+          Apply
+        </button>
+        {query || formatFilter || sortNewest ? (
+          <Link
+            href="/reviewer"
+            className="px-2 py-1.5 text-[12px] font-semibold text-text-muted hover:text-navy"
+          >
+            Clear
+          </Link>
+        ) : null}
+      </form>
 
       {just === "approved" ? (
         <div className="mb-4 rounded-md border border-emerald-400 bg-emerald-50 px-4 py-2.5 text-[13px] text-emerald-700">
@@ -46,7 +108,9 @@ export default async function ReviewerQueuePage({
       <div className="overflow-hidden rounded-lg border border-border bg-white">
         {pending.length === 0 ? (
           <p className="px-4 py-10 text-center text-[12px] text-text-muted">
-            Nothing pending. ☕
+            {query || formatFilter
+              ? "No applications match your filters."
+              : "Nothing pending. ☕"}
           </p>
         ) : (
           <table className="w-full text-[12px]">
@@ -70,9 +134,7 @@ export default async function ReviewerQueuePage({
                 return (
                   <tr
                     key={app.id}
-                    className={`border-b border-border last:border-b-0 ${
-                      app.isExpedited ? "bg-ace-bg/40" : ""
-                    }`}
+                    className="border-b border-border last:border-b-0"
                   >
                     <td className="px-4 py-2 text-text-muted">
                       {submitted.toLocaleDateString("en-US", {
@@ -83,11 +145,6 @@ export default async function ReviewerQueuePage({
                     <td className="px-4 py-2 text-text-mid">{app.company.name}</td>
                     <td className="px-4 py-2 font-medium text-navy">
                       {app.courseTitle ?? "(untitled)"}
-                      {app.isExpedited ? (
-                        <span className="ml-1 rounded bg-ace-bg px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-ace">
-                          Expedited
-                        </span>
-                      ) : null}
                     </td>
                     <td className="px-4 py-2 text-text-mid tabular-nums">
                       {app.ceHours ? Number(app.ceHours).toFixed(1) : "—"}
@@ -103,11 +160,7 @@ export default async function ReviewerQueuePage({
                     <td className="px-4 py-2">
                       <Link
                         href={`/reviewer/${app.id}`}
-                        className={`rounded-md px-3 py-1.5 text-[11px] font-semibold ${
-                          app.isExpedited
-                            ? "bg-ace text-navy hover:bg-ace-light"
-                            : "bg-navy text-white hover:bg-navy/90"
-                        }`}
+                        className="rounded-md bg-navy px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-navy/90"
                       >
                         Review
                       </Link>

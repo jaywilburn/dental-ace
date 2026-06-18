@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { boardSignupSchema } from "@/lib/board/signup-schema";
-import { US_STATES } from "@/lib/protrack/reference";
+import { JURISDICTIONS } from "@/lib/protrack/reference";
 import { signEmailVerificationToken } from "@/lib/auth/verification-token";
 import { sendEmail } from "@/lib/email/send";
 import { appBaseUrl } from "@/lib/app-url";
@@ -71,8 +71,8 @@ export async function POST(request: NextRequest) {
   }
   const data = parsed.data;
 
-  if (!US_STATES[data.state]) {
-    return back("Pick a valid US state.");
+  if (!JURISDICTIONS[data.state]) {
+    return back("Pick a valid state or province.");
   }
 
   // Pre-check: is this state already claimed? Fail fast before we burn an
@@ -85,7 +85,7 @@ export async function POST(request: NextRequest) {
   });
   if (existingBoard) {
     return back(
-      `${US_STATES[data.state]} is already registered with Verify. If you're a board admin who needs access, contact info@dentalace.org to be added.`,
+      `${JURISDICTIONS[data.state]} is already registered with Verify. If you're a board admin who needs access, contact info@dentalace.org to be added.`,
     );
   }
 
@@ -122,7 +122,7 @@ export async function POST(request: NextRequest) {
           userId,
           kind: "BOARD",
           payload: { state: data.state, boardName: data.boardName },
-          label: `${US_STATES[data.state]}, ${data.boardName}`,
+          label: `${JURISDICTIONS[data.state]}, ${data.boardName}`,
         },
       });
     });

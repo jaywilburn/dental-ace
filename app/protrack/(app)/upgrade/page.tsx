@@ -45,7 +45,12 @@ export default async function UpgradePage({
         subtitle="Stay audit-ready and never miss a renewal deadline."
       />
 
-      {gate === "pro" ? (
+      {gate === "multistate" ? (
+        <p className="mb-4 rounded-md border border-ace/40 bg-ace-bg px-3 py-2 text-[12px] text-ace-dark text-pretty">
+          Multi-state tracking lets you track every state or province you are
+          licensed in at once. Upgrade below to unlock it.
+        </p>
+      ) : gate === "pro" ? (
         <p className="mb-4 rounded-md border border-ace/40 bg-ace-bg px-3 py-2 text-[12px] text-ace-dark text-pretty">
           Renewal reminders, multi-state tracking, and audit-ready exports are Pro
           features. Upgrade below to unlock them.

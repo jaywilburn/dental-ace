@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { LicenseType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireProtrackPro } from "@/lib/protrack/require-pro";
-import { STATE_CODES } from "@/lib/protrack/reference";
+import { JURISDICTION_CODES } from "@/lib/protrack/reference";
 
 /*
   Add an additional state license (Pro feature, gated server-side).
@@ -31,7 +31,7 @@ export async function addStateLicense(formData: FormData): Promise<void> {
   const licenseNumber = String(formData.get("licenseNumber") ?? "").trim();
 
   const licenseType = LICENSE_TYPES.find((t) => t === licenseTypeRaw);
-  if (!STATE_CODES.includes(state) || !licenseType || licenseNumber.length < 2) {
+  if (!JURISDICTION_CODES.includes(state) || !licenseType || licenseNumber.length < 2) {
     redirect("/protrack/multistate?error=invalid");
   }
 

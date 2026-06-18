@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { registerSchema } from "@/lib/protrack/register-schema";
-import { STATE_CODES } from "@/lib/protrack/reference";
+import { JURISDICTION_CODES } from "@/lib/protrack/reference";
 import { signEmailVerificationToken } from "@/lib/auth/verification-token";
 import { sendEmail } from "@/lib/email/send";
 import { appBaseUrl } from "@/lib/app-url";
@@ -78,7 +78,7 @@ export async function POST(request: NextRequest) {
   const hasLicense = !!(
     data.licenseType &&
     data.primaryState &&
-    STATE_CODES.includes(data.primaryState) &&
+    JURISDICTION_CODES.includes(data.primaryState) &&
     data.licenseNumber &&
     data.licenseNumber.length >= 2
   );

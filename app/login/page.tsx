@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { BrandMark } from "@/components/brand-mark";
+import { LoginRoleSelector } from "@/components/auth/login-role-selector";
 import { getCurrentUser, homePathFor } from "@/lib/auth/session";
 
 /*
@@ -43,7 +44,9 @@ export default async function LoginPage({
             </p>
           </div>
 
-          <div className="mt-6">
+          <LoginRoleSelector />
+
+          <div className="mt-3">
             <label
               htmlFor="email"
               className="mb-1.5 block text-[10px] font-semibold text-white/50"

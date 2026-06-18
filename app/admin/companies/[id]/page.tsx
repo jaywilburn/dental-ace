@@ -18,7 +18,7 @@ export default async function AdminCompanyDetailPage({
   const company = await prisma.company.findUnique({
     where: { id },
     select: {
-      id: true, name: true, applicationCredits: true, expeditedCredits: true,
+      id: true, name: true, applicationCredits: true,
       certBalance: true, certAlertThreshold: true, totalCertsIssued: true,
       contactEmail: true, contactPhone: true, addressLine1: true,
       addressLine2: true, city: true, state: true, zip: true,
@@ -45,7 +45,7 @@ export default async function AdminCompanyDetailPage({
         <div className="rounded-lg border border-border bg-white p-4">
           <p className="text-[10px] uppercase tracking-wide text-text-muted">App Credits</p>
           <p className="font-serif text-2xl font-bold text-navy tabular-nums">{company.applicationCredits}</p>
-          <p className="text-[11px] text-text-muted">{company.expeditedCredits} expedited</p>
+          <p className="text-[11px] text-text-muted">Never expire</p>
         </div>
         <div className="rounded-lg border border-border bg-white p-4">
           <p className="text-[10px] uppercase tracking-wide text-text-muted">Cert Balance</p>
@@ -92,9 +92,6 @@ export default async function AdminCompanyDetailPage({
           <p className="text-[12px] font-semibold text-navy">Grant application credits</p>
           <input type="number" name="quantity" min={1} step={1} required placeholder="Quantity"
             className="w-full rounded-md border border-border px-3 py-2 text-[13px]" />
-          <label className="flex items-center gap-2 text-[12px] text-text-mid">
-            <input type="checkbox" name="expedited" value="true" /> Expedited credits
-          </label>
           <button type="submit" className="rounded-md bg-navy px-3 py-1.5 text-[12px] font-semibold text-white">Grant</button>
         </form>
 

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { BrandMark } from "@/components/brand-mark";
 import { getCurrentUser } from "@/lib/auth/session";
-import { STATE_CODES, US_STATES } from "@/lib/protrack/reference";
+import { JurisdictionOptions } from "@/components/jurisdiction-options";
 
 /*
   Public self-serve state-board sign-up. Posts to /api/auth/register-board which
@@ -13,10 +13,6 @@ import { STATE_CODES, US_STATES } from "@/lib/protrack/reference";
 const fieldClass =
   "w-full rounded-md border border-border bg-white px-3 py-2 text-[13px] text-navy outline-none focus:border-ace";
 const labelClass = "mb-1 block text-[11px] font-semibold text-text-mid";
-
-const STATES_BY_NAME = [...STATE_CODES].sort((a, b) =>
-  US_STATES[a]!.localeCompare(US_STATES[b]!),
-);
 
 export default async function BoardSignupPage({
   searchParams,
@@ -119,7 +115,7 @@ export default async function BoardSignupPage({
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
                 <label htmlFor="state" className={labelClass}>
-                  State
+                  State/Province
                 </label>
                 <select
                   id="state"
@@ -129,13 +125,9 @@ export default async function BoardSignupPage({
                   required
                 >
                   <option value="" disabled>
-                    Pick a state
+                    Pick a state or province
                   </option>
-                  {STATES_BY_NAME.map((code) => (
-                    <option key={code} value={code}>
-                      {US_STATES[code]}
-                    </option>
-                  ))}
+                  <JurisdictionOptions />
                 </select>
               </div>
               <div>

@@ -3,7 +3,7 @@ import { Prisma, type AccessRequestKind } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { companyRegisterSchema } from "@/lib/company/register-schema";
 import { boardSignupSchema } from "@/lib/board/signup-schema";
-import { US_STATES } from "@/lib/protrack/reference";
+import { JURISDICTIONS } from "@/lib/protrack/reference";
 import { sendEmail } from "@/lib/email/send";
 import { appBaseUrl } from "@/lib/app-url";
 import AccessRequestReceivedEmail from "@/emails/access-request-received";
@@ -47,8 +47,8 @@ export function validateRequestPayload(kind: AccessRequestKind, raw: unknown): V
   if (kind === "BOARD") {
     const p = boardPayloadSchema.safeParse(raw);
     if (!p.success) return { ok: false, message: p.error.issues[0]?.message ?? "Check the form." };
-    if (!US_STATES[p.data.state]) return { ok: false, message: "Pick a valid US state." };
-    return { ok: true, payload: p.data, label: `${US_STATES[p.data.state]}, ${p.data.boardName}` };
+    if (!JURISDICTIONS[p.data.state]) return { ok: false, message: "Pick a valid state or province." };
+    return { ok: true, payload: p.data, label: `${JURISDICTIONS[p.data.state]}, ${p.data.boardName}` };
   }
   return { ok: true, payload: {}, label: roleLabelFor(kind) };
 }
