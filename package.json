@@ -11,6 +11,7 @@
     "typecheck": "tsc --noEmit",
     "seed": "tsx prisma/seed.ts",
     "seed:verify": "tsx scripts/seed-verify.ts",
+    "seed:events": "tsx scripts/seed-event-courses.ts",
     "test": "vitest run",
     "test:watch": "vitest"
   },
