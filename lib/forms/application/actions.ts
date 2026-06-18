@@ -32,7 +32,6 @@ import {
 } from "@/lib/forms/application/rich-text";
 import { sendEmail } from "@/lib/email/send";
 import ApplicationSubmittedEmail from "@/emails/application-submitted";
-import { chooseCreditPool } from "@/lib/billing/credit-pool";
 
 /*
   Server actions for the multi-step course application form.
@@ -267,13 +266,12 @@ export async function saveStep4(formData: FormData) {
 
 /**
  * Final submit. Validates the merged data fully, decides which credit pool to
- * spend (expedited if the company has any + the customer opted in), consumes
- * exactly one credit atomically, transitions DRAFT -> PENDING, and fires the
- * reviewer notification email (log mode until Resend is wired).
+ * consumes exactly one application credit atomically, transitions DRAFT ->
+ * PENDING, and fires the reviewer notification email (log mode until Resend is
+ * wired).
  */
 export async function submitApplication(formData: FormData) {
   const applicationId = String(formData.get("applicationId") ?? "");
-  const useExpedited = formData.get("useExpedited") === "true";
   const companyId = await getCustomerCompanyId();
 
   const ip = ((await headers()).get("x-forwarded-for") ?? "unknown").split(",")[0].trim();
@@ -300,9 +298,6 @@ export async function submitApplication(formData: FormData) {
   const fullData = fullParse.data;
 
   const submittedAt = new Date();
-  // Tracks whether the expedited pool actually paid; emails + downstream logs
-  // should reflect what the DB committed, not what the form requested.
-  let appliedExpedited = false;
 
   // Atomic credit consumption + status transition.
   await prisma.$transaction(async (tx) => {
@@ -310,21 +305,10 @@ export async function submitApplication(formData: FormData) {
 
     const company = await tx.company.findUniqueOrThrow({
       where: { id: companyId },
-      select: { applicationCredits: true, expeditedCredits: true },
+      select: { applicationCredits: true },
     });
 
-    const pool = chooseCreditPool({
-      useExpedited,
-      applicationCredits: company.applicationCredits,
-      expeditedCredits: company.expeditedCredits,
-    });
-    if (pool === "expedited") {
-      appliedExpedited = true;
-      await tx.company.update({
-        where: { id: companyId },
-        data: { expeditedCredits: { decrement: 1 } },
-      });
-    } else if (pool === "standard") {
+    if (company.applicationCredits > 0) {
       await tx.company.update({
         where: { id: companyId },
         data: { applicationCredits: { decrement: 1 } },
@@ -345,7 +329,6 @@ export async function submitApplication(formData: FormData) {
         ceHours: fullData.ceCreditHours,
         courseType: fullData.subjectMatter,
         deliveryMethod: fullData.deliveryFormat,
-        isExpedited: appliedExpedited,
         submittedAt,
       },
     });
@@ -371,7 +354,6 @@ export async function submitApplication(formData: FormData) {
           ceHours: fullData.ceCreditHours,
           deliveryFormat: fullData.deliveryFormat,
           submittedAt: submittedAt.toLocaleString(),
-          isExpedited: appliedExpedited,
           reviewUrl: `${process.env.NEXT_PUBLIC_APP_URL ?? ""}/reviewer/${applicationId}`,
         }),
         react: ApplicationSubmittedEmail({
@@ -381,7 +363,6 @@ export async function submitApplication(formData: FormData) {
           ceHours: fullData.ceCreditHours,
           deliveryFormat: fullData.deliveryFormat,
           submittedAt: submittedAt.toLocaleString(),
-          isExpedited: appliedExpedited,
           reviewUrl: `${process.env.NEXT_PUBLIC_APP_URL ?? ""}/reviewer/${applicationId}`,
         }),
       });

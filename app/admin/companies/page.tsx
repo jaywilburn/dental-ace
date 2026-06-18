@@ -29,7 +29,7 @@ export default async function AdminCompaniesPage({
       take: PAGE_SIZE,
       select: {
         id: true, name: true, contactEmail: true, applicationCredits: true,
-        expeditedCredits: true, certBalance: true, totalCertsIssued: true,
+        certBalance: true, totalCertsIssued: true,
       },
     }),
   ]);
@@ -64,7 +64,7 @@ export default async function AdminCompaniesPage({
                   </td>
                   <td className="px-4 py-2 text-text-muted">{c.contactEmail ?? "·"}</td>
                   <td className="px-4 py-2 text-text-mid tabular-nums">
-                    {c.applicationCredits}{c.expeditedCredits > 0 ? ` (+${c.expeditedCredits} exp)` : ""}
+                    {c.applicationCredits}
                   </td>
                   <td className="px-4 py-2 text-text-mid tabular-nums">{c.certBalance}</td>
                   <td className="px-4 py-2 text-text-muted tabular-nums">{c.totalCertsIssued}</td>

@@ -3,7 +3,6 @@ import Link from "next/link";
 import { cn } from "@/lib/utils";
 import {
   APP_COURSE_TIERS,
-  CATALOG,
   CERT_BUNDLE_SKUS,
   formatPrice,
   formatWholePrice,
@@ -84,11 +83,10 @@ export default function PricingPage() {
             </h2>
             <p className="mx-auto mt-2 max-w-[520px] text-pretty text-sm text-text-muted">
               One credit covers one course application through AADB review. The
-              per-course price drops as you buy more in a single order, or add
-              expedited review when you are on a deadline.
+              per-course price drops as you buy more in a single order.
             </p>
           </div>
-          <div className="grid gap-5 md:grid-cols-2">
+          <div className="mx-auto grid max-w-md gap-5">
             <div className="flex flex-col rounded-2xl border border-ace bg-white p-6 shadow-lg">
               <p className="mb-3 text-sm font-semibold text-navy">
                 Course applications, volume pricing
@@ -113,7 +111,6 @@ export default function PricingPage() {
                 Buy in your portal
               </Link>
             </div>
-            <SkuCard sku={CATALOG.app_1_exp} />
           </div>
 
           <div className="mb-10 mt-16 text-center">

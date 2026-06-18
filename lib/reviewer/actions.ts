@@ -126,6 +126,16 @@ export async function approveApplication(formData: FormData) {
       throw new Error("Application status changed during approval");
     }
 
+    // If this application renews an existing course, supersede the old course
+    // now that a fresh 3-year accreditation has been issued. The old row is
+    // kept (issued certs still reference it) but is no longer the live course.
+    if (application.renewalOfCourseId) {
+      await tx.accreditedCourse.updateMany({
+        where: { id: application.renewalOfCourseId, supersededAt: null },
+        data: { supersededAt: approvedAt },
+      });
+    }
+
     return id;
   });
 
@@ -215,6 +225,7 @@ export async function approveApplication(formData: FormData) {
 
   revalidatePath("/reviewer");
   revalidatePath("/reviewer/approved");
+  revalidatePath("/company/courses");
   redirect("/reviewer?just=approved");
 }
 

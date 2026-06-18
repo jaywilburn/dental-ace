@@ -11,6 +11,9 @@ export type NavItem = {
   label: string;
   href: string;
   icon: string;
+  // External/static assets (e.g. a downloadable PDF) open in a new tab via a
+  // plain anchor instead of client-side <Link> navigation.
+  external?: boolean;
 };
 
 export type NavSection = {
@@ -25,6 +28,12 @@ export const portalNav: Record<PortalArea, NavSection[]> = {
       items: [
         { label: "Dashboard", href: "/company", icon: "📊" },
         { label: "New Application", href: "/company/applications/new", icon: "📝" },
+        {
+          label: "Application Overview PDF",
+          href: "/application-overview.pdf",
+          icon: "📄",
+          external: true,
+        },
         { label: "My Courses", href: "/company/courses", icon: "🎓" },
         { label: "Certificate Log", href: "/company/certificates", icon: "📜" },
         { label: "Events", href: "/company/events", icon: "⭐" },

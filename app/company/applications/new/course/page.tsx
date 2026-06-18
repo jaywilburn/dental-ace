@@ -51,7 +51,7 @@ export default async function ApplicationCourseInfoPage({
         subtitle="Step 2 of 6 — Course Information"
         action={
           <span className="rounded-full bg-ace-bg px-2.5 py-1 text-[10px] font-bold text-ace-dark">
-            {totalCredits.applicationCredits + totalCredits.expeditedCredits} Credits Available
+            {totalCredits.applicationCredits} Credits Available
           </span>
         }
       />

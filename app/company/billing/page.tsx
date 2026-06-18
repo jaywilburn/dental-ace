@@ -73,11 +73,6 @@ export default async function BillingHistoryPage({
                   </td>
                   <td className="px-4 py-2 font-medium text-navy">
                     {labelFor(txn.type)}
-                    {txn.isExpedited ? (
-                      <span className="ml-1 rounded bg-ace/15 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-ace-dark">
-                        expedited
-                      </span>
-                    ) : null}
                   </td>
                   <td className="px-4 py-2 text-text-mid">
                     {txn.quantity}{" "}
@@ -115,8 +110,6 @@ function labelFor(type: string): string {
       return "Application credits";
     case "CERT_BUNDLE":
       return "Certificate bundle";
-    case "EXPEDITE":
-      return "Expedite add-on";
     case "ADMIN_OVERRIDE":
       return "Admin override";
     default:

@@ -34,7 +34,8 @@ export default function CourseExpiringEmail({
       <Text style={{ margin: "10px 0 14px 0", fontSize: 14, lineHeight: 1.65, color: emailColors.textMid }}>
         Your accredited course is approaching its expiration date. After it
         expires, attendees can no longer claim certificates for it. To keep it
-        active, contact AADB to renew before the date below.
+        active, renew it from My Courses. Renewing re-submits the course for AADB
+        review and, once approved, extends the accreditation for another 3 years.
       </Text>
       <DetailGrid
         rows={[
@@ -44,7 +45,7 @@ export default function CourseExpiringEmail({
           { label: "Days Remaining", value: String(daysRemaining) },
         ]}
       />
-      <CtaButton href={myCoursesUrl} label="View My Courses →" />
+      <CtaButton href={myCoursesUrl} label="Renew this course →" />
     </BrandEmail>
   );
 }

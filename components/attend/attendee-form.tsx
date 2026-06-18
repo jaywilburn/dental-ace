@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { submitAttendance, type AttendResult } from "@/lib/attend/actions";
+import { JurisdictionOptions } from "@/components/jurisdiction-options";
 
 /*
   4-step mobile attendee form: identity → affirmation → quiz → review/submit.
@@ -63,7 +64,17 @@ export function AttendeeForm({ token, quiz }: { token: string; quiz: PublicQuizQ
           <Field label="Email" value={email} onChange={setEmail} type="email" />
           <Field label="License number" value={licenseNumber} onChange={setLicenseNumber} />
           <Field label="License type (e.g. RDH)" value={licenseType} onChange={setLicenseType} />
-          <Field label="License state (2-letter)" value={licenseState} onChange={setLicenseState} />
+          <label className="block text-sm">
+            <span className="text-slate-700">License state/province</span>
+            <select
+              value={licenseState}
+              onChange={(e) => setLicenseState(e.target.value)}
+              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+            >
+              <option value="">Select…</option>
+              <JurisdictionOptions />
+            </select>
+          </label>
           <NavButtons onNext={() => setStep(1)} nextDisabled={!name || !email || !licenseState} />
         </section>
       )}

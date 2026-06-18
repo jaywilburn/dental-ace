@@ -61,8 +61,66 @@ export const US_STATES: Record<string, string> = {
 
 export const STATE_CODES = Object.keys(US_STATES);
 
+/*
+  Canadian provinces + territories (2-letter codes, no collisions with US state
+  codes). Added June 2026 at the client's request so Canadian licensees and ACE
+  certificate recipients can denote their jurisdiction. CE-hour requirements per
+  province are not seeded yet (blocked on the authoritative requirements file),
+  so provinces appear in dropdowns but show no requirement progress until loaded.
+*/
+export const CA_PROVINCES: Record<string, string> = {
+  AB: "Alberta",
+  BC: "British Columbia",
+  MB: "Manitoba",
+  NB: "New Brunswick",
+  NL: "Newfoundland and Labrador",
+  NS: "Nova Scotia",
+  NT: "Northwest Territories",
+  NU: "Nunavut",
+  ON: "Ontario",
+  PE: "Prince Edward Island",
+  QC: "Quebec",
+  SK: "Saskatchewan",
+  YT: "Yukon",
+};
+
+/*
+  The full jurisdiction set (US states + Canadian provinces). Use this for
+  membership validation and name lookup; the `state`/`license_states` DB columns
+  are Char(2) strings, so province codes need no schema change.
+*/
+export const JURISDICTIONS: Record<string, string> = {
+  ...US_STATES,
+  ...CA_PROVINCES,
+};
+
+export const JURISDICTION_CODES = Object.keys(JURISDICTIONS);
+
+/*
+  Grouped, name-sorted options for rendering a <select> with <optgroup>s so
+  provinces are clearly separated from US states rather than interleaved
+  alphabetically. Shared by every jurisdiction dropdown.
+*/
+export const JURISDICTION_GROUPS: {
+  label: string;
+  options: { code: string; name: string }[];
+}[] = [
+  {
+    label: "United States",
+    options: Object.keys(US_STATES)
+      .sort((a, b) => US_STATES[a]!.localeCompare(US_STATES[b]!))
+      .map((code) => ({ code, name: US_STATES[code]! })),
+  },
+  {
+    label: "Canada",
+    options: Object.keys(CA_PROVINCES)
+      .sort((a, b) => CA_PROVINCES[a]!.localeCompare(CA_PROVINCES[b]!))
+      .map((code) => ({ code, name: CA_PROVINCES[code]! })),
+  },
+];
+
 export function stateName(code: string): string {
-  return US_STATES[code.trim().toUpperCase()] ?? code;
+  return JURISDICTIONS[code.trim().toUpperCase()] ?? code;
 }
 
 const LICENSE_SHORT: Record<LicenseType, string> = {

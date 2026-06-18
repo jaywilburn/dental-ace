@@ -9,7 +9,7 @@ import {
   FormLabel,
 } from "@/components/application-form/form-controls";
 import { requireUser } from "@/lib/auth/session";
-import { STATE_CODES, US_STATES } from "@/lib/protrack/reference";
+import { JurisdictionOptions } from "@/components/jurisdiction-options";
 import { registerCompany } from "@/lib/company/register-actions";
 
 /*
@@ -27,10 +27,6 @@ import { registerCompany } from "@/lib/company/register-actions";
 
 const selectClass =
   "w-full rounded-md border border-border bg-white px-3 py-2 text-[13px] text-navy outline-none transition-colors focus:border-ace focus:ring-2 focus:ring-ace/30";
-
-const STATES_BY_NAME = [...STATE_CODES].sort((a, b) =>
-  US_STATES[a]!.localeCompare(US_STATES[b]!),
-);
 
 export default async function CompanyRegisterPage({
   searchParams,
@@ -180,7 +176,7 @@ export default async function CompanyRegisterPage({
             <FormField>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <FormLabel required>State</FormLabel>
+                  <FormLabel required>State/Province</FormLabel>
                   <select
                     name="state"
                     className={selectClass}
@@ -188,13 +184,9 @@ export default async function CompanyRegisterPage({
                     required
                   >
                     <option value="" disabled>
-                      Pick a state
+                      Pick a state or province
                     </option>
-                    {STATES_BY_NAME.map((code) => (
-                      <option key={code} value={code}>
-                        {US_STATES[code]}
-                      </option>
-                    ))}
+                    <JurisdictionOptions />
                   </select>
                 </div>
                 <div>

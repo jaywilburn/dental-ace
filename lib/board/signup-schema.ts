@@ -2,8 +2,9 @@ import { z } from "zod";
 
 /*
   Validation for the /signup/board form. State is a 2-char code matched against
-  US_STATES in lib/protrack/reference. Board name is free-text — the form
-  suggests the canonical name for the picked state but lets the user override.
+  JURISDICTIONS (US states + Canadian provinces) in lib/protrack/reference. Board
+  name is free-text — the form suggests the canonical name for the picked
+  state/province but lets the user override.
 */
 export const boardSignupSchema = z.object({
   firstName: z.string().trim().min(1, "First name is required").max(80),

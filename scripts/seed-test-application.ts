@@ -131,7 +131,7 @@ const APPLICATION_DATA = {
 async function main() {
   const company = await prisma.company.findFirst({
     where: { name: "Texas Dental Association" },
-    select: { id: true, name: true, applicationCredits: true, expeditedCredits: true },
+    select: { id: true, name: true, applicationCredits: true },
   });
   if (!company) {
     throw new Error(
@@ -140,9 +140,7 @@ async function main() {
   }
 
   console.log(`Target company: ${company.name} (${company.id})`);
-  console.log(
-    `  applicationCredits=${company.applicationCredits}, expeditedCredits=${company.expeditedCredits}`,
-  );
+  console.log(`  applicationCredits=${company.applicationCredits}`);
 
   const existing = await prisma.courseApplication.findFirst({
     where: { companyId: company.id, status: "DRAFT" },

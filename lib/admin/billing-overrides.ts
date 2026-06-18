@@ -23,7 +23,6 @@ export async function grantAppCredits(formData: FormData) {
   const admin = await requireStaff("ADMIN");
   const companyId = String(formData.get("companyId") ?? "");
   const quantity = Number(formData.get("quantity") ?? 0);
-  const expedited = formData.get("expedited") === "true";
   if (!companyId) throw new Error("companyId required");
 
   const v = validateAppCreditGrant(quantity);
@@ -33,9 +32,7 @@ export async function grantAppCredits(formData: FormData) {
     await tx.$executeRaw`select id from public.companies where id = ${companyId}::uuid for update`;
     await tx.company.update({
       where: { id: companyId },
-      data: expedited
-        ? { expeditedCredits: { increment: quantity } }
-        : { applicationCredits: { increment: quantity } },
+      data: { applicationCredits: { increment: quantity } },
     });
     await tx.billingTransaction.create({
       data: {
@@ -43,7 +40,6 @@ export async function grantAppCredits(formData: FormData) {
         type: BillingTransactionType.ADMIN_OVERRIDE,
         quantity,
         amountCents: 0,
-        isExpedited: expedited,
         performedById: admin.id,
       },
     });

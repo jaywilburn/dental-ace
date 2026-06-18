@@ -1,15 +1,16 @@
+import Link from "next/link";
 import { PageHeader } from "@/components/portal-shell";
 import { ProgressBar } from "@/components/protrack/progress-bar";
-import { requireProtrackPro } from "@/lib/protrack/require-pro";
+import { requireUser } from "@/lib/auth/session";
+import { isProActive } from "@/lib/protrack/require-pro";
 import { prisma } from "@/lib/prisma";
 import { LicenseType } from "@prisma/client";
 import {
   LICENSE_TYPE_OPTIONS,
-  STATE_CODES,
-  US_STATES,
   licenseTypeShort,
   stateName,
 } from "@/lib/protrack/reference";
+import { JurisdictionOptions } from "@/components/jurisdiction-options";
 import {
   computeRequirementProgress,
   formatHours,
@@ -37,8 +38,15 @@ export default async function MultiStatePage({
 }: {
   searchParams: Promise<{ added?: string; error?: string }>;
 }) {
-  const user = await requireProtrackPro();
+  const user = await requireUser();
   const { added, error } = await searchParams;
+
+  // Multi-state tracking stays a Pro feature. Rather than bounce Free users
+  // away (Row 15: "how do they upgrade?"), show a teaser with a clear upgrade
+  // CTA. The add-state action is still Pro-gated server-side.
+  if (!isProActive(user)) {
+    return <MultiStateUpsell />;
+  }
 
   const [licenses, certRows, requirements] = await Promise.all([
     prisma.userLicense.findMany({
@@ -170,19 +178,13 @@ export default async function MultiStatePage({
           className="flex flex-col gap-2 rounded-lg border border-dashed border-border bg-white p-4"
         >
           <p className="text-[13px] font-semibold text-navy">
-            🌐 Add a state license
+            🌐 Add a state or province license
           </p>
           <select name="state" className={fieldClass} defaultValue="" required>
             <option value="" disabled>
-              State
+              State/Province
             </option>
-            {[...STATE_CODES]
-              .sort((a, b) => US_STATES[a]!.localeCompare(US_STATES[b]!))
-              .map((code) => (
-                <option key={code} value={code}>
-                  {US_STATES[code]}
-                </option>
-              ))}
+            <JurisdictionOptions />
           </select>
           <select
             name="licenseType"
@@ -209,6 +211,34 @@ export default async function MultiStatePage({
             Add license
           </button>
         </form>
+      </div>
+    </>
+  );
+}
+
+function MultiStateUpsell() {
+  return (
+    <>
+      <PageHeader
+        title="Multi-State Tracking"
+        subtitle="Track CE compliance for every state or province you are licensed in, at once."
+      />
+      <div className="mx-auto max-w-xl rounded-xl border-2 border-ace bg-white p-6 text-center">
+        <p className="text-2xl">🌐</p>
+        <p className="mt-2 font-serif text-lg font-bold text-navy">
+          Licensed in more than one state or province?
+        </p>
+        <p className="mx-auto mt-2 max-w-md text-[13px] leading-relaxed text-text-mid">
+          ProTrack Pro tracks every jurisdiction you hold a license in side by
+          side, so a single certificate counts toward each one automatically.
+          Multi-state tracking is a Pro feature.
+        </p>
+        <Link
+          href="/protrack/upgrade?gate=multistate"
+          className="mt-5 inline-block rounded-md bg-navy px-5 py-2.5 text-[13px] font-semibold text-white transition-colors hover:bg-navy/90"
+        >
+          Upgrade to add multi-state
+        </Link>
       </div>
     </>
   );

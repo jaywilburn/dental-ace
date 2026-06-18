@@ -15,8 +15,8 @@ import { AttachmentsCard } from "@/components/application-form/attachments-card"
 
 /*
   Step 5 — Review & Submit. Read-only summary of every field on the draft.
-  Submit consumes one credit (expedited if chosen + available) and transitions
-  the draft from DRAFT to PENDING.
+  Submit consumes one application credit and transitions the draft from DRAFT
+  to PENDING.
 */
 export default async function ApplicationStep5Page() {
   // Redirects to /company/buy/credits when the company holds no credits.
@@ -139,37 +139,13 @@ export default async function ApplicationStep5Page() {
 
       <form action={submitApplication} className="mt-6">
         <input type="hidden" name="applicationId" value={applicationId} />
-        <div className="rounded-lg border border-border bg-white p-5">
-          <p className="mb-3 text-[13px] font-semibold text-navy">Choose credit pool</p>
-          <div className="space-y-2 text-[12px] text-text-mid">
-            <label className="flex items-center gap-2">
-              <input
-                type="radio"
-                name="useExpedited"
-                value="false"
-                defaultChecked={company.expeditedCredits === 0}
-                disabled={company.applicationCredits === 0}
-              />
-              Use a standard credit ({company.applicationCredits} available)
-              {company.applicationCredits === 0 ? (
-                <span className="text-red-500">— none</span>
-              ) : null}
-            </label>
-            <label className="flex items-center gap-2">
-              <input
-                type="radio"
-                name="useExpedited"
-                value="true"
-                defaultChecked={company.expeditedCredits > 0}
-                disabled={company.expeditedCredits === 0}
-              />
-              Use an expedited credit ({company.expeditedCredits} available, ~3 business day review)
-              {company.expeditedCredits === 0 ? (
-                <span className="text-red-500">— none</span>
-              ) : null}
-            </label>
-          </div>
-          {company.applicationCredits + company.expeditedCredits === 0 ? (
+        <div className="rounded-lg border border-border bg-white p-5 text-[12px] text-text-mid">
+          Submitting consumes 1 application credit. You have{" "}
+          <span className="font-semibold text-navy">
+            {company.applicationCredits}
+          </span>{" "}
+          available.
+          {company.applicationCredits === 0 ? (
             <div className="mt-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[12px] text-red-800">
               You have no credits available. Go to{" "}
               <Link className="font-semibold underline" href="/company/buy/credits">
@@ -189,7 +165,7 @@ export default async function ApplicationStep5Page() {
           </Link>
           <button
             type="submit"
-            disabled={company.applicationCredits + company.expeditedCredits === 0}
+            disabled={company.applicationCredits === 0}
             className="rounded-md bg-emerald-600 px-6 py-2.5 text-[13px] font-semibold text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
             ✓ Submit & Consume 1 Credit

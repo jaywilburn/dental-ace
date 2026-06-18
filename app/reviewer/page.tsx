@@ -4,8 +4,8 @@ import { requireStaff } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 
 /*
-  Reviewer queue. Lists all PENDING applications across all companies.
-  Expedited rows are sorted to the top and highlighted gold.
+  Reviewer queue. Lists all PENDING applications across all companies,
+  oldest-submitted first.
 */
 export default async function ReviewerQueuePage({
   searchParams,
@@ -17,19 +17,18 @@ export default async function ReviewerQueuePage({
 
   const pending = await prisma.courseApplication.findMany({
     where: { status: "PENDING" },
-    orderBy: [{ isExpedited: "desc" }, { submittedAt: "asc" }],
+    orderBy: [{ submittedAt: "asc" }],
     include: { company: { select: { name: true } } },
     take: 100,
   });
 
-  const expeditedCount = pending.filter((a) => a.isExpedited).length;
-  const now = Date.now();
+  const now = new Date().getTime();
 
   return (
     <>
       <PageHeader
         title="Review Queue"
-        subtitle={`${pending.length} application${pending.length === 1 ? "" : "s"} pending${expeditedCount > 0 ? ` · ${expeditedCount} expedited` : ""}`}
+        subtitle={`${pending.length} application${pending.length === 1 ? "" : "s"} pending`}
       />
 
       {just === "approved" ? (
@@ -70,9 +69,7 @@ export default async function ReviewerQueuePage({
                 return (
                   <tr
                     key={app.id}
-                    className={`border-b border-border last:border-b-0 ${
-                      app.isExpedited ? "bg-ace-bg/40" : ""
-                    }`}
+                    className="border-b border-border last:border-b-0"
                   >
                     <td className="px-4 py-2 text-text-muted">
                       {submitted.toLocaleDateString("en-US", {
@@ -83,11 +80,6 @@ export default async function ReviewerQueuePage({
                     <td className="px-4 py-2 text-text-mid">{app.company.name}</td>
                     <td className="px-4 py-2 font-medium text-navy">
                       {app.courseTitle ?? "(untitled)"}
-                      {app.isExpedited ? (
-                        <span className="ml-1 rounded bg-ace-bg px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-ace">
-                          Expedited
-                        </span>
-                      ) : null}
                     </td>
                     <td className="px-4 py-2 text-text-mid tabular-nums">
                       {app.ceHours ? Number(app.ceHours).toFixed(1) : "—"}
@@ -103,11 +95,7 @@ export default async function ReviewerQueuePage({
                     <td className="px-4 py-2">
                       <Link
                         href={`/reviewer/${app.id}`}
-                        className={`rounded-md px-3 py-1.5 text-[11px] font-semibold ${
-                          app.isExpedited
-                            ? "bg-ace text-navy hover:bg-ace-light"
-                            : "bg-navy text-white hover:bg-navy/90"
-                        }`}
+                        className="rounded-md bg-navy px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-navy/90"
                       >
                         Review
                       </Link>

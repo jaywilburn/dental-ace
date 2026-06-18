@@ -34,7 +34,6 @@ export default async function CompanyDashboard({
     select: {
       name: true,
       applicationCredits: true,
-      expeditedCredits: true,
       certBalance: true,
       certAlertThreshold: true,
       totalCertsIssued: true,
@@ -68,7 +67,7 @@ export default async function CompanyDashboard({
     }),
   ]);
 
-  const totalCredits = company.applicationCredits + company.expeditedCredits;
+  const totalCredits = company.applicationCredits;
   const lowBalance = company.certBalance <= company.certAlertThreshold;
 
   return (
@@ -102,11 +101,7 @@ export default async function CompanyDashboard({
           label="App Credits"
           tone="gold"
           value={totalCredits}
-          meta={
-            company.expeditedCredits > 0
-              ? `${company.applicationCredits} standard + ${company.expeditedCredits} expedited`
-              : "Never expire"
-          }
+          meta="Never expire"
         />
         <PortalStatCard
           label="Cert Balance"
@@ -216,8 +211,6 @@ function labelFor(type: string, unit = false): string {
       return unit ? "credit" : "Application credits";
     case "CERT_BUNDLE":
       return unit ? "certificate" : "Certificate bundle";
-    case "EXPEDITE":
-      return unit ? "expedite add-on" : "Expedite add-on";
     case "ADMIN_OVERRIDE":
       return "Admin override";
     default:

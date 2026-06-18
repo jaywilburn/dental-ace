@@ -3,6 +3,18 @@ import { PageHeader } from "@/components/portal-shell";
 import { requireDentalAce } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { courseAssetUrls } from "@/lib/courses/course-assets";
+import { startCourseRenewal } from "@/lib/company/course-renewal";
+
+// Renewal becomes available this many days before a course expires (and stays
+// available after expiry). Reminder emails fire at 60/30 days.
+const RENEW_WINDOW_DAYS = 90;
+
+const RENEW_ERRORS: Record<string, string> = {
+  renew_not_found: "That course could not be found.",
+  already_renewed: "That course has already been renewed.",
+  renewal_in_progress: "A renewal for that course is already in progress.",
+  renew_failed: "Could not start the renewal. Please try again.",
+};
 
 /*
   My Courses — lists every application + accredited course for the company.
@@ -18,10 +30,10 @@ import { courseAssetUrls } from "@/lib/courses/course-assets";
 export default async function MyCoursesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ just?: string }>;
+  searchParams: Promise<{ just?: string; error?: string }>;
 }) {
   const user = await requireDentalAce();
-  const { just } = await searchParams;
+  const { just, error } = await searchParams;
 
   if (!user.companyId) {
     return (
@@ -71,6 +83,24 @@ export default async function MyCoursesPage({
     })),
   );
 
+  // Courses with a renewal already in flight (DRAFT or PENDING) can't be
+  // renewed again; surface that instead of the Renew button.
+  const courseIds = accreditedCourses.map((c) => c.id);
+  const openRenewals = courseIds.length
+    ? await prisma.courseApplication.findMany({
+        where: {
+          companyId: user.companyId,
+          renewalOfCourseId: { in: courseIds },
+          status: { in: ["PENDING", "DRAFT"] },
+        },
+        select: { renewalOfCourseId: true },
+      })
+    : [];
+  const renewingCourseIds = new Set(
+    openRenewals.map((r) => r.renewalOfCourseId),
+  );
+  const now = new Date();
+
   return (
     <>
       <PageHeader
@@ -89,6 +119,11 @@ export default async function MyCoursesPage({
       {just === "submitted" ? (
         <div className="mb-4 rounded-md border border-emerald-400 bg-emerald-50 px-4 py-2.5 text-[13px] text-emerald-700">
           ✓ Application submitted. AADB has been notified and will review shortly.
+        </div>
+      ) : null}
+      {error ? (
+        <div className="mb-4 rounded-md border border-red-300 bg-red-50 px-4 py-2.5 text-[13px] text-red-700">
+          {RENEW_ERRORS[error] ?? "Something went wrong. Please try again."}
         </div>
       ) : null}
 
@@ -111,7 +146,15 @@ export default async function MyCoursesPage({
               </tr>
             </thead>
             <tbody>
-              {courses.map((course) => (
+              {courses.map((course) => {
+                const isSuperseded = course.supersededAt != null;
+                const daysToExpiry = Math.ceil(
+                  (course.expiresAt.getTime() - now.getTime()) / 86_400_000,
+                );
+                const renewable =
+                  !isSuperseded && daysToExpiry <= RENEW_WINDOW_DAYS;
+                const renewalInProgress = renewingCourseIds.has(course.id);
+                return (
                 <tr key={course.id} className="border-b border-border last:border-b-0">
                   <td className="px-4 py-2 font-mono text-[11px] text-navy">
                     {course.courseIdNumber}
@@ -130,6 +173,15 @@ export default async function MyCoursesPage({
                       month: "short",
                       year: "numeric",
                     })}
+                    {isSuperseded ? (
+                      <span className="ml-1 text-[10px] font-semibold uppercase tracking-wide text-text-muted">
+                        · Renewed
+                      </span>
+                    ) : daysToExpiry < 0 ? (
+                      <span className="ml-1 text-[10px] font-semibold uppercase tracking-wide text-red-600">
+                        · Expired
+                      </span>
+                    ) : null}
                   </td>
                   <td className="px-4 py-2 text-right text-text-mid tabular-nums">
                     {course.certsIssuedCount}
@@ -180,10 +232,26 @@ export default async function MyCoursesPage({
                       >
                         Application
                       </Link>
+                      {isSuperseded ? (
+                        <span className="text-text-muted">Renewed</span>
+                      ) : renewalInProgress ? (
+                        <span className="text-text-muted">Renewal in progress</span>
+                      ) : renewable ? (
+                        <form action={startCourseRenewal}>
+                          <input type="hidden" name="courseId" value={course.id} />
+                          <button
+                            type="submit"
+                            className="font-semibold text-ace underline"
+                          >
+                            Renew
+                          </button>
+                        </form>
+                      ) : null}
                     </div>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         )}
@@ -222,11 +290,6 @@ export default async function MyCoursesPage({
                   </td>
                   <td className="px-4 py-2 font-medium text-navy">
                     {app.courseTitle ?? "(untitled draft)"}
-                    {app.isExpedited ? (
-                      <span className="ml-1 rounded bg-ace/15 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-ace-dark">
-                        expedited
-                      </span>
-                    ) : null}
                   </td>
                   <td className="px-4 py-2 text-text-mid tabular-nums">
                     {app.ceHours ? Number(app.ceHours).toFixed(1) : "—"}
