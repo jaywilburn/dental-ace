@@ -201,6 +201,33 @@ const STATE_REQUIREMENTS = [
   },
 ] as const;
 
+/*
+  Canadian CE-hour requirements by province (client-provided, June 2026). The
+  source table is province-level: one credit total + cycle + regulatory
+  authority per jurisdiction, with no per-license-type or category breakdown.
+  We therefore apply each province's total to all three license types so any
+  Canadian licensee's (state, licenseType) lookup resolves. Territories
+  (NT/NU/YT) are intentionally absent and show "no requirements on file".
+*/
+const CA_PROVINCE_REQUIREMENTS = [
+  { state: "BC", totalHours: 90, cycleMonths: 36, authority: "Oral Health BC" },
+  { state: "AB", totalHours: 60, cycleMonths: 24, authority: "College of Dental Surgeons of Alberta" },
+  { state: "SK", totalHours: 45, cycleMonths: 12, authority: "College of Dental Surgeons of Saskatchewan" },
+  { state: "MB", totalHours: 60, cycleMonths: 24, authority: "Manitoba Dental Association" },
+  { state: "ON", totalHours: 90, cycleMonths: 36, authority: "Royal College of Dental Surgeons of Ontario" },
+  { state: "QC", totalHours: 60, cycleMonths: 24, authority: "Ordre des dentistes du Quebec" },
+  { state: "NB", totalHours: 60, cycleMonths: 24, authority: "New Brunswick Dental Society" },
+  { state: "NS", totalHours: 90, cycleMonths: 36, authority: "Provincial Dental Board of Nova Scotia" },
+  { state: "PE", totalHours: 45, cycleMonths: 12, authority: "Dental Council of Prince Edward Island" },
+  { state: "NL", totalHours: 60, cycleMonths: 24, authority: "Newfoundland and Labrador Dental Board" },
+] as const;
+
+const CA_LICENSE_TYPES = [
+  LicenseType.DDS_DMD,
+  LicenseType.RDH,
+  LicenseType.DA,
+] as const;
+
 // Sarah's CE history. Sums to 14 of 18 hours: General CE complete (10/10),
 // Jurisprudence complete (2/2), Sedation partial (1/2), Med. Emergencies
 // complete (1/1), Infection Control not started (0/2).
@@ -362,6 +389,30 @@ async function seedProtrack() {
     });
   }
   console.log(`  ✓ ${STATE_REQUIREMENTS.length} provisional state requirements`);
+
+  // 1b. Canadian province requirements (client-provided), applied to every
+  // license type. No category breakdown, so categories is empty (overall-hours
+  // tracking only). Idempotent on (state, license type).
+  let caCount = 0;
+  for (const prov of CA_PROVINCE_REQUIREMENTS) {
+    for (const licenseType of CA_LICENSE_TYPES) {
+      const data = {
+        totalHours: prov.totalHours,
+        cycleMonths: prov.cycleMonths,
+        renewalMonth: null,
+        categories: [] as unknown as Prisma.InputJsonValue,
+        status: RequirementStatus.PROVISIONAL,
+        source: `${prov.authority} (client-provided, June 2026)`,
+      };
+      await prisma.stateRequirement.upsert({
+        where: { state_licenseType: { state: prov.state, licenseType } },
+        update: data,
+        create: { state: prov.state, licenseType, ...data },
+      });
+      caCount++;
+    }
+  }
+  console.log(`  ✓ ${caCount} Canadian province requirements`);
 
   // 2. Sarah's account (a plain user with ProTrack Free + her name on the row).
   const authUser = await upsertAuthUser(
