@@ -13,7 +13,6 @@ import {
 } from "@/components/application-form/form-controls";
 import { requireApplicationCredits } from "@/lib/company/credit-guards";
 import { ensureDraft, getDraftData, saveStep3 } from "@/lib/forms/application/actions";
-import { FileUploadField } from "@/components/application-form/file-upload-field";
 
 const PRESENTER_ROLES = ["Primary Presenter", "Co-Presenter", "Moderator"] as const;
 
@@ -103,14 +102,6 @@ export default async function ApplicationStep3Page({
               required
               minLength={2}
               maxLength={2000}
-            />
-          </FormField>
-          <FormField fullWidth>
-            <FileUploadField
-              applicationId={applicationId}
-              field="headshot"
-              label="Presenter Headshot"
-              existingFilename={draft.headshot?.filename}
             />
           </FormField>
         </FormCard>

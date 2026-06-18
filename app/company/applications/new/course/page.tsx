@@ -107,7 +107,7 @@ export default async function ApplicationCourseInfoPage({
           <FormField fullWidth>
             <FormLabel
               required
-              hint="Live formats need a presenter available for Q&A; all formats require a 5-question quiz (built in a later step)."
+              hint="Just your primary format — this does not limit you. Once approved, you can deliver this course in any of the formats you were accredited for."
             >
               Format you will use MOST to distribute this course
             </FormLabel>

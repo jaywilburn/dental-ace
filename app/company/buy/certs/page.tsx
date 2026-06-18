@@ -62,8 +62,7 @@ export default async function BuyCertsPage() {
         </p>
         <p className="text-[12px] leading-relaxed text-text-mid">
           Certificates are issued to attendees from your shared balance across
-          all courses. The webhook handler identifies each bundle and applies
-          the balance grant atomically.
+          all courses. Each bundle you buy is added to that balance.
         </p>
       </div>
     </>

@@ -207,7 +207,6 @@ export async function saveStep2(formData: FormData) {
     educationPart3: String(formData.get("educationPart3") ?? "") || undefined,
     educationPart4: String(formData.get("educationPart4") ?? "") || "N/A",
     creatorExperience: String(formData.get("creatorExperience") ?? ""),
-    cvResume: String(formData.get("cvResume") ?? ""),
   };
   await mergeStep(applicationId, step2Schema, raw, STEP_ROUTES[2]);
   redirect(STEP_ROUTES[3]);

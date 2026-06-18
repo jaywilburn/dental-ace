@@ -115,13 +115,9 @@ export const step2Schema = z.object({
     .string()
     .min(10, "Describe experience relative to the course subject")
     .max(2000),
-  // Text since 2026-06 (client feedback: type/paste the CV, not upload).
-  // Applications saved before the change carry a fileRef under this key; the
-  // read schema below keeps those parseable.
-  cvResume: z
-    .string()
-    .min(1, "CV / resume is required")
-    .max(20_000),
+  // CV/Resume question removed 2026-06 (client: no longer needed). Legacy
+  // applications still carry a cvResume value; the read schema keeps it
+  // parseable so old records stay viewable.
 });
 
 export const presenterSchema = z.object({
@@ -135,10 +131,9 @@ export const presenterSchema = z.object({
 
 export const step3Schema = z.object({
   presenters: z.array(presenterSchema).min(1).max(8),
-  // Phase 1 ships a single primary presenter, so the headshot is captured once
-  // at the top level (uploaded straight to applicationData) rather than nested
-  // per-presenter. It survives mergeStep because saveStep3 never sets this key.
-  headshot: fileRef.optional(),
+  // Presenter headshot upload removed 2026-06 (client: no longer needed).
+  // Legacy applications still carry a headshot fileRef; the read schema keeps
+  // it parseable so old records stay viewable (shown via the Attachments card).
 });
 
 const trueFalseQuestionSchema = z.object({
@@ -206,6 +201,8 @@ export const applicationDataReadSchema = applicationDataSchema
     // shown via resolveAttachmentLinks) or absence.
     courseOutline: z.union([z.string(), fileRef]).optional(),
     cvResume: z.union([z.string(), fileRef]).optional(),
+    // Removed from the form 2026-06; legacy applications still carry it.
+    headshot: fileRef.optional(),
     // New 2026-06 fields — optional on read so applications created before this
     // change remain viewable/approvable in the reviewer detail view.
     organizationName: z.string().optional(),

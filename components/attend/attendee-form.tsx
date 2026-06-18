@@ -63,7 +63,20 @@ export function AttendeeForm({ token, quiz }: { token: string; quiz: PublicQuizQ
           <Field label="Full name" value={name} onChange={setName} />
           <Field label="Email" value={email} onChange={setEmail} type="email" />
           <Field label="License number" value={licenseNumber} onChange={setLicenseNumber} />
-          <Field label="License type (e.g. RDH)" value={licenseType} onChange={setLicenseType} />
+          <label className="block text-sm">
+            <span className="text-slate-700">License type</span>
+            <select
+              value={licenseType}
+              onChange={(e) => setLicenseType(e.target.value)}
+              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+            >
+              <option value="">Select…</option>
+              <option value="RDH">Dental Hygienist (RDH)</option>
+              <option value="DDS/DMD">Dentist (DDS / DMD)</option>
+              <option value="DA">Dental Assistant (DA)</option>
+              <option value="Other">Other</option>
+            </select>
+          </label>
           <label className="block text-sm">
             <span className="text-slate-700">License state/province</span>
             <select

@@ -8,10 +8,12 @@ import { Prisma } from "@prisma/client";
 export function buildCertWhere(
   companyId: string | null | undefined,
   query: string,
+  courseId?: string,
 ): Prisma.IssuedCertificateWhereInput {
   return {
     companyId: companyId ?? "",
     passed: true,
+    ...(courseId ? { courseId } : {}),
     ...(query
       ? {
           OR: [

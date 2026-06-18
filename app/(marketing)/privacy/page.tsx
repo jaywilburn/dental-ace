@@ -61,25 +61,14 @@ const sections: Section[] = [
     body: (
       <>
         We share information with vendors who process it on our behalf, under
-        contract, and only as needed to deliver the service:
+        contract, and only as needed to deliver the service, including:
         <ul className="mt-3 list-disc space-y-1.5 pl-5">
+          <li>Cloud hosting, database, authentication, and file-storage providers.</li>
           <li>
-            <strong className="text-navy">Supabase</strong> for database,
-            authentication, and file storage.
+            A PCI-compliant payment processor. Card details are handled by the
+            processor, not stored on our servers.
           </li>
-          <li>
-            <strong className="text-navy">Stripe</strong> (including Stripe
-            Connect) for payment processing. Card details are handled by Stripe,
-            not stored on our servers.
-          </li>
-          <li>
-            <strong className="text-navy">Resend</strong> for transactional
-            email delivery.
-          </li>
-          <li>
-            <strong className="text-navy">Vercel</strong> for application
-            hosting and delivery.
-          </li>
+          <li>A transactional email delivery provider.</li>
         </ul>
       </>
     ),

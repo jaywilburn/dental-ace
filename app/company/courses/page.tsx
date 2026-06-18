@@ -257,7 +257,7 @@ export default async function MyCoursesPage({
         )}
       </div>
 
-      <h2 className="mb-3 text-[13px] font-semibold text-navy">In-flight applications</h2>
+      <h2 className="mb-3 text-[13px] font-semibold text-navy">In Review</h2>
       <div className="overflow-hidden rounded-lg border border-border bg-white">
         {applications.length === 0 ? (
           <p className="px-4 py-6 text-center text-[12px] text-text-muted">

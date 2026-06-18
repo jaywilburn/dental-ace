@@ -97,7 +97,6 @@ export default async function ApplicationStep5Page() {
             ...(data.educationPart3 ? [{ label: "Education Part 3", value: data.educationPart3, full: true }] : []),
             { label: "Education Part 4", value: data.educationPart4, full: true },
             { label: "Experience Relative to Subject", value: data.creatorExperience, full: true },
-            { label: "CV / Resume", value: data.cvResume, full: true },
             {
               label: "Detailed Bio",
               value: sanitizeRichText(data.detailedBioHtml),

@@ -14,7 +14,10 @@ export const runtime = "nodejs";
 
 const EXPORT_CAP = 10_000;
 
-const querySchema = z.object({ q: z.string().trim().max(200).optional() });
+const querySchema = z.object({
+  q: z.string().trim().max(200).optional(),
+  course: z.string().uuid().optional(),
+});
 
 export async function GET(request: NextRequest) {
   // Same gate as the Certificate Log page: no credits + no issued certs
@@ -23,6 +26,7 @@ export async function GET(request: NextRequest) {
 
   const parsed = querySchema.safeParse({
     q: request.nextUrl.searchParams.get("q") ?? undefined,
+    course: request.nextUrl.searchParams.get("course") ?? undefined,
   });
   if (!parsed.success) {
     return NextResponse.json({ error: "Invalid query" }, { status: 400 });
@@ -30,7 +34,7 @@ export async function GET(request: NextRequest) {
   const query = parsed.data.q ?? "";
 
   const certs = await prisma.issuedCertificate.findMany({
-    where: buildCertWhere(user.companyId, query),
+    where: buildCertWhere(user.companyId, query, parsed.data.course),
     orderBy: { issuedAt: "desc" },
     take: EXPORT_CAP,
     select: {
@@ -43,7 +47,7 @@ export async function GET(request: NextRequest) {
       course: {
         select: {
           courseIdNumber: true,
-          application: { select: { courseTitle: true } },
+          application: { select: { courseTitle: true, ceHours: true } },
         },
       },
     },
@@ -57,6 +61,7 @@ export async function GET(request: NextRequest) {
     "License Number",
     "Course ID",
     "Course Title",
+    "CE Hours",
     "Score",
   ];
 
@@ -71,6 +76,9 @@ export async function GET(request: NextRequest) {
         cert.licenseNumber ?? "",
         cert.course?.courseIdNumber ?? "",
         cert.course?.application?.courseTitle ?? "",
+        cert.course?.application?.ceHours != null
+          ? String(Number(cert.course.application.ceHours))
+          : "",
         cert.score != null ? String(cert.score) : "",
       ]
         .map(csvField)
