@@ -61,9 +61,9 @@ export default async function EventsIndexPage({
           <p className="font-semibold">No event-eligible courses yet</p>
           <p>
             Events need at least one approved course with a live delivery
-            format (Live/In Person or Live/Virtual) where you answered Yes to
+            format (Live/In Person or Live/Online) where you answered Yes to
             the combined-certificate and sessions-submitted-separately
-            questions on Step 1.{" "}
+            questions on Step 2 (Course Information).{" "}
             <Link
               href="/company/applications/new"
               className="font-semibold underline"

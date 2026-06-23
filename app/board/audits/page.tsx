@@ -45,7 +45,7 @@ export default async function AuditsHistoryPage() {
             No audits yet
           </p>
           <p className="mt-1 text-[12px] text-text-muted">
-            Run your first random audit to snapshot CE compliance for a sample
+            Run your first audit to snapshot CE compliance for a sample
             of in-state licensees.
           </p>
           <Link

@@ -32,7 +32,7 @@ const breakdown: {
     step: "For state boards",
     color: "ver",
     title: "Audit with confidence in Verify",
-    body: "Run a randomized CE audit on any percentage of licensees in one click. Compliance data is pulled live from ProTrack, deficiencies surface instantly, notices go out in bulk, and every batch produces a complete, defensible audit record.",
+    body: "Run a CE audit on any percentage of licensees in one click. Compliance data is pulled live from ProTrack, deficiencies surface instantly, notices go out in bulk, and every batch produces a complete, defensible audit record.",
   },
 ];
 

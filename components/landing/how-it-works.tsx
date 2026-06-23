@@ -26,7 +26,7 @@ const steps: { color: "ace" | "pro" | "ver"; title: string; desc: string }[] = [
   {
     color: "ver",
     title: "Board audits",
-    desc: "State board runs a random audit in Verify. Compliance data is live. Deficiencies flagged instantly.",
+    desc: "State board runs an audit in Verify. Compliance data is live. Deficiencies flagged instantly.",
   },
   {
     color: "ver",

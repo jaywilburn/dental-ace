@@ -60,7 +60,7 @@ export default async function NewAuditPage({
   return (
     <>
       <PageHeader
-        title="Run a random audit"
+        title="Run an audit"
         subtitle={`Pick a sample size and license type. Verify will snapshot CE compliance for the selected licensees in ${board.state}.`}
       />
 

@@ -90,7 +90,7 @@ export default function LandingPage() {
           label="Board Auditing"
           name="Verify"
           audience="For state dental boards, provisioned by AADB"
-          description="Replace your paper CE audit process entirely. Run a random audit in one click, send deficiency notices in bulk, and keep a full audit trail, automatically."
+          description="Replace your paper CE audit process entirely. Run an audit in one click, send deficiency notices in bulk, and keep a full audit trail, automatically."
           features={[
             {
               lead: "Audit in Seconds, Not Weeks.",

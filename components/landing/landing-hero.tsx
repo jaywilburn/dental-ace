@@ -93,9 +93,9 @@ export function LandingHero() {
           tag="Board Auditing"
           name="Verify"
           audience="For state dental boards"
-          description="Run random CE compliance audits on your licensees in one click. Live compliance data, bulk deficiency notices, and a full audit trail, replacing paper entirely."
+          description="Run CE compliance audits on your licensees in one click. Live compliance data, bulk deficiency notices, and a full audit trail, replacing paper entirely."
           features={[
-            "Randomized audits in seconds, not weeks",
+            "Audits in seconds, not weeks",
             "Live CE status for every licensee",
             "Deficiency notices and reminders, automatic",
           ]}

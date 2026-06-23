@@ -35,7 +35,7 @@ export default async function BoardSignupPage({
             Register your state board
           </h1>
           <p className="mt-1 max-w-sm text-[12px] text-white/55 text-pretty">
-            Verify lets state dental boards run random CE audits, send
+            Verify lets state dental boards run CE audits, send
             deficiency notices, and track resolution. First registration for
             a state requires a <span className="font-mono">.gov</span> email.
           </p>

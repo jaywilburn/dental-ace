@@ -14,6 +14,7 @@ import {
   formatLabel,
   monthsUntil,
   parseCategories,
+  recentCertificates,
   type CategoryProgress,
 } from "@/lib/protrack/progress";
 
@@ -46,6 +47,11 @@ export default async function ProtrackDashboard() {
       },
       certificates: {
         orderBy: { completedAt: "desc" },
+        // Cap the result set so a long-lived account with thousands of
+        // certificates can't force an unbounded fetch/deserialize just to render
+        // the 5 most-recent. The progress math below sums every returned cert, so
+        // the cap is set well above any realistic per-account total.
+        take: 1000,
         select: {
           id: true,
           courseTitle: true,
@@ -239,6 +245,46 @@ export default async function ProtrackDashboard() {
           </span>
         </Link>
       </div>
+
+      {/* My Certificates */}
+      {account.certificates.length > 0 ? (
+        <section className="mt-4 rounded-lg border border-border bg-white p-4">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-[12px] font-semibold text-navy">
+              My Certificates · {account.certificates.length}
+            </p>
+            <Link
+              href="/protrack/certificates"
+              className="shrink-0 text-[12px] font-semibold text-ace-dark transition-colors hover:text-navy"
+            >
+              View all →
+            </Link>
+          </div>
+          <ul className="mt-3 divide-y divide-border">
+            {recentCertificates(account.certificates).map((c) => (
+              <li
+                key={c.id}
+                className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 py-2.5 first:pt-0 last:pb-0"
+              >
+                <div className="min-w-0">
+                  <p className="truncate text-[13px] font-medium text-navy">
+                    {c.courseTitle}
+                  </p>
+                  <p className="text-[11px] text-text-muted">{c.category}</p>
+                </div>
+                <div className="shrink-0 text-right tabular-nums">
+                  <p className="text-[12px] font-semibold text-navy">
+                    {formatHours(Number(c.hours))} hrs
+                  </p>
+                  <p className="text-[11px] text-text-muted">
+                    {dateFmt.format(c.completedAt)}
+                  </p>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
       {user.protrackTier !== "PRO" ? (
         <Link

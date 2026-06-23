@@ -47,7 +47,7 @@ export default function NoticeInitialEmail({
           color: emailColors.textMid,
         }}
       >
-        Your license has been selected in a random continuing-education audit by
+        Your license has been selected in a continuing-education audit by
         the {boardName}. Based on the certificates currently on file, your
         record falls short of the requirements for this renewal cycle.
       </Text>

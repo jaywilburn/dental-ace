@@ -62,13 +62,13 @@ export default async function BoardOverviewPage() {
     <>
       <PageHeader
         title={`${board.name} — Overview`}
-        subtitle={`Verify dashboard for ${board.state}. Random audits, deficiency tracking, and compliance reporting.`}
+        subtitle={`Verify dashboard for ${board.state}. CE audits, deficiency tracking, and compliance reporting.`}
         action={
           <Link
             href="/board/audits/new"
             className="inline-flex items-center gap-2 rounded-md bg-ver px-4 py-2 text-[12px] font-semibold text-white transition-colors hover:bg-ver/90"
           >
-            🎲 Run Random Audit
+            🎲 Run Audit
           </Link>
         }
       />
@@ -192,7 +192,7 @@ function EmptyAudits() {
         No audits yet
       </p>
       <p className="mt-1 text-[12px] text-text-muted">
-        Run a random audit to pick a sample of licensees and snapshot their CE
+        Run an audit to pick a sample of licensees and snapshot their CE
         compliance.
       </p>
       <Link

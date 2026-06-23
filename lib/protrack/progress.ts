@@ -161,3 +161,18 @@ export function formatLabel(format: CategoryFormat): string {
 export function formatHours(hours: number): string {
   return Number.isInteger(hours) ? String(hours) : hours.toFixed(1);
 }
+
+/** Default number of certificates shown in the dashboard "My Certificates" list. */
+export const RECENT_CERTIFICATES_LIMIT = 5;
+
+/**
+ * Return the most-recent certificates for the dashboard list. Assumes the input
+ * is already ordered newest-first (the dashboard query sorts by completedAt desc),
+ * so this only caps the length — it does not re-sort.
+ */
+export function recentCertificates<T>(
+  certificates: readonly T[],
+  limit: number = RECENT_CERTIFICATES_LIMIT,
+): T[] {
+  return certificates.slice(0, Math.max(0, limit));
+}

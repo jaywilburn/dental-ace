@@ -3,7 +3,7 @@ import { MockupChrome } from "@/components/landing/mockup-chrome";
 /*
   Verify state-board mockup. Texas State Board header with licensee count, a
   4-stat row (compliant / in progress / deficient / compliant %), segmented
-  compliance bar, "Run Random Audit" button, and an active audit batch card.
+  compliance bar, "Run Audit" button, and an active audit batch card.
 */
 
 const audit = [
@@ -52,7 +52,7 @@ export function MockupVerify() {
         aria-hidden
         className="mb-2 w-full rounded-md bg-ace py-2.5 text-xs font-bold text-navy"
       >
-        Run Random Audit · 10% of licensees
+        Run Audit · 10% of licensees
       </button>
 
       <div className="rounded-md border border-ver/25 bg-ver/10 px-3 py-2">

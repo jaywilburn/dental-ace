@@ -44,7 +44,7 @@ const products: { name: React.ReactNode; tag: string; body: string; color: strin
     name: "Verify",
     tag: "Board Auditing",
     color: "text-ver",
-    body: "A board-provisioned audit tool for state dental boards. Runs randomized CE audits, surfaces deficiencies instantly, sends bulk notices, and produces a defensible audit record for every batch.",
+    body: "A board-provisioned audit tool for state dental boards. Runs CE audits, surfaces deficiencies instantly, sends bulk notices, and produces a defensible audit record for every batch.",
   },
 ];
 

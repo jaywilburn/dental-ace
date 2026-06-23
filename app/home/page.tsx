@@ -70,7 +70,7 @@ export default async function HomeHub({
     features.push({
       href: "/board",
       title: "Verify",
-      desc: "Run random audits, send deficiency notices, and track resolution.",
+      desc: "Run audits, send deficiency notices, and track resolution.",
     });
   } else if (pending.has("BOARD")) {
     features.push({

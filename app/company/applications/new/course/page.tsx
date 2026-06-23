@@ -121,7 +121,14 @@ export default async function ApplicationCourseInfoPage({
             <FormField fullWidth>
               <div className="rounded-md border-2 border-ace bg-ace-bg p-4">
                 <p className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-ace-dark">
-                  ★ Live course detected — two questions before you continue
+                  ★ Live course detected, two questions before you continue
+                </p>
+                <p className="mb-4 rounded-md border border-ace bg-white px-3 py-2.5 text-[11px] leading-relaxed text-ace-dark">
+                  Answering <strong>Yes</strong> to both questions below makes
+                  this course eligible for the Events feature, which bundles a
+                  multi-session live course into a single combined certificate
+                  for live attendees. These two answers are what unlock Event
+                  Setup once the course is approved.
                 </p>
                 <div className="mb-4">
                   <FormLabel required>
