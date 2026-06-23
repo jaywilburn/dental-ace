@@ -29,7 +29,7 @@ export const portalNav: Record<PortalArea, NavSection[]> = {
         { label: "Dashboard", href: "/company", icon: "📊" },
         { label: "New Application", href: "/company/applications/new", icon: "📝" },
         {
-          label: "Application Overview PDF",
+          label: "Downloadable Application Worksheet",
           href: "/application-overview.pdf",
           icon: "📄",
           external: true,
@@ -103,6 +103,8 @@ export const portalNav: Record<PortalArea, NavSection[]> = {
   ],
   // ProTrack. "Pro Features" items redirect FREE accounts to the upgrade page
   // server-side (lib/protrack/require-pro.ts); the lock treatment is cosmetic.
+  // Multi-State lives under "My CE" because it is a Free-tier feature (client
+  // June 2026) and the layout hides the entire "Pro Features" section for Free.
   protrack: [
     {
       label: "My CE",
@@ -110,6 +112,7 @@ export const portalNav: Record<PortalArea, NavSection[]> = {
         { label: "CE Dashboard", href: "/protrack", icon: "📊" },
         { label: "My Certificates", href: "/protrack/certificates", icon: "📜" },
         { label: "Upload Certificate", href: "/protrack/upload", icon: "⬆️" },
+        { label: "Multi-State", href: "/protrack/multistate", icon: "🌐" },
         { label: "State Requirements", href: "/protrack/states", icon: "🗺️" },
       ],
     },
@@ -118,7 +121,6 @@ export const portalNav: Record<PortalArea, NavSection[]> = {
       items: [
         { label: "Reminders", href: "/protrack/reminders", icon: "🔔" },
         { label: "Export Report", href: "/protrack/export", icon: "📤" },
-        { label: "Multi-State", href: "/protrack/multistate", icon: "🌐" },
       ],
     },
   ],

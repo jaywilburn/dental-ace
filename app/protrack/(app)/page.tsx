@@ -242,12 +242,12 @@ export default async function ProtrackDashboard() {
 
       {user.protrackTier !== "PRO" ? (
         <Link
-          href="/protrack/upgrade?gate=multistate"
+          href="/protrack/upgrade?gate=pro"
           className="mt-4 flex items-center justify-between gap-3 rounded-lg border border-ace/40 bg-ace-bg px-4 py-3 text-pretty transition-colors hover:bg-ace-bg/70"
         >
           <span className="text-[12px] text-ace-dark">
-            🌐 Licensed in more than one state or province? Track them all with
-            ProTrack Pro.
+            🔔 Never miss a renewal. Get deadline reminders and a downloadable
+            PDF for your dental board with ProTrack Pro.
           </span>
           <span className="shrink-0 text-[12px] font-semibold text-ace-dark">
             Upgrade →

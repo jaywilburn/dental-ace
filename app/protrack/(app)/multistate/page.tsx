@@ -1,8 +1,6 @@
-import Link from "next/link";
 import { PageHeader } from "@/components/portal-shell";
 import { ProgressBar } from "@/components/protrack/progress-bar";
 import { requireUser } from "@/lib/auth/session";
-import { isProActive } from "@/lib/protrack/require-pro";
 import { prisma } from "@/lib/prisma";
 import { LicenseType } from "@prisma/client";
 import {
@@ -29,8 +27,9 @@ const fieldClass =
   "w-full rounded-md border border-border bg-white px-3 py-2 text-[13px] text-navy outline-none focus:border-ace";
 
 /*
-  Pro-gated multi-state tracking. One progress tracker per license; certificates
-  count toward every state whose requirements list their category. Mirrors
+  Multi-state tracking, included in the Free tier (client June 2026). One
+  progress tracker per license; certificates count toward every state whose
+  requirements list their category. Mirrors
   logic/protrack-dev-mockup-suite.html #multistate.
 */
 export default async function MultiStatePage({
@@ -40,13 +39,6 @@ export default async function MultiStatePage({
 }) {
   const user = await requireUser();
   const { added, error } = await searchParams;
-
-  // Multi-state tracking stays a Pro feature. Rather than bounce Free users
-  // away (Row 15: "how do they upgrade?"), show a teaser with a clear upgrade
-  // CTA. The add-state action is still Pro-gated server-side.
-  if (!isProActive(user)) {
-    return <MultiStateUpsell />;
-  }
 
   const [licenses, certRows, requirements] = await Promise.all([
     prisma.userLicense.findMany({
@@ -85,7 +77,9 @@ export default async function MultiStatePage({
         <p className="mb-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[12px] text-red-700">
           {error === "duplicate"
             ? "You already track that state and license type."
-            : "Please check the license details and try again."}
+            : error === "limit"
+              ? "You can track up to 10 licenses."
+              : "Please check the license details and try again."}
         </p>
       ) : null}
 
@@ -211,34 +205,6 @@ export default async function MultiStatePage({
             Add license
           </button>
         </form>
-      </div>
-    </>
-  );
-}
-
-function MultiStateUpsell() {
-  return (
-    <>
-      <PageHeader
-        title="Multi-State Tracking"
-        subtitle="Track CE compliance for every state or province you are licensed in, at once."
-      />
-      <div className="mx-auto max-w-xl rounded-xl border-2 border-ace bg-white p-6 text-center">
-        <p className="text-2xl">🌐</p>
-        <p className="mt-2 font-serif text-lg font-bold text-navy">
-          Licensed in more than one state or province?
-        </p>
-        <p className="mx-auto mt-2 max-w-md text-[13px] leading-relaxed text-text-mid">
-          ProTrack Pro tracks every jurisdiction you hold a license in side by
-          side, so a single certificate counts toward each one automatically.
-          Multi-state tracking is a Pro feature.
-        </p>
-        <Link
-          href="/protrack/upgrade?gate=multistate"
-          className="mt-5 inline-block rounded-md bg-navy px-5 py-2.5 text-[13px] font-semibold text-white transition-colors hover:bg-navy/90"
-        >
-          Upgrade to add multi-state
-        </Link>
       </div>
     </>
   );

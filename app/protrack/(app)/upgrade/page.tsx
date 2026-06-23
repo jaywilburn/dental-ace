@@ -19,14 +19,13 @@ const FREE_FEATURES = [
   "Unlimited certificate uploads",
   "Automatic DentalACE certificate sync",
   "All 50-state requirements",
+  "Multi-state license tracking (all your jurisdictions)",
 ];
 
 const PRO_FEATURES = [
   "Everything in Free",
   "Renewal reminders (90 / 60 / 30 / 7 days)",
-  "Category-gap alerts",
-  "Multi-state license tracking",
-  "Audit-ready PDF export",
+  "Downloadable PDF for your dental board (audit-ready)",
 ];
 
 export default async function UpgradePage({
@@ -45,14 +44,9 @@ export default async function UpgradePage({
         subtitle="Stay audit-ready and never miss a renewal deadline."
       />
 
-      {gate === "multistate" ? (
+      {gate === "pro" ? (
         <p className="mb-4 rounded-md border border-ace/40 bg-ace-bg px-3 py-2 text-[12px] text-ace-dark text-pretty">
-          Multi-state tracking lets you track every state or province you are
-          licensed in at once. Upgrade below to unlock it.
-        </p>
-      ) : gate === "pro" ? (
-        <p className="mb-4 rounded-md border border-ace/40 bg-ace-bg px-3 py-2 text-[12px] text-ace-dark text-pretty">
-          Renewal reminders, multi-state tracking, and audit-ready exports are Pro
+          Renewal reminders and a downloadable PDF for your dental board are Pro
           features. Upgrade below to unlock them.
         </p>
       ) : null}

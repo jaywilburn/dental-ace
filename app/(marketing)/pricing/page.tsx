@@ -140,8 +140,9 @@ export default function PricingPage() {
             <p className="mb-1 font-serif text-3xl font-bold text-pro">$0</p>
             <p className="mb-5 text-sm leading-relaxed text-text-mid">
               Dentists, hygienists, and dental assistants track CE hours across
-              all 50 states at no cost. DentalACE certificates sync
-              automatically, and you can upload CE from any provider.
+              all 50 states, including every state they are licensed in, at no
+              cost. DentalACE certificates sync automatically, and you can upload
+              CE from any provider.
             </p>
             <Link
               href="/signup"
@@ -163,8 +164,7 @@ export default function PricingPage() {
             </p>
             <p className="mb-5 text-sm leading-relaxed text-text-mid">
               Everything in Free, plus renewal reminders at 90, 60, 30, and 7
-              days, category-gap alerts, multi-state license tracking, and
-              audit-ready PDF exports.
+              days and a downloadable, audit-ready PDF for your dental board.
             </p>
             <Link
               href="/signup"
@@ -197,15 +197,12 @@ export default function PricingPage() {
             <p className="mb-2 font-mono text-[10px] uppercase tracking-[2px] text-ver-dark">
               VerifyIQ · For state boards
             </p>
-            <p className="mb-1 font-serif text-3xl font-bold text-ver">
-              $499
-              <span className="text-base font-semibold">/mo</span>
+            <p className="mb-3 font-serif text-3xl font-bold text-ver">
+              Coming soon
             </p>
-            <p className="mb-3 text-xs text-text-muted">or $5,000/yr</p>
             <p className="mb-5 text-sm leading-relaxed text-text-mid">
               An advanced compliance intelligence add-on to Verify for state
-              dental boards. Coming soon; contact us for details and early
-              access.
+              dental boards. Contact us for details and early access.
             </p>
             <Link
               href="/verify/contact"

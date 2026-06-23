@@ -4,11 +4,13 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { LicenseType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { requireProtrackPro } from "@/lib/protrack/require-pro";
+import { requireUser } from "@/lib/auth/session";
 import { JURISDICTION_CODES } from "@/lib/protrack/reference";
 
 /*
-  Add an additional state license (Pro feature, gated server-side).
+  Add an additional state license. Multi-state tracking is included in the Free
+  tier (client June 2026); a soft cap keeps any one account from creating an
+  unreasonable number of license rows.
 
   SECURITY: this does NOT trigger an ACE certificate backfill. Auto-sync matches
   by account email, which is not verified at sign-up (email_confirm=true), so
@@ -23,8 +25,20 @@ const LICENSE_TYPES: LicenseType[] = [
   LicenseType.DA,
 ];
 
+// A licensed dental professional realistically holds a handful of jurisdictions.
+// Cap total licenses per account to prevent junk/abuse rows now that multi-state
+// is free; never reached by a real user.
+const MAX_LICENSES_PER_USER = 10;
+
 export async function addStateLicense(formData: FormData): Promise<void> {
-  const user = await requireProtrackPro();
+  const user = await requireUser();
+
+  const existing = await prisma.userLicense.count({
+    where: { licenseeId: user.id },
+  });
+  if (existing >= MAX_LICENSES_PER_USER) {
+    redirect("/protrack/multistate?error=limit");
+  }
 
   const state = String(formData.get("state") ?? "").trim().toUpperCase();
   const licenseTypeRaw = String(formData.get("licenseType") ?? "");
