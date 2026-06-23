@@ -29,6 +29,7 @@ import {
   RequirementStatus,
   ApplicationStatus,
 } from "@prisma/client";
+import { US_STATE_REQUIREMENTS } from "./data/state-requirements";
 
 config({ path: ".env.local" });
 
@@ -135,13 +136,15 @@ async function upsertAuthUser(email: string, password: string) {
 
 // ── Phase 2 (ProTrack) seed ──────────────────────────────────────────────────
 //
-// One LICENSEE test user (Sarah Mitchell, RDH, TX) with a primary license, a
-// handful of CE certificates, and provisional state requirements for TX/CA/FL.
-// Requirements are PROVISIONAL until John's authoritative 50-state file lands.
+// One LICENSEE test user (Sarah Mitchell, RDH, TX) with a primary license and a
+// handful of CE certificates. State requirements come from the shared data file
+// (prisma/data/state-requirements.ts): all 50 US states + DC from aces4ce.com
+// (CONFIRMED, totals-only) plus the TX/CA/FL RDH demo exceptions (PROVISIONAL,
+// with category breakdowns). `pnpm import:requirements` loads the same file.
 //
-// Texas RDH: 18 total hours over a 24-month cycle (renews in December). The
-// named category minimums below sum to 17; the remaining hour is general
-// elective CE. Many boards write rules this way (a total above the named sum).
+// Texas RDH (demo exception): 18 total hours over a 24-month cycle (renews in
+// December). The named category minimums sum to 17; the remaining hour is
+// general elective CE. Many boards write rules this way (a total above the sum).
 
 const LICENSEE_SEED = {
   email: "sarah.mitchell@example.com",
@@ -153,53 +156,6 @@ const LICENSEE_SEED = {
   licenseNumber: "TX-RDH-91043",
   renewalDate: new Date("2026-12-31T00:00:00Z"),
 } as const;
-
-const STATE_REQUIREMENTS = [
-  {
-    state: "TX",
-    licenseType: LicenseType.RDH,
-    totalHours: 18,
-    cycleMonths: 24,
-    renewalMonth: 12,
-    categories: [
-      { name: "General CE", hours: 10, format: "ANY" },
-      { name: "Jurisprudence", hours: 2, format: "ONLINE" },
-      { name: "Sedation", hours: 2, format: "IN_PERSON" },
-      { name: "Infection Control", hours: 2, format: "ANY" },
-      { name: "Med. Emergencies", hours: 1, format: "IN_PERSON" },
-    ],
-    source: "Provisional seed (mockup). Replace with John's authoritative file.",
-  },
-  {
-    state: "CA",
-    licenseType: LicenseType.RDH,
-    totalHours: 25,
-    cycleMonths: 24,
-    renewalMonth: null,
-    categories: [
-      { name: "General CE", hours: 21, format: "ANY" },
-      { name: "Infection Control", hours: 2, format: "ANY" },
-      { name: "Basic Life Support", hours: 2, format: "IN_PERSON" },
-    ],
-    source: "Provisional seed. Replace with John's authoritative file.",
-  },
-  {
-    state: "FL",
-    licenseType: LicenseType.RDH,
-    totalHours: 24,
-    cycleMonths: 24,
-    renewalMonth: null,
-    categories: [
-      { name: "General CE", hours: 16, format: "ANY" },
-      { name: "Medical Errors", hours: 2, format: "ANY" },
-      { name: "Jurisprudence", hours: 2, format: "ONLINE" },
-      { name: "HIV/AIDS", hours: 1, format: "ANY" },
-      { name: "Domestic Violence", hours: 2, format: "ANY" },
-      { name: "Infection Control", hours: 1, format: "ANY" },
-    ],
-    source: "Provisional seed. Replace with John's authoritative file.",
-  },
-] as const;
 
 /*
   Canadian CE-hour requirements by province (client-provided, June 2026). The
@@ -362,33 +318,27 @@ async function seedAceSyncDemo(companyId: string) {
 async function seedProtrack() {
   console.log("\nSeeding ProTrack (Phase 2) licensee + state requirements...\n");
 
-  // 1. Provisional state requirements (idempotent on state + license type).
-  for (const req of STATE_REQUIREMENTS) {
+  // 1. US state requirements from the shared data file. Each row carries its own
+  // status/source/categories (CONFIRMED aces4ce totals + PROVISIONAL demo rows).
+  // Idempotent on (state, license type).
+  for (const req of US_STATE_REQUIREMENTS) {
+    const data = {
+      totalHours: req.totalHours,
+      cycleMonths: req.cycleMonths,
+      renewalMonth: req.renewalMonth,
+      categories: req.categories as unknown as Prisma.InputJsonValue,
+      status: req.status,
+      source: req.source,
+    };
     await prisma.stateRequirement.upsert({
       where: {
         state_licenseType: { state: req.state, licenseType: req.licenseType },
       },
-      update: {
-        totalHours: req.totalHours,
-        cycleMonths: req.cycleMonths,
-        renewalMonth: req.renewalMonth,
-        categories: req.categories as unknown as Prisma.InputJsonValue,
-        status: RequirementStatus.PROVISIONAL,
-        source: req.source,
-      },
-      create: {
-        state: req.state,
-        licenseType: req.licenseType,
-        totalHours: req.totalHours,
-        cycleMonths: req.cycleMonths,
-        renewalMonth: req.renewalMonth,
-        categories: req.categories as unknown as Prisma.InputJsonValue,
-        status: RequirementStatus.PROVISIONAL,
-        source: req.source,
-      },
+      update: data,
+      create: { state: req.state, licenseType: req.licenseType, ...data },
     });
   }
-  console.log(`  ✓ ${STATE_REQUIREMENTS.length} provisional state requirements`);
+  console.log(`  ✓ ${US_STATE_REQUIREMENTS.length} US state requirements`);
 
   // 1b. Canadian province requirements (client-provided), applied to every
   // license type. No category breakdown, so categories is empty (overall-hours
