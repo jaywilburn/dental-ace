@@ -78,8 +78,6 @@ export const step1Schema = z.object({
     .string()
     .min(20, "Add a short description (up to 2 paragraphs)")
     .max(1500),
-  combinedCert: z.boolean().optional(),
-  submitSessionsSeparately: z.boolean().optional(),
   publicProtectionStatement: z.string().min(20, "Please describe how this course benefits patient safety").max(2000),
   courseObjectives: z.string().min(20, "List at least 3 objectives").max(2000),
   // Text since 2026-06 (client feedback: type/paste the outline, not upload).

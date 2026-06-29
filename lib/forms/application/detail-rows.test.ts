@@ -108,23 +108,6 @@ describe("courseInfoRows", () => {
     expect(labels).toContain("ADA CERP Category");
   });
 
-  it("adds combined-cert rows only for live formats, including retired values", () => {
-    const onDemand = courseInfoRows(parseRead()).map((r) => r.label);
-    expect(onDemand).not.toContain("Combined Cert?");
-
-    const live = courseInfoRows(
-      parseRead({ deliveryFormat: "Live/In Person", combinedCert: true }),
-    );
-    expect(live.find((r) => r.label === "Combined Cert?")?.value).toBe("Yes");
-    expect(live.map((r) => r.label)).toContain("Sessions submitted separately?");
-
-    // Retired pre-2026-06 value still counts as live.
-    const legacyLive = courseInfoRows(
-      parseRead({ deliveryFormat: "Live Event" }),
-    ).map((r) => r.label);
-    expect(legacyLive).toContain("Combined Cert?");
-  });
-
   it("shows the course outline row only for the current text form", () => {
     // Absent (legacy application without an outline) — no row.
     expect(courseInfoRows(parseRead()).map((r) => r.label)).not.toContain(

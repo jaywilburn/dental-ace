@@ -44,6 +44,14 @@ export default async function ReviewerQueuePage({
     take: 100,
   });
 
+  // Events run through the same review queue (separate table — the columns differ).
+  const pendingEvents = await prisma.event.findMany({
+    where: { status: "PENDING" },
+    orderBy: { submittedAt: "asc" },
+    include: { company: { select: { name: true } } },
+    take: 100,
+  });
+
   const now = new Date().getTime();
   const fieldClass =
     "rounded-md border border-border bg-white px-3 py-1.5 text-[12px] text-navy outline-none focus:border-ace";
@@ -172,6 +180,52 @@ export default async function ReviewerQueuePage({
           </table>
         )}
       </div>
+
+      {pendingEvents.length > 0 ? (
+        <div className="mt-8">
+          <h2 className="mb-2 text-[13px] font-semibold text-navy">
+            Pending Events ({pendingEvents.length})
+          </h2>
+          <div className="overflow-hidden rounded-lg border border-border bg-white">
+            <table className="w-full text-[12px]">
+              <thead>
+                <tr className="border-b border-border bg-surface text-left text-[10px] uppercase tracking-wide text-text-muted">
+                  <th className="px-4 py-2 font-semibold">Submitted</th>
+                  <th className="px-4 py-2 font-semibold">Company</th>
+                  <th className="px-4 py-2 font-semibold">Event</th>
+                  <th className="px-4 py-2 text-right font-semibold">Hours</th>
+                  <th className="px-4 py-2 font-semibold">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pendingEvents.map((ev) => {
+                  const submitted = ev.submittedAt ?? ev.createdAt;
+                  return (
+                    <tr key={ev.id} className="border-b border-border last:border-b-0">
+                      <td className="px-4 py-2 text-text-muted">
+                        {submitted.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                      </td>
+                      <td className="px-4 py-2 text-text-mid">{ev.company.name}</td>
+                      <td className="px-4 py-2 font-medium text-navy">{ev.name}</td>
+                      <td className="px-4 py-2 text-right tabular-nums text-text-mid">
+                        {ev.totalHours ? Number(ev.totalHours).toFixed(1) : "—"}
+                      </td>
+                      <td className="px-4 py-2">
+                        <Link
+                          href={`/reviewer/events/${ev.id}`}
+                          className="rounded-md bg-navy px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-navy/90"
+                        >
+                          Review
+                        </Link>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : null}
     </>
   );
 }

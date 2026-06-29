@@ -56,6 +56,7 @@ export default async function CertificateLogPage({
             application: { select: { courseTitle: true, ceHours: true } },
           },
         },
+        event: { select: { name: true } },
       },
     }),
   ]);
@@ -157,13 +158,17 @@ export default async function CertificateLogPage({
                     </span>
                   </td>
                   <td className="px-4 py-2 text-text-mid">
-                    {cert.course.application.courseTitle ??
-                      cert.course.courseIdNumber}
+                    {cert.course?.application.courseTitle ??
+                      cert.course?.courseIdNumber ??
+                      cert.event?.name ??
+                      "—"}
                   </td>
                   <td className="px-4 py-2 text-right text-text-mid tabular-nums">
-                    {cert.course.application.ceHours
-                      ? Number(cert.course.application.ceHours).toFixed(1)
-                      : "—"}
+                    {cert.ceHours
+                      ? Number(cert.ceHours).toFixed(1)
+                      : cert.course?.application.ceHours
+                        ? Number(cert.course.application.ceHours).toFixed(1)
+                        : "—"}
                   </td>
                   <td className="px-4 py-2 text-text-muted">
                     {cert.licenseType ?? ""} {cert.licenseNumber ?? ""}

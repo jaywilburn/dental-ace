@@ -161,13 +161,6 @@ export async function saveStep1(formData: FormData) {
     deliveryFormat: String(formData.get("deliveryFormat") ?? ""),
     primaryDistributionFormat: String(formData.get("primaryDistributionFormat") ?? ""),
     shortDescription: String(formData.get("shortDescription") ?? ""),
-    combinedCert: formData.get("combinedCert") === "yes" ? true : formData.get("combinedCert") === "no" ? false : undefined,
-    submitSessionsSeparately:
-      formData.get("submitSessionsSeparately") === "yes"
-        ? true
-        : formData.get("submitSessionsSeparately") === "no"
-          ? false
-          : undefined,
     publicProtectionStatement: String(formData.get("publicProtectionStatement") ?? ""),
     courseObjectives: String(formData.get("courseObjectives") ?? ""),
     courseOutline: String(formData.get("courseOutline") ?? ""),

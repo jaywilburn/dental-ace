@@ -16,6 +16,8 @@ export type AceBadgeInput = {
   courseIdNumber: string;
   approvedAt: Date;
   expiresAt: Date;
+  // "Course" (default) or "Event" — drives the wording on the logo.
+  kind?: "Course" | "Event";
 };
 
 export type BadgeFormat = "png" | "jpeg";
@@ -36,6 +38,8 @@ function badgeHtml(input: AceBadgeInput): string {
   const from = input.approvedAt.toLocaleDateString("en-US", dateOpts);
   const to = input.expiresAt.toLocaleDateString("en-US", dateOpts);
   const safeId = input.courseIdNumber.replace(/[<>&]/g, "");
+  const kind = input.kind ?? "Course";
+  const kindLower = kind.toLowerCase();
   return `<!doctype html><html><head><meta charset="utf-8"><style>
     *{margin:0;padding:0;box-sizing:border-box}
     body{width:600px;height:600px;background:#D9D9D9;color:#262626;
@@ -52,9 +56,9 @@ function badgeHtml(input: AceBadgeInput): string {
   </style></head><body>
     <img class="seal" src="${ACE_SEAL_DATA_URI}" alt="DentalACE Accredited Continuing Education, An AADB Program" />
     <div class="line approve">The content of this course has been approved by the American Association of Dental Boards.</div>
-    <div class="line idlabel">The Course ID for this Course is:</div>
+    <div class="line idlabel">The ${kind} ID for this ${kind} is:</div>
     <div class="line idval">${safeId}</div>
-    <div class="line accredited">This content of this course is accredited from:</div>
+    <div class="line accredited">This content of this ${kindLower} is accredited from:</div>
     <div class="line dates">${from} - ${to}</div>
   </body></html>`;
 }

@@ -1,7 +1,4 @@
-import {
-  isLiveFormat,
-  type ApplicationDataRead,
-} from "@/lib/forms/application/schemas";
+import { type ApplicationDataRead } from "@/lib/forms/application/schemas";
 import { sanitizeRichText } from "@/lib/forms/application/rich-text";
 
 /*
@@ -49,15 +46,6 @@ export function courseInfoRows(data: ApplicationDataRead): DetailRow[] {
       : []),
     ...(data.adaCerpCategory
       ? [{ label: "ADA CERP Category", value: data.adaCerpCategory }]
-      : []),
-    ...(isLiveFormat(data.deliveryFormat)
-      ? [
-          { label: "Combined Cert?", value: data.combinedCert ? "Yes" : "No" },
-          {
-            label: "Sessions submitted separately?",
-            value: data.submitSessionsSeparately ? "Yes" : "No",
-          },
-        ]
       : []),
     { label: "Public Protection Statement", value: data.publicProtectionStatement, full: true },
     { label: "Course Objectives", value: data.courseObjectives, full: true },
