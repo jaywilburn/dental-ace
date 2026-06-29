@@ -1,16 +1,20 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { requireDentalAce } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
-import { renderAceBadgePng } from "@/lib/badge/render";
+import { renderAceBadge, type BadgeFormat } from "@/lib/badge/render";
 
 export const runtime = "nodejs";
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
   const user = await requireDentalAce();
   const { id } = await params;
+
+  // ?format=jpeg downloads a JPEG; anything else (default) is PNG.
+  const format: BadgeFormat =
+    request.nextUrl.searchParams.get("format") === "jpeg" ? "jpeg" : "png";
 
   const course = await prisma.accreditedCourse.findUnique({
     where: { id },
@@ -18,7 +22,7 @@ export async function GET(
       companyId: true,
       courseIdNumber: true,
       approvedAt: true,
-      application: { select: { courseTitle: true } },
+      expiresAt: true,
     },
   });
   if (!course) {
@@ -28,13 +32,16 @@ export async function GET(
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  let png: Buffer;
+  let image: Buffer;
   try {
-    png = await renderAceBadgePng({
-      courseIdNumber: course.courseIdNumber,
-      courseTitle: course.application.courseTitle ?? "Accredited Course",
-      approvedAt: course.approvedAt,
-    });
+    image = await renderAceBadge(
+      {
+        courseIdNumber: course.courseIdNumber,
+        approvedAt: course.approvedAt,
+        expiresAt: course.expiresAt,
+      },
+      format,
+    );
   } catch (err) {
     console.error(`[badge] render failed (courseId=${id})`, err);
     return NextResponse.json(
@@ -43,12 +50,13 @@ export async function GET(
     );
   }
 
-  return new NextResponse(new Uint8Array(png), {
+  const ext = format === "jpeg" ? "jpg" : "png";
+  return new NextResponse(new Uint8Array(image), {
     headers: {
-      "Content-Type": "image/png",
+      "Content-Type": format === "jpeg" ? "image/jpeg" : "image/png",
       // User-facing name is "Marketing Logo" (client feedback, 2026-06); the
       // /badge route path and render module keep the internal name.
-      "Content-Disposition": `attachment; filename="${course.courseIdNumber}-marketing-logo.png"`,
+      "Content-Disposition": `attachment; filename="${course.courseIdNumber}-marketing-logo.${ext}"`,
     },
   });
 }

@@ -54,6 +54,20 @@ export default async function ApplicationOrgStepPage({
         }
       />
       <ApplicationStepBar currentStep={1} />
+      <a
+        href="/application-overview.pdf"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="mb-5 flex items-center justify-between gap-3 rounded-md border border-ace/40 bg-ace-bg px-4 py-3 text-pretty transition-colors hover:bg-ace-bg/70"
+      >
+        <span className="text-[12px] text-ace-dark">
+          New to the application? Download the Application Worksheet (PDF) to
+          gather everything you need before you start.
+        </span>
+        <span className="shrink-0 text-[12px] font-semibold text-ace-dark">
+          ↓ Worksheet
+        </span>
+      </a>
       {error === "validation" ? <FormErrorBanner detail={detail} /> : null}
       <form action={saveOrgStep} className="space-y-5">
         <input type="hidden" name="applicationId" value={applicationId} />

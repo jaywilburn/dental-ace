@@ -37,6 +37,7 @@ type IssuedCertForSync = {
   courseType: string | null;
   deliveryMethod: string | null;
   certPdfUrl: string | null;
+  completedAt: Date | null;
   issuedAt: Date;
   company: { name: string };
   course: {
@@ -49,6 +50,7 @@ const ISSUED_SELECT = {
   courseType: true,
   deliveryMethod: true,
   certPdfUrl: true,
+  completedAt: true,
   issuedAt: true,
   company: { select: { name: true } },
   course: {
@@ -73,7 +75,9 @@ function toCeCertData(issued: IssuedCertForSync, licenseeId: string) {
       ? Number(issued.course.application.ceHours)
       : 0,
     deliveryFormat: mapDeliveryFormat(issued.deliveryMethod),
-    completedAt: issued.issuedAt,
+    // Prefer the attendee-entered completion date; legacy rows (null) fall back
+    // to the issuance timestamp.
+    completedAt: issued.completedAt ?? issued.issuedAt,
     verificationStatus: VerificationStatus.AUTO,
     fileUrl: issued.certPdfUrl,
     issuedCertificateId: issued.id,

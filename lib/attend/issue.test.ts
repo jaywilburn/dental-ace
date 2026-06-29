@@ -26,6 +26,7 @@ const baseInput = {
   courseType: "Infection Control",
   quizResponses: [{ type: "TF", answer: "True" }],
   score: 4,
+  completedAt: new Date("2026-01-15T12:00:00"),
 };
 
 describe("issueCertificateTx", () => {

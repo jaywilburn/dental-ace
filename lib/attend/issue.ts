@@ -28,6 +28,7 @@ export type IssueCertInput = {
   courseType?: string | null;
   quizResponses: unknown;
   score: number;
+  completedAt: Date;
 };
 
 /**
@@ -72,6 +73,7 @@ export async function issueCertificateTx(
       quizResponses: input.quizResponses as Prisma.InputJsonValue,
       score: input.score,
       passed: true,
+      completedAt: input.completedAt,
     },
     select: { id: true },
   });

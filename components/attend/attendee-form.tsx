@@ -19,9 +19,16 @@ export function AttendeeForm({ token, quiz }: { token: string; quiz: PublicQuizQ
   const [step, setStep] = useState(0);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  // Course completion date ("what day did you take the course?"), defaulted to
+  // today. Lazy initializers (no setState-in-effect); both compute the same day
+  // on server render and client hydration.
+  const [today] = useState(todayISO);
+  const [completedOn, setCompletedOn] = useState<string>(today);
   const [licenseNumber, setLicenseNumber] = useState("");
   const [licenseType, setLicenseType] = useState("");
-  const [licenseState, setLicenseState] = useState("");
+  // Multiple states of licensure (client "Course Completion" form, items 8-16).
+  // First entry is the primary/required state; up to 5 total.
+  const [licenseStates, setLicenseStates] = useState<string[]>([""]);
   const [affirmed, setAffirmed] = useState(false);
   const [answers, setAnswers] = useState<(Answer | null)[]>(quiz.map(() => null));
   const [submitting, setSubmitting] = useState(false);
@@ -30,6 +37,21 @@ export function AttendeeForm({ token, quiz }: { token: string; quiz: PublicQuizQ
   function setAnswer(i: number, a: Answer) {
     setAnswers((prev) => prev.map((x, idx) => (idx === i ? a : x)));
   }
+
+  function setStateAt(i: number, v: string) {
+    setLicenseStates((prev) => prev.map((s, idx) => (idx === i ? v : s)));
+  }
+  function addState() {
+    setLicenseStates((prev) => (prev.length >= 5 ? prev : [...prev, ""]));
+  }
+  function removeState(i: number) {
+    setLicenseStates((prev) => prev.filter((_, idx) => idx !== i));
+  }
+
+  // De-duped, upper-cased, non-empty states for submit + review.
+  const cleanStates = Array.from(
+    new Set(licenseStates.map((s) => s.trim().toUpperCase()).filter(Boolean)),
+  );
 
   async function onSubmit() {
     setSubmitting(true);
@@ -40,7 +62,8 @@ export function AttendeeForm({ token, quiz }: { token: string; quiz: PublicQuizQ
         attendeeEmail: email,
         licenseNumber: licenseNumber || undefined,
         licenseType: licenseType || undefined,
-        licenseStates: [licenseState.toUpperCase()],
+        licenseStates: cleanStates,
+        completionDate: completedOn,
         affirmed,
         answers: answers.filter(Boolean) as Answer[],
       });
@@ -62,6 +85,16 @@ export function AttendeeForm({ token, quiz }: { token: string; quiz: PublicQuizQ
         <section className="space-y-3">
           <Field label="Full name" value={name} onChange={setName} />
           <Field label="Email" value={email} onChange={setEmail} type="email" />
+          <label className="block text-sm">
+            <span className="text-slate-700">Date you completed the course</span>
+            <input
+              type="date"
+              value={completedOn}
+              max={today || undefined}
+              onChange={(e) => setCompletedOn(e.target.value)}
+              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+            />
+          </label>
           <Field label="License number" value={licenseNumber} onChange={setLicenseNumber} />
           <label className="block text-sm">
             <span className="text-slate-700">License type</span>
@@ -77,18 +110,47 @@ export function AttendeeForm({ token, quiz }: { token: string; quiz: PublicQuizQ
               <option value="Other">Other</option>
             </select>
           </label>
-          <label className="block text-sm">
-            <span className="text-slate-700">License state/province</span>
-            <select
-              value={licenseState}
-              onChange={(e) => setLicenseState(e.target.value)}
-              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-            >
-              <option value="">Select…</option>
-              <JurisdictionOptions />
-            </select>
-          </label>
-          <NavButtons onNext={() => setStep(1)} nextDisabled={!name || !email || !licenseState} />
+          <div className="space-y-2">
+            <span className="block text-sm text-slate-700">
+              State(s) of licensure
+            </span>
+            {licenseStates.map((st, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <select
+                  value={st}
+                  onChange={(e) => setStateAt(i, e.target.value)}
+                  className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                >
+                  <option value="">
+                    {i === 0 ? "Select your state…" : "Select another state…"}
+                  </option>
+                  <JurisdictionOptions />
+                </select>
+                {i > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => removeState(i)}
+                    className="shrink-0 rounded-md border border-slate-300 px-2.5 py-2 text-xs text-slate-500"
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
+            ))}
+            {licenseStates.length < 5 && (
+              <button
+                type="button"
+                onClick={addState}
+                className="text-sm font-medium text-ace-dark hover:underline"
+              >
+                + Add another state where you are licensed
+              </button>
+            )}
+          </div>
+          <NavButtons
+            onNext={() => setStep(1)}
+            nextDisabled={!name || !email || !completedOn || !cleanStates.length}
+          />
         </section>
       )}
 
@@ -136,7 +198,8 @@ export function AttendeeForm({ token, quiz }: { token: string; quiz: PublicQuizQ
           <div className="rounded-md bg-slate-50 p-3 text-sm text-slate-700">
             <div><strong>{name}</strong></div>
             <div>{email}</div>
-            <div>{licenseType} {licenseNumber} · {licenseState.toUpperCase()}</div>
+            <div>{licenseType} {licenseNumber} · {cleanStates.join(", ")}</div>
+            <div>Completed {completedOn}</div>
           </div>
           <NavButtons
             onBack={() => setStep(2)}
@@ -233,6 +296,13 @@ function NavButtons({ onBack, onNext, nextDisabled, nextLabel = "Next" }: { onBa
       </button>
     </div>
   );
+}
+
+function todayISO(): string {
+  const t = new Date();
+  const m = String(t.getMonth() + 1).padStart(2, "0");
+  const d = String(t.getDate()).padStart(2, "0");
+  return `${t.getFullYear()}-${m}-${d}`;
 }
 
 function Banner({ tone, title, body }: { tone: "ok" | "warn"; title: string; body: string }) {

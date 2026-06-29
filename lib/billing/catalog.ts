@@ -10,10 +10,11 @@
   Expedited processing was removed entirely in June 2026 (client Row 17): no
   expedited SKU, no expedited credit pool.
 
-  Real-mode Stripe price IDs come from env (STRIPE_PRICE_ID_<SKU>). In mock
-  mode they're undefined and the system uses the SKU id directly. For
-  `app_course`, the real-mode Stripe Price should be configured with volume
-  tiers matching APP_COURSE_TIERS so Stripe and this table can't disagree.
+  Real-mode checkout (lib/billing/start-checkout.ts) builds Stripe sessions
+  from inline price_data keyed off this table, so the prices here are the only
+  source of truth and can't drift from a separately-configured Stripe Price.
+  The per-SKU `envPriceIdKey` fields are retained for a possible future switch
+  to pre-created Stripe Prices but are not read by the current checkout.
 */
 
 export type SkuKind = "APP_CREDIT" | "CERT_BUNDLE";

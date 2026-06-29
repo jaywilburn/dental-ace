@@ -39,11 +39,19 @@ export async function createSignedUrl(
   kind: BucketKind,
   path: string,
   expiresIn = 300,
+  options?: {
+    /**
+     * When set, the signed URL forces a download (Content-Disposition:
+     * attachment) instead of rendering inline. Pass a string to override the
+     * downloaded filename, or true to keep the stored object name.
+     */
+    download?: boolean | string;
+  },
 ): Promise<string> {
   const supabase = createServiceRoleClient();
   const { data, error } = await supabase.storage
     .from(bucketName(kind))
-    .createSignedUrl(path, expiresIn);
+    .createSignedUrl(path, expiresIn, options);
   if (error || !data?.signedUrl) {
     throw new Error(`Signed URL failed (${path}): ${error?.message ?? "no URL"}`);
   }

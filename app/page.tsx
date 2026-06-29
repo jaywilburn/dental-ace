@@ -7,6 +7,7 @@ import { ProductDetail } from "@/components/landing/product-detail";
 import { MockupAce } from "@/components/landing/mockup-ace";
 import { MockupProTrack } from "@/components/landing/mockup-protrack";
 import { MockupVerify } from "@/components/landing/mockup-verify";
+import { VerifyIQSection } from "@/components/landing/verifyiq-section";
 import { TrustSection } from "@/components/landing/trust-section";
 import { CtaBanner } from "@/components/landing/cta-banner";
 import { LandingFooter } from "@/components/landing/landing-footer";
@@ -109,6 +110,8 @@ export default function LandingPage() {
           ctaHref="/verify/contact"
           mockup={<MockupVerify />}
         />
+
+        <VerifyIQSection />
 
         <TrustSection />
         <CtaBanner />

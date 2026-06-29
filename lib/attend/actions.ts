@@ -61,6 +61,9 @@ export async function submitAttendance(input: unknown): Promise<AttendResult> {
   if (!parsed.success) return { status: "invalid" };
   const sub = parsed.data;
   const email = sub.attendeeEmail.toLowerCase();
+  // Attendee-entered course completion date. Parsed at noon so the calendar
+  // date is stable regardless of server timezone. Drives the cert + ProTrack.
+  const completedAt = new Date(`${sub.completionDate}T12:00:00`);
 
   // Rate limit: 5 submissions / 10 min per IP+token.
   const h = await headers();
@@ -117,6 +120,7 @@ export async function submitAttendance(input: unknown): Promise<AttendResult> {
         quizResponses: sub.answers,
         score: scored.score,
         passed: false,
+        completedAt,
       },
     });
     const canRetake = !decision.isFinalAttempt;
@@ -159,6 +163,7 @@ export async function submitAttendance(input: unknown): Promise<AttendResult> {
         courseType: course.application.courseType,
         quizResponses: sub.answers,
         score: scored.score,
+        completedAt,
       });
       return cert.id;
     });
@@ -170,7 +175,6 @@ export async function submitAttendance(input: unknown): Promise<AttendResult> {
 
   // Post-commit: render PDF, upload, persist URL, email. Failures are logged,
   // not fatal — the cert exists and is downloadable from the company log.
-  const completedAt = new Date();
   const pdfPath = `${certificateId}.pdf`;
   try {
     const pdf = await renderCertificatePdf({
