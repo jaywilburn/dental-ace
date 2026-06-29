@@ -373,6 +373,10 @@ model IssuedCertificate {
   score          Int
   passed         Boolean
   certPdfUrl     String?          @map("cert_pdf_url")
+  // Course completion date as entered by the attendee ("when did you take the
+  // course?"). Nullable: legacy rows fall back to issuedAt. Flows to the
+  // certificate PDF and the ProTrack CE record (see lib/protrack/ace-sync.ts).
+  completedAt    DateTime?        @map("completed_at")
   issuedAt       DateTime         @default(now()) @map("issued_at")
 
   ceCertificate CeCertificate? // Phase 2: the ProTrack copy once auto-synced

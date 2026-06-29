@@ -8,6 +8,7 @@ const valid = {
   licenseNumber: "TX-RDH-1",
   licenseType: "RDH",
   licenseStates: ["TX"],
+  completionDate: "2026-01-15",
   affirmed: true,
   answers: [
     { type: "TF", answer: "True" },
@@ -25,6 +26,18 @@ describe("attendeeSubmissionSchema", () => {
 
   it("rejects when attendance is not affirmed", () => {
     expect(attendeeSubmissionSchema.safeParse({ ...valid, affirmed: false }).success).toBe(false);
+  });
+
+  it("rejects a future completion date", () => {
+    expect(
+      attendeeSubmissionSchema.safeParse({ ...valid, completionDate: "2099-01-01" }).success,
+    ).toBe(false);
+  });
+
+  it("rejects a malformed completion date", () => {
+    expect(
+      attendeeSubmissionSchema.safeParse({ ...valid, completionDate: "01/15/2026" }).success,
+    ).toBe(false);
   });
 
   it("rejects the wrong number of answers", () => {

@@ -35,11 +35,14 @@ export default async function CertificatesPage() {
     },
   });
 
-  // Short-lived signed download links for uploaded files.
+  // Short-lived signed download links for uploaded files. download:true forces
+  // the browser to save the original file instead of opening it in a tab.
   const signedUrls = await Promise.all(
     certificates.map((c) =>
       c.fileUrl
-        ? createSignedUrl("uploads", c.fileUrl).catch(() => null)
+        ? createSignedUrl("uploads", c.fileUrl, 300, { download: true }).catch(
+            () => null,
+          )
         : Promise.resolve(null),
     ),
   );
@@ -124,11 +127,11 @@ export default async function CertificatesPage() {
                       {signedUrls[i] ? (
                         <a
                           href={signedUrls[i]!}
-                          target="_blank"
+                          download
                           rel="noopener noreferrer"
                           className="font-semibold text-ace-dark hover:underline"
                         >
-                          View
+                          ↓ Download
                         </a>
                       ) : (
                         <span className="text-text-muted">—</span>

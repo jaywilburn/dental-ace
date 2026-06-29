@@ -220,12 +220,22 @@ export default async function MyCoursesPage({
                       ) : (
                         <span className="text-text-muted">Letter unavailable</span>
                       )}
-                      <a
-                        href={`/api/courses/${course.id}/badge`}
-                        className="text-ace underline"
-                      >
-                        Marketing Logo
-                      </a>
+                      <span className="inline-flex items-center gap-1 text-ace">
+                        <a
+                          href={`/api/courses/${course.id}/badge`}
+                          className="underline"
+                        >
+                          Marketing Logo
+                        </a>
+                        <span className="text-text-muted">·</span>
+                        <a
+                          href={`/api/courses/${course.id}/badge?format=jpeg`}
+                          className="underline"
+                          title="Download as JPEG"
+                        >
+                          JPEG
+                        </a>
+                      </span>
                       <Link
                         href={`/company/applications/${course.applicationId}`}
                         className="text-ace underline"

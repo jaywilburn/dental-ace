@@ -23,6 +23,26 @@ export const attendeeSubmissionSchema = z.object({
   licenseNumber: z.string().max(100).optional(),
   licenseType: z.string().max(100).optional(),
   licenseStates: z.array(z.string().length(2)).min(1).max(10),
+  // Course completion date the attendee enters ("what day did you take the
+  // course?"). yyyy-mm-dd from <input type="date">; must be a real date in the
+  // last 10 years and not in the future.
+  completionDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Enter the date you took the course")
+    .refine(
+      (s) => {
+        const d = new Date(`${s}T12:00:00`);
+        if (Number.isNaN(d.getTime())) return false;
+        const now = new Date();
+        const earliest = new Date(
+          now.getFullYear() - 10,
+          now.getMonth(),
+          now.getDate(),
+        );
+        return d <= now && d >= earliest;
+      },
+      { message: "Date must be within the last 10 years and not in the future" },
+    ),
   affirmed: z.literal(true),
   answers: z.array(attendeeAnswerSchema).length(5),
 });

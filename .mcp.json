@@ -3,6 +3,10 @@
     "supabase": {
       "command": "bash",
       "args": ["scripts/run-supabase-mcp.sh"]
+    },
+    "stripe": {
+      "command": "bash",
+      "args": ["scripts/run-stripe-mcp.sh"]
     }
   }
 }

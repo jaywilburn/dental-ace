@@ -40,6 +40,9 @@ export async function startProCheckout(formData: FormData): Promise<void> {
     mode: "subscription",
     line_items: [{ price: priceId, quantity: 1 }],
     client_reference_id: user.id,
+    // Surfaces a promo-code field on hosted checkout (coupons created in the
+    // Stripe dashboard).
+    allow_promotion_codes: true,
     success_url: `${origin}/protrack?upgraded=1`,
     cancel_url: `${origin}/protrack/upgrade`,
     metadata: { planId: plan.id, userId: user.id },

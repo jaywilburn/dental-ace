@@ -100,6 +100,24 @@ export default async function ProtrackDashboard() {
     </Link>
   );
 
+  const isFree = user.protrackTier !== "PRO";
+
+  // Free users get a gold Upgrade CTA in the header alongside Upload, so the Pro
+  // upsell is visible at the top of the dashboard, not just in the banner below.
+  const headerAction = isFree ? (
+    <div className="flex items-center gap-2">
+      <Link
+        href="/protrack/upgrade?gate=pro"
+        className="rounded-md bg-ace px-3.5 py-2 text-[12px] font-semibold text-navy transition-colors hover:bg-ace/90"
+      >
+        ★ Upgrade to Pro
+      </Link>
+      {uploadAction}
+    </div>
+  ) : (
+    uploadAction
+  );
+
   const cycleYears = requirement
     ? `${primary.renewalDate.getFullYear() - Math.round(requirement.cycleMonths / 12)}-${primary.renewalDate.getFullYear()}`
     : null;
@@ -138,7 +156,7 @@ export default async function ProtrackDashboard() {
 
   return (
     <>
-      <PageHeader title="CE Dashboard" subtitle={subtitle} action={uploadAction} />
+      <PageHeader title="CE Dashboard" subtitle={subtitle} action={headerAction} />
 
       {requirement.status === "PROVISIONAL" ? (
         <p className="mb-4 rounded-md border border-ace/40 bg-ace-bg px-3 py-2 text-[11px] text-ace-dark text-pretty">
@@ -192,6 +210,32 @@ export default async function ProtrackDashboard() {
           </dl>
         </div>
       </section>
+
+      {/* Pro upsell — prominent card directly under the requirement hero */}
+      {isFree ? (
+        <Link
+          href="/protrack/upgrade?gate=pro"
+          className="mt-4 flex flex-wrap items-center justify-between gap-4 rounded-lg border border-ace bg-ace-bg px-5 py-4 text-pretty transition-colors hover:bg-ace-bg/70"
+        >
+          <div className="flex items-start gap-3">
+            <span aria-hidden className="text-xl text-ace-dark">
+              ★
+            </span>
+            <div>
+              <p className="text-[13px] font-semibold text-navy">
+                Upgrade to ProTrack Pro
+              </p>
+              <p className="mt-0.5 text-[12px] text-ace-dark">
+                Never miss a renewal. Get deadline reminders and a downloadable,
+                board-ready PDF of your CE history.
+              </p>
+            </div>
+          </div>
+          <span className="shrink-0 rounded-md bg-ace px-3.5 py-2 text-[12px] font-semibold text-navy">
+            Upgrade for $7/mo →
+          </span>
+        </Link>
+      ) : null}
 
       {/* Overall progress */}
       <section className="mt-4 rounded-lg border border-border bg-white p-4">
@@ -286,20 +330,6 @@ export default async function ProtrackDashboard() {
         </section>
       ) : null}
 
-      {user.protrackTier !== "PRO" ? (
-        <Link
-          href="/protrack/upgrade?gate=pro"
-          className="mt-4 flex items-center justify-between gap-3 rounded-lg border border-ace/40 bg-ace-bg px-4 py-3 text-pretty transition-colors hover:bg-ace-bg/70"
-        >
-          <span className="text-[12px] text-ace-dark">
-            🔔 Never miss a renewal. Get deadline reminders and a downloadable
-            PDF for your dental board with ProTrack Pro.
-          </span>
-          <span className="shrink-0 text-[12px] font-semibold text-ace-dark">
-            Upgrade →
-          </span>
-        </Link>
-      ) : null}
     </>
   );
 }
