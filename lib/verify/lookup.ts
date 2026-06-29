@@ -213,6 +213,7 @@ async function runNameLookup(parsed: {
       id: true,
       attendeeName: true,
       issuedAt: true,
+      ceHours: true,
       course: {
         select: {
           application: {
@@ -224,6 +225,7 @@ async function runNameLookup(parsed: {
           },
         },
       },
+      event: { select: { name: true } },
     },
   });
 
@@ -269,9 +271,9 @@ async function runNameLookup(parsed: {
       attendeeName: row.attendeeName,
       // Name mode: never surface license number (see comment above).
       licenseNumber: null,
-      courseTitle: row.course.application.courseTitle ?? "(course)",
-      ceHours: Number(row.course.application.ceHours ?? 0),
-      category: row.course.application.courseType ?? null,
+      courseTitle: row.course?.application.courseTitle ?? row.event?.name ?? "(course)",
+      ceHours: Number(row.ceHours ?? row.course?.application.ceHours ?? 0),
+      category: row.course?.application.courseType ?? null,
       completedAt: row.issuedAt,
       certNumber: row.id,
     }));
@@ -353,6 +355,7 @@ async function runIdentifierLookup(args: {
       attendeeName: true,
       licenseNumber: true,
       issuedAt: true,
+      ceHours: true,
       course: {
         select: {
           application: {
@@ -364,6 +367,7 @@ async function runIdentifierLookup(args: {
           },
         },
       },
+      event: { select: { name: true } },
     },
   });
 
@@ -394,9 +398,9 @@ async function runIdentifierLookup(args: {
       verificationLabel: verificationLabelFor("DENTAL_ACE_ISSUED"),
       attendeeName: row.attendeeName,
       licenseNumber: row.licenseNumber,
-      courseTitle: row.course.application.courseTitle ?? "(course)",
-      ceHours: Number(row.course.application.ceHours ?? 0),
-      category: row.course.application.courseType ?? null,
+      courseTitle: row.course?.application.courseTitle ?? row.event?.name ?? "(course)",
+      ceHours: Number(row.ceHours ?? row.course?.application.ceHours ?? 0),
+      category: row.course?.application.courseType ?? null,
       completedAt: row.issuedAt,
       certNumber: row.id,
     }));

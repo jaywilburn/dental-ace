@@ -38,11 +38,14 @@ type IssuedCertForSync = {
   deliveryMethod: string | null;
   certPdfUrl: string | null;
   completedAt: Date | null;
+  ceHours: Prisma.Decimal | null;
   issuedAt: Date;
   company: { name: string };
+  // Course certs carry `course`; event certs carry `event` + a stored `ceHours`.
   course: {
     application: { ceHours: Prisma.Decimal | null; courseTitle: string | null };
-  };
+  } | null;
+  event: { name: string } | null;
 };
 
 const ISSUED_SELECT = {
@@ -51,6 +54,7 @@ const ISSUED_SELECT = {
   deliveryMethod: true,
   certPdfUrl: true,
   completedAt: true,
+  ceHours: true,
   issuedAt: true,
   company: { select: { name: true } },
   course: {
@@ -58,10 +62,20 @@ const ISSUED_SELECT = {
       application: { select: { ceHours: true, courseTitle: true } },
     },
   },
+  event: { select: { name: true } },
 } satisfies Prisma.IssuedCertificateSelect;
 
 function toCeCertData(issued: IssuedCertForSync, licenseeId: string) {
-  const courseTitle = issued.course.application.courseTitle ?? "DentalACE course";
+  // Event certs use the event name; course certs use the course title.
+  const courseTitle =
+    issued.event?.name ?? issued.course?.application.courseTitle ?? "DentalACE course";
+  // Event certs store hours on the cert (total/attended); course certs read the
+  // course's CE hours.
+  const hours = issued.ceHours
+    ? Number(issued.ceHours)
+    : issued.course?.application.ceHours
+      ? Number(issued.course.application.ceHours)
+      : 0;
   return {
     licenseeId,
     courseTitle,
@@ -71,9 +85,7 @@ function toCeCertData(issued: IssuedCertForSync, licenseeId: string) {
       courseType: issued.courseType,
       courseTitle,
     }),
-    hours: issued.course.application.ceHours
-      ? Number(issued.course.application.ceHours)
-      : 0,
+    hours,
     deliveryFormat: mapDeliveryFormat(issued.deliveryMethod),
     // Prefer the attendee-entered completion date; legacy rows (null) fall back
     // to the issuance timestamp.
