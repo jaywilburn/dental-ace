@@ -2,6 +2,7 @@ import Link from "next/link";
 import { PageHeader } from "@/components/portal-shell";
 import { requireDentalAce } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
+import { eventAssetUrls } from "@/lib/events/event-assets";
 import type { ApplicationStatus, EventType } from "@prisma/client";
 
 /*
@@ -32,6 +33,9 @@ export default async function EventsIndexPage({
   const user = await requireDentalAce();
   const { just } = await searchParams;
 
+  const company = user.companyId
+    ? await prisma.company.findUnique({ where: { id: user.companyId }, select: { name: true } })
+    : null;
   const events = user.companyId
     ? await prisma.event.findMany({
         where: { companyId: user.companyId },
@@ -40,6 +44,29 @@ export default async function EventsIndexPage({
         take: 50,
       })
     : [];
+
+  // Signed download URLs (self-healing) for approved events' QR + approval letter.
+  const assets = new Map<string, { qrDownloadUrl: string | null; letterDownloadUrl: string | null }>();
+  await Promise.all(
+    events
+      .filter((e) => e.status === "APPROVED" && e.eventIdNumber && e.approvedAt && e.expiresAt)
+      .map(async (e) => {
+        assets.set(
+          e.id,
+          await eventAssetUrls({
+            attendeeLinkToken: e.attendeeLinkToken,
+            qrCodeUrl: e.qrCodeUrl,
+            approvalLetterUrl: e.approvalLetterUrl,
+            eventIdNumber: e.eventIdNumber!,
+            eventName: e.name,
+            companyName: company?.name ?? "",
+            totalHours: e.totalHours ? Number(e.totalHours) : 0,
+            approvedAt: e.approvedAt!,
+            expiresAt: e.expiresAt!,
+          }),
+        );
+      }),
+  );
 
   return (
     <>
@@ -115,6 +142,25 @@ export default async function EventsIndexPage({
                       >
                         Continue
                       </Link>
+                    ) : event.status === "APPROVED" ? (
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]">
+                        <Link href={`/attend/event/${event.attendeeLinkToken}`} className="text-ace underline">
+                          Attendee Link
+                        </Link>
+                        {assets.get(event.id)?.qrDownloadUrl ? (
+                          <a href={assets.get(event.id)!.qrDownloadUrl!} target="_blank" rel="noopener noreferrer" className="text-ace underline">
+                            QR Code
+                          </a>
+                        ) : null}
+                        {assets.get(event.id)?.letterDownloadUrl ? (
+                          <a href={assets.get(event.id)!.letterDownloadUrl!} target="_blank" rel="noopener noreferrer" className="text-ace underline">
+                            Approval Letter
+                          </a>
+                        ) : null}
+                        <a href={`/api/events/${event.id}/badge`} className="text-ace underline">
+                          Marketing Logo
+                        </a>
+                      </div>
                     ) : event.eventIdNumber ? (
                       <span className="font-mono text-[11px] text-text-muted">{event.eventIdNumber}</span>
                     ) : (

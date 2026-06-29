@@ -8,7 +8,7 @@ import {
   getDraftData,
   submitApplication,
 } from "@/lib/forms/application/actions";
-import { applicationDataSchema, isLiveFormat } from "@/lib/forms/application/schemas";
+import { applicationDataSchema } from "@/lib/forms/application/schemas";
 import { sanitizeRichText } from "@/lib/forms/application/rich-text";
 import { resolveAttachmentLinks } from "@/lib/forms/application/attachments";
 import { AttachmentsCard } from "@/components/application-form/attachments-card";
@@ -66,18 +66,6 @@ export default async function ApplicationStep5Page() {
             { label: "Short Description", value: data.shortDescription, full: true },
             { label: "Course Objectives", value: data.courseObjectives, full: true },
             { label: "Course Outline", value: data.courseOutline, full: true },
-            ...(isLiveFormat(data.deliveryFormat)
-              ? [
-                  {
-                    label: "Combined Certificate for live attendees?",
-                    value: data.combinedCert ? "Yes" : "No",
-                  },
-                  {
-                    label: "Submitting sessions separately?",
-                    value: data.submitSessionsSeparately ? "Yes" : "No",
-                  },
-                ]
-              : []),
           ]}
         />
 
