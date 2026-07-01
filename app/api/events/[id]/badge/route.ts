@@ -1,14 +1,15 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { requireDentalAce } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
-import { renderAceBadge, type BadgeFormat } from "@/lib/badge/render";
+import { renderAceBadge, parseBadgeFormat, badgeFileMeta } from "@/lib/badge/render";
 
 export const runtime = "nodejs";
 
 /*
-  Event marketing logo (PNG default, ?format=jpeg). Same AADB template as the
-  course badge, with "Event ID" wording. Only the owning company can fetch it,
-  and only once the event is approved (it carries an event id + dates).
+  Event marketing logo (PNG by default; the route also accepts ?format=pdf and
+  ?format=jpeg/jpg). Same AADB template as the course badge, with "Event ID"
+  wording. Only the owning company can fetch it, and only once the event is
+  approved (it carries an event id + dates).
 */
 export async function GET(
   request: NextRequest,
@@ -17,8 +18,7 @@ export async function GET(
   const user = await requireDentalAce();
   const { id } = await params;
 
-  const format: BadgeFormat =
-    request.nextUrl.searchParams.get("format") === "jpeg" ? "jpeg" : "png";
+  const format = parseBadgeFormat(request.nextUrl.searchParams.get("format"));
 
   const event = await prisma.event.findUnique({
     where: { id },
@@ -67,10 +67,10 @@ export async function GET(
     );
   }
 
-  const ext = format === "jpeg" ? "jpg" : "png";
+  const { ext, contentType } = badgeFileMeta(format);
   return new NextResponse(new Uint8Array(image), {
     headers: {
-      "Content-Type": format === "jpeg" ? "image/jpeg" : "image/png",
+      "Content-Type": contentType,
       "Content-Disposition": `attachment; filename="${event.eventIdNumber}-marketing-logo.${ext}"`,
     },
   });

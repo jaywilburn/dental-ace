@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { requireDentalAce } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
-import { renderAceBadge, type BadgeFormat } from "@/lib/badge/render";
+import { renderAceBadge, parseBadgeFormat, badgeFileMeta } from "@/lib/badge/render";
 
 export const runtime = "nodejs";
 
@@ -12,9 +12,9 @@ export async function GET(
   const user = await requireDentalAce();
   const { id } = await params;
 
-  // ?format=jpeg downloads a JPEG; anything else (default) is PNG.
-  const format: BadgeFormat =
-    request.nextUrl.searchParams.get("format") === "jpeg" ? "jpeg" : "png";
+  // The single "Marketing Logo" link downloads PNG; the route also accepts
+  // ?format=pdf and ?format=jpeg (or jpg) so the system can emit any format.
+  const format = parseBadgeFormat(request.nextUrl.searchParams.get("format"));
 
   const course = await prisma.accreditedCourse.findUnique({
     where: { id },
@@ -50,10 +50,10 @@ export async function GET(
     );
   }
 
-  const ext = format === "jpeg" ? "jpg" : "png";
+  const { ext, contentType } = badgeFileMeta(format);
   return new NextResponse(new Uint8Array(image), {
     headers: {
-      "Content-Type": format === "jpeg" ? "image/jpeg" : "image/png",
+      "Content-Type": contentType,
       // User-facing name is "Marketing Logo" (client feedback, 2026-06); the
       // /badge route path and render module keep the internal name.
       "Content-Disposition": `attachment; filename="${course.courseIdNumber}-marketing-logo.${ext}"`,
