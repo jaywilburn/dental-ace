@@ -31,6 +31,9 @@ export default async function ReviewerQueuePage({
 
   const where: Prisma.CourseApplicationWhereInput = {
     status: "PENDING",
+    // Inline event-scoped session applications are reviewed as part of their
+    // event (see the Pending Events section), never as standalone queue items.
+    eventId: null,
     ...(query
       ? { company: { name: { contains: query, mode: "insensitive" } } }
       : {}),

@@ -4,12 +4,23 @@ import { PageHeader } from "@/components/portal-shell";
 import { requireStaff } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { approveEvent, rejectEvent } from "@/lib/reviewer/event-actions";
+import { isInlineFullCourse } from "@/lib/forms/event/schemas";
+import { applicationDataReadSchema } from "@/lib/forms/application/schemas";
+import {
+  courseInfoRows,
+  creatorRows,
+  presenterRows,
+} from "@/lib/forms/application/detail-rows";
+import {
+  DetailSection,
+  QuizPreviewCard,
+} from "@/components/application-form/detail-section";
 import type { EventType } from "@prisma/client";
 
 const TYPE_LABEL: Record<EventType, string> = {
-  FULL_EVENT_QUIZ: "Full attendance · single use (one event application)",
+  FULL_EVENT_QUIZ: "Full attendance · sessions accredited as courses (not reused)",
   FULL_PER_COURSE: "Full attendance · courses reused",
-  SELECTIVE_INLINE: "Selective attendance · single use (inline sessions)",
+  SELECTIVE_INLINE: "Selective attendance · sessions accredited as courses (not reused)",
   SELECTIVE_PER_COURSE: "Selective attendance · courses reused",
 };
 
@@ -19,8 +30,9 @@ type QuizItem =
   | { type: "MC"; question: string; options: string[]; correctIndex: number };
 
 /*
-  Reviewer event detail. Shows the submitted event, its sessions/quiz, and the
-  approve/reject actions (lib/reviewer/event-actions.ts).
+  Reviewer event detail. Event-only events (new model) list each inline session
+  as its full course application; legacy inline/quiz events and per-course events
+  keep their original rendering for back-compat.
 */
 export default async function ReviewEventPage({
   params,
@@ -43,6 +55,10 @@ export default async function ReviewEventPage({
           course: { select: { courseIdNumber: true, application: { select: { courseTitle: true, ceHours: true } } } },
         },
       },
+      sessionApplications: {
+        orderBy: { sessionPosition: "asc" },
+        select: { id: true, sessionPosition: true, applicationData: true },
+      },
     },
   });
   if (!event) notFound();
@@ -50,6 +66,14 @@ export default async function ReviewEventPage({
   const data = (event.eventData as Record<string, unknown>) ?? {};
   const quiz = (data.quiz as QuizItem[] | undefined) ?? [];
   const pending = event.status === "PENDING";
+  const inlineFull = event.eventType ? isInlineFullCourse(event.eventType) : false;
+
+  // New model: parse each session's full application for display.
+  const sessionApps = event.sessionApplications.map((a) => {
+    const parsed = applicationDataReadSchema.safeParse(a.applicationData);
+    return { id: a.id, position: a.sessionPosition ?? 0, parsed };
+  });
+  const showSessionApps = inlineFull && sessionApps.length > 0;
 
   return (
     <>
@@ -75,9 +99,46 @@ export default async function ReviewEventPage({
           </dl>
         </div>
 
-        {event.eventType === "SELECTIVE_INLINE" ? (
+        {showSessionApps ? (
           <div className="rounded-lg border border-border bg-white p-5">
-            <p className="mb-3 text-[13px] font-semibold text-navy">Sessions</p>
+            <p className="mb-1 text-[13px] font-semibold text-navy">
+              Sessions ({sessionApps.length}) — each accredited as its own course
+            </p>
+            <p className="mb-3 text-[11px] text-text-muted">
+              Approving the event accredits every session below (one Course ID
+              each) and issues the combined event ID.
+            </p>
+            <div className="space-y-3">
+              {sessionApps.map((s, i) => (
+                <details key={s.id} className="rounded-md border border-border" open={i === 0}>
+                  <summary className="cursor-pointer px-3 py-2 text-[12px] font-semibold text-navy">
+                    {i + 1}.{" "}
+                    {s.parsed.success ? s.parsed.data.courseTitle : "Session (unreadable)"}
+                    {s.parsed.success ? (
+                      <span className="font-normal text-text-muted">
+                        {" "}· {s.parsed.data.ceCreditHours.toFixed(1)} hrs
+                      </span>
+                    ) : null}
+                  </summary>
+                  {s.parsed.success ? (
+                    <div className="space-y-4 border-t border-border p-3">
+                      <DetailSection title="Course Information" rows={courseInfoRows(s.parsed.data)} />
+                      <DetailSection title="Course Creator" rows={creatorRows(s.parsed.data)} />
+                      <DetailSection title="Presenters" rows={presenterRows(s.parsed.data)} />
+                      <QuizPreviewCard title="Quiz" quiz={s.parsed.data.quiz} />
+                    </div>
+                  ) : (
+                    <p className="border-t border-border p-3 text-[12px] text-red-600">
+                      This session&apos;s application could not be read.
+                    </p>
+                  )}
+                </details>
+              ))}
+            </div>
+          </div>
+        ) : event.eventType === "SELECTIVE_INLINE" ? (
+          <div className="rounded-lg border border-border bg-white p-5">
+            <p className="mb-3 text-[13px] font-semibold text-navy">Sessions (legacy)</p>
             <ul className="space-y-3">
               {event.sessions.map((s) => {
                 const q = (s.question as StoredQuestion | null) ?? {};
@@ -113,7 +174,7 @@ export default async function ReviewEventPage({
           </div>
         ) : (
           <div className="rounded-lg border border-border bg-white p-5">
-            <p className="mb-3 text-[13px] font-semibold text-navy">Event Quiz</p>
+            <p className="mb-3 text-[13px] font-semibold text-navy">Event Quiz (legacy)</p>
             <ol className="space-y-3 text-[12px]">
               {quiz.map((q, i) => (
                 <li key={i}>

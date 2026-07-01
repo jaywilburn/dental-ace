@@ -5,6 +5,7 @@ import { getCurrentUser } from "@/lib/auth/session";
 import { LICENSE_TYPE_OPTIONS } from "@/lib/protrack/reference";
 import { JurisdictionOptions } from "@/components/jurisdiction-options";
 import { SignupRoleSelect } from "@/components/auth/signup-role-select";
+import { isValidSignupRole } from "@/lib/auth/signup-role";
 
 /*
   Public platform sign-up. One account for DentalACE One; every new account gets
@@ -14,20 +15,14 @@ import { SignupRoleSelect } from "@/components/auth/signup-role-select";
   Next 16 + Turbopack). Validation errors come back via ?error=.
 
   Step 0: When ?as= is absent or invalid, a role-picker chooser is shown so the
-  user can declare what they're here to do. The `as` param is display-only and is
-  NOT posted to /api/auth/register.
+  user can declare what they're here to do. The `as` param tailors the copy +
+  optional license fields, and is posted back via a hidden field so a register
+  error redirect can return to the right variant of this form (not the chooser).
 */
 
 const fieldClass =
   "w-full rounded-md border border-border bg-white px-3 py-2 text-[13px] text-navy outline-none focus:border-ace";
 const labelClass = "mb-1 block text-[11px] font-semibold text-text-mid";
-
-
-type ValidRole = "individual" | "company" | "staff";
-
-function isValidRole(as: string | undefined): as is ValidRole {
-  return as === "individual" || as === "company" || as === "staff";
-}
 
 export default async function SignupPage({
   searchParams,
@@ -45,7 +40,7 @@ export default async function SignupPage({
   const { error, sent, as, email } = await searchParams;
   if (sent) return <CheckYourEmail email={sent} />;
 
-  if (!isValidRole(as)) {
+  if (!isValidSignupRole(as)) {
     return <RoleChooser />;
   }
 
@@ -83,6 +78,7 @@ export default async function SignupPage({
           ) : null}
 
           <form method="POST" action="/api/auth/register" className="space-y-4">
+            <input type="hidden" name="as" value={as} />
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
                 <label htmlFor="firstName" className={labelClass}>

@@ -16,10 +16,14 @@ import {
   inlineSessionsSchema,
   attachedCoursesSchema,
   deriveEventType,
-  isEventOnly,
+  isInlineFullCourse,
   type EventData,
   type InlineSession,
 } from "@/lib/forms/event/schemas";
+import {
+  applicationDataSchema,
+  type ApplicationData,
+} from "@/lib/forms/application/schemas";
 import { sendEmail } from "@/lib/email/send";
 import ApplicationSubmittedEmail from "@/emails/application-submitted";
 
@@ -47,8 +51,9 @@ async function customerCompanyId(): Promise<string> {
 
 /** The wizard step a given event type routes to after the qualifiers step. */
 function typeStepRoute(type: EventType): string {
-  if (type === EventType.FULL_EVENT_QUIZ) return ROUTES.quiz;
-  if (type === EventType.SELECTIVE_INLINE) return ROUTES.sessions;
+  // Both event-only types now capture a full course application per session,
+  // so they share the sessions list (each row is an inline session application).
+  if (isInlineFullCourse(type)) return ROUTES.sessions;
   return ROUTES.courses; // FULL_PER_COURSE | SELECTIVE_PER_COURSE
 }
 
@@ -81,6 +86,14 @@ export type EventDraft = {
     durationHours: number | null;
     position: number;
   }>;
+  // Inline event-scoped session applications (event-only full-course path).
+  sessionApplications: Array<{
+    id: string;
+    position: number;
+    courseTitle: string;
+    ceHours: number | null;
+    complete: boolean;
+  }>;
 };
 
 export async function getEventDraft(eventId: string): Promise<EventDraft | null> {
@@ -104,6 +117,10 @@ export async function getEventDraft(eventId: string): Promise<EventDraft | null>
           position: true,
         },
       },
+      sessionApplications: {
+        orderBy: { sessionPosition: "asc" },
+        select: { id: true, sessionPosition: true, applicationData: true },
+      },
     },
   });
   if (!row) return null;
@@ -118,6 +135,21 @@ export async function getEventDraft(eventId: string): Promise<EventDraft | null>
       ...s,
       durationHours: s.durationHours ? Number(s.durationHours) : null,
     })),
+    sessionApplications: row.sessionApplications.map((a) => {
+      const data = (a.applicationData as Record<string, unknown> | null) ?? {};
+      return {
+        id: a.id,
+        position: a.sessionPosition ?? 0,
+        courseTitle:
+          typeof data.courseTitle === "string" && data.courseTitle
+            ? data.courseTitle
+            : "Untitled session",
+        ceHours:
+          typeof data.ceCreditHours === "number" ? data.ceCreditHours : null,
+        // Complete = the full application validates (org inherited + all steps).
+        complete: applicationDataSchema.safeParse(data).success,
+      };
+    }),
   };
 }
 
@@ -213,6 +245,11 @@ export async function saveQualifiers(formData: FormData) {
     });
     if (current && current.eventType !== type) {
       await tx.eventSession.deleteMany({ where: { eventId } });
+      // Also drop inline session applications from a prior event-only branch so
+      // they don't linger (and keep charging) after switching away.
+      await tx.courseApplication.deleteMany({
+        where: { eventId, status: "DRAFT" },
+      });
     }
     await tx.event.updateMany({
       where: { id: eventId, companyId, status: "DRAFT" },
@@ -390,61 +427,130 @@ export async function submitEvent(formData: FormData) {
     include: {
       company: { select: { name: true } },
       sessions: { select: { id: true, courseId: true } },
+      sessionApplications: {
+        orderBy: { sessionPosition: "asc" },
+        select: { id: true, applicationData: true },
+      },
     },
   });
   if (!draft) throw new Error("Event draft not found");
   if (!draft.eventType) redirect(ROUTES.qualifiers);
   const type = draft.eventType;
   const data = (draft.eventData as Partial<EventData>) ?? {};
+  const inlineFull = isInlineFullCourse(type);
 
-  // Per-type completeness check.
-  const missing = (() => {
-    if (!draft.name || !draft.eventDate || !data.organizationName) {
-      return ROUTES.details;
-    }
-    if (type === EventType.FULL_EVENT_QUIZ) {
-      return data.quiz && draft.totalHours ? null : ROUTES.quiz;
-    }
-    if (type === EventType.SELECTIVE_INLINE) {
-      return draft.sessions.some((s) => s.courseId === null)
-        ? null
-        : ROUTES.sessions;
-    }
-    // PER_COURSE types
-    return draft.sessions.some((s) => s.courseId !== null) ? null : ROUTES.courses;
-  })();
-  if (missing) {
+  // Shared prerequisite: event name/date + org captured at the details step.
+  if (!draft.name || !draft.eventDate || !data.organizationName) {
     redirect(
-      `${missing}?error=validation&detail=${encodeURIComponent(
+      `${ROUTES.details}?error=validation&detail=${encodeURIComponent(
         "Some required details are missing. Finish this step.",
       )}`,
     );
   }
 
-  const submittedAt = new Date();
-  const consumesCredit = isEventOnly(type);
+  // Event-only path: each session is a full course application. Validate every
+  // one, charge one application credit per session, and move them + the event to
+  // PENDING atomically. Per-course path stays free (its courses were already paid).
+  if (inlineFull) {
+    const apps = draft.sessionApplications;
+    if (apps.length === 0) {
+      redirect(
+        `${ROUTES.sessions}?error=validation&detail=${encodeURIComponent(
+          "Add at least one session before submitting.",
+        )}`,
+      );
+    }
+    // Validate each session's full application; on the first miss, jump into it.
+    const parsedSessions = apps.map((a) => ({
+      id: a.id,
+      parsed: applicationDataSchema.safeParse(a.applicationData),
+    }));
+    const bad = parsedSessions.find((s) => !s.parsed.success);
+    if (bad) {
+      redirect(
+        `${ROUTES.sessions}/${bad.id}/course?error=validation&detail=${encodeURIComponent(
+          "This session is missing required fields. Finish each step and save.",
+        )}`,
+      );
+    }
+    const sessions = parsedSessions.map((s) => ({
+      id: s.id,
+      data: (s.parsed as { success: true; data: ApplicationData }).data,
+    }));
+    const n = sessions.length;
+    const totalHours = sessions.reduce((sum, s) => sum + s.data.ceCreditHours, 0);
+    const submittedAt = new Date();
 
-  await prisma.$transaction(async (tx) => {
-    if (consumesCredit) {
+    // Pre-check for a friendly redirect (the locked re-check below is the guard).
+    const bal = await prisma.company.findUnique({
+      where: { id: companyId },
+      select: { applicationCredits: true },
+    });
+    if ((bal?.applicationCredits ?? 0) < n) {
+      redirect(`${ROUTES.review}?error=credits`);
+    }
+
+    await prisma.$transaction(async (tx) => {
       await tx.$executeRaw`select id from public.companies where id = ${companyId}::uuid for update`;
       const company = await tx.company.findUniqueOrThrow({
         where: { id: companyId },
         select: { applicationCredits: true },
       });
-      if (company.applicationCredits <= 0) {
-        throw new Error("No application credits available");
+      if (company.applicationCredits < n) {
+        throw new Error("Not enough application credits");
       }
       await tx.company.update({
         where: { id: companyId },
-        data: { applicationCredits: { decrement: 1 } },
+        data: { applicationCredits: { decrement: n } },
       });
-    }
-    const updated = await tx.event.updateMany({
-      where: { id: eventId, companyId, status: "DRAFT" },
-      data: { status: "PENDING", submittedAt },
+
+      // Flip each session application DRAFT -> PENDING, mirroring the columns the
+      // reviewer queue + accreditation read (as submitApplication does).
+      for (const s of sessions) {
+        const moved = await tx.courseApplication.updateMany({
+          where: { id: s.id, companyId, eventId, status: "DRAFT" },
+          data: {
+            status: "PENDING",
+            courseTitle: s.data.courseTitle,
+            ceHours: s.data.ceCreditHours,
+            courseType: s.data.subjectMatter,
+            deliveryMethod: s.data.deliveryFormat,
+            submittedAt,
+          },
+        });
+        if (moved.count !== 1) throw new Error("A session was already submitted");
+      }
+
+      const updated = await tx.event.updateMany({
+        where: { id: eventId, companyId, status: "DRAFT" },
+        data: {
+          status: "PENDING",
+          submittedAt,
+          totalHours: new Prisma.Decimal(totalHours),
+        },
+      });
+      if (updated.count !== 1) throw new Error("Event was already submitted");
     });
-    if (updated.count !== 1) throw new Error("Event was already submitted");
-  });
+  } else {
+    // PER_COURSE types: at least one attached course; no credit consumed.
+    if (!draft.sessions.some((s) => s.courseId !== null)) {
+      redirect(
+        `${ROUTES.courses}?error=validation&detail=${encodeURIComponent(
+          "Attach at least one approved course before submitting.",
+        )}`,
+      );
+    }
+    const submittedAt = new Date();
+    await prisma.$transaction(async (tx) => {
+      const updated = await tx.event.updateMany({
+        where: { id: eventId, companyId, status: "DRAFT" },
+        data: { status: "PENDING", submittedAt },
+      });
+      if (updated.count !== 1) throw new Error("Event was already submitted");
+    });
+  }
+
+  const submittedAt = new Date();
 
   // Reviewer notification (reuses the application-submitted template).
   const reviewerEmails = (process.env.REVIEWER_NOTIFICATION_EMAILS ?? "")

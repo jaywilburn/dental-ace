@@ -1,15 +1,10 @@
 "use server";
 
-import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { Prisma } from "@prisma/client";
 import { getCurrentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { appBaseUrl } from "@/lib/app-url";
-import { uploadToStorage } from "@/lib/storage";
-import { renderApprovalLetterPdf } from "@/lib/pdf/approval-letter";
-import { renderQrPng } from "@/lib/qrcode";
 import { sendEmail } from "@/lib/email/send";
 import ApplicationApprovedEmail from "@/emails/application-approved";
 import ApplicationRejectedEmail from "@/emails/application-rejected";
@@ -17,14 +12,15 @@ import {
   applicationDataReadSchema,
   type ApplicationDataRead,
 } from "@/lib/forms/application/schemas";
-import { formatCourseId, nextSeqFromLast } from "@/lib/reviewer/course-id";
+import { accreditApplicationTx, renderCourseAssets } from "@/lib/reviewer/accredit";
 
 /*
   Approve / reject server actions invoked from the reviewer detail page.
 
   Approve generates the Course ID, QR code PNG, approval letter PDF, persists
   an accredited_courses row, transitions the application to APPROVED, and
-  fires the approval email with attachments.
+  fires the approval email with attachments. The accreditation core is shared
+  with event approval via lib/reviewer/accredit.ts.
 
   Reject sets REJECTED with the reviewer's notes and sends the rejection
   email. Credit is NOT refunded.
@@ -34,26 +30,6 @@ async function requireReviewer() {
   const user = await getCurrentUser();
   if (!user || (user.staffRole !== "REVIEWER" && user.staffRole !== "ADMIN")) redirect("/login");
   return user;
-}
-
-/**
- * Compute the next ACE-YYYY-##### course id. MUST be called from inside a
- * transaction that has already acquired a year-scoped advisory lock
- * (pg_advisory_xact_lock(year)) — otherwise two concurrent approvals can
- * compute the same number and collide on the unique constraint after
- * external IO (PDF render + Storage upload) has happened.
- */
-async function nextCourseIdNumber(
-  tx: Prisma.TransactionClient,
-  year: number,
-): Promise<string> {
-  const prefix = `ACE-${year}-`;
-  const last = await tx.accreditedCourse.findFirst({
-    where: { courseIdNumber: { startsWith: prefix } },
-    orderBy: { courseIdNumber: "desc" },
-    select: { courseIdNumber: true },
-  });
-  return formatCourseId(year, nextSeqFromLast(last?.courseIdNumber ?? null));
 }
 
 export async function approveApplication(formData: FormData) {
@@ -81,107 +57,43 @@ export async function approveApplication(formData: FormData) {
   const expiresAt = new Date(approvedAt);
   expiresAt.setFullYear(expiresAt.getFullYear() + 3);
   const year = approvedAt.getFullYear();
-  const attendeeLinkToken = randomUUID();
   const appBase = appBaseUrl();
-
-  // Storage paths are keyed by applicationId, not Course ID — that way a
-  // retried approval or a race between two reviewers on different applications
-  // can never clobber each other's QR/PDF (upsert:true is idempotent at the
-  // applicationId level).
-  const qrStoragePath = `qrcodes/${application.id}.png`;
-  const pdfStoragePath = `approval-letters/${application.id}.pdf`;
 
   // 1) Commit the DB transition first, with the Course ID generated UNDER a
   //    year-scoped advisory lock so two reviewers can't compute the same id.
-  //    The application's PENDING status is also re-asserted via updateMany.
-  const courseIdNumber = await prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx) => {
     await tx.$executeRaw`select pg_advisory_xact_lock(${year})`;
-
-    const id = await nextCourseIdNumber(tx, year);
-
-    await tx.accreditedCourse.create({
-      data: {
-        applicationId: application.id,
+    return accreditApplicationTx(tx, {
+      application: {
+        id: application.id,
         companyId: application.companyId,
-        courseIdNumber: id,
-        approvedAt,
-        expiresAt,
-        attendeeLinkToken,
-        qrCodeUrl: qrStoragePath,
-        approvalLetterUrl: pdfStoragePath,
-        quizQuestions: data.quiz as unknown as object,
+        renewalOfCourseId: application.renewalOfCourseId,
       },
+      data,
+      reviewerId: reviewer.id,
+      reviewerNotes,
+      approvedAt,
+      expiresAt,
+      year,
     });
-
-    const updated = await tx.courseApplication.updateMany({
-      where: { id: application.id, status: "PENDING" },
-      data: {
-        status: "APPROVED",
-        reviewedById: reviewer.id,
-        reviewedAt: approvedAt,
-        reviewerNotes,
-      },
-    });
-    if (updated.count !== 1) {
-      throw new Error("Application status changed during approval");
-    }
-
-    // If this application renews an existing course, supersede the old course
-    // now that a fresh 3-year accreditation has been issued. The old row is
-    // kept (issued certs still reference it) but is no longer the live course.
-    if (application.renewalOfCourseId) {
-      await tx.accreditedCourse.updateMany({
-        where: { id: application.renewalOfCourseId, supersededAt: null },
-        data: { supersededAt: approvedAt },
-      });
-    }
-
-    return id;
   });
+  const courseIdNumber = result.courseIdNumber;
 
-  // 2) Render and upload assets AFTER the row is committed. Using deterministic
-  //    paths means an upload failure is fully retryable: the My Courses page
-  //    self-heals via lib/courses/course-assets.ts when it finds a recorded
-  //    path with no object behind it. A failure here must NOT fail the
-  //    approval (the DB transition is already committed), but it must be
-  //    loudly observable in server logs.
-  const attendeeUrl = `${appBase}/attend/${attendeeLinkToken}`;
-  let qrPng: Buffer | null = null;
-  let letterPdf: Buffer | null = null;
-  try {
-    [qrPng, letterPdf] = await Promise.all([
-      renderQrPng(attendeeUrl),
-      renderApprovalLetterPdf({
-        companyName: application.company.name,
-        courseTitle: data.courseTitle,
-        courseIdNumber,
-        ceHours: data.ceCreditHours,
-        approvedAt,
-        expiresAt,
-        reviewerName: reviewer.email.split("@")[0],
-      }),
-    ]);
-
-    await Promise.all([
-      uploadToStorage({
-        kind: "uploads",
-        path: qrStoragePath,
-        body: qrPng,
-        contentType: "image/png",
-      }),
-      uploadToStorage({
-        kind: "uploads",
-        path: pdfStoragePath,
-        body: letterPdf,
-        contentType: "application/pdf",
-      }),
-    ]);
-  } catch (err) {
-    console.error(
-      `[approveApplication] asset render/upload failed (applicationId=${application.id}, courseId=${courseIdNumber}) - My Courses will regenerate on demand`,
-      err,
-    );
-  }
+  // 2) Render + upload assets AFTER commit (non-fatal; My Courses self-heals).
+  const { qrPng, letterPdf } = await renderCourseAssets({
+    applicationId: application.id,
+    courseIdNumber,
+    attendeeLinkToken: result.attendeeLinkToken,
+    qrStoragePath: result.qrStoragePath,
+    pdfStoragePath: result.pdfStoragePath,
+    companyName: application.company.name,
+    courseTitle: data.courseTitle,
+    ceHours: data.ceCreditHours,
+    approvedAt,
+    expiresAt,
+    reviewerName: reviewer.email.split("@")[0],
+    withQr: true,
+  });
 
   // Approval email — log mode unless Resend is configured.
   const customerEmail = application.company.users[0]?.email;

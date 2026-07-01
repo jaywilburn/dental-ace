@@ -30,6 +30,7 @@ import {
   ApplicationStatus,
 } from "@prisma/client";
 import { US_STATE_REQUIREMENTS } from "./data/state-requirements";
+import { placeholderCertificatePdf } from "./data/placeholder-cert";
 
 config({ path: ".env.local" });
 
@@ -43,6 +44,9 @@ if (typeof globalThis.WebSocket === "undefined") {
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+// Mirror lib/storage.ts's bucket resolution so the seed writes the placeholder
+// cert to the same private bucket the certificates page signs URLs from.
+const UPLOADS_BUCKET = process.env.SUPABASE_STORAGE_BUCKET_UPLOADS ?? "uploads";
 
 if (!SUPABASE_URL || !SERVICE_ROLE_KEY) {
   throw new Error(
@@ -422,6 +426,34 @@ async function seedProtrack() {
       verificationStatus: c.verificationStatus,
     })),
   });
+
+  // 4b. Attach a placeholder PDF to one uploaded cert so the "↓ Download" link
+  // on /protrack/certificates is visible in the demo. The file goes to the
+  // uploads bucket at a deterministic path keyed by the licensee id (upsert so
+  // re-running overwrites in place), and fileUrl stores the path WITHIN that
+  // bucket — exactly what createSignedUrl("uploads", fileUrl, …) expects.
+  const placeholderCertPath = `protrack/certificates/${authUser.id}/seed-placeholder.pdf`;
+  const { error: uploadError } = await admin.storage
+    .from(UPLOADS_BUCKET)
+    .upload(placeholderCertPath, placeholderCertificatePdf(), {
+      contentType: "application/pdf",
+      upsert: true,
+    });
+  if (uploadError) {
+    throw new Error(
+      `Placeholder cert upload failed (${placeholderCertPath}): ${uploadError.message}`,
+    );
+  }
+  // Pin it to the first uploaded-source cert (a natural fit for a user-supplied
+  // PDF). updateMany because (licenseeId, courseTitle) isn't a unique key.
+  const certForFile = LICENSEE_CERTS.find((c) => c.source === CertSource.UPLOADED);
+  if (certForFile) {
+    await prisma.ceCertificate.updateMany({
+      where: { licenseeId: authUser.id, courseTitle: certForFile.courseTitle },
+      data: { fileUrl: placeholderCertPath },
+    });
+  }
+  console.log("  ✓ placeholder certificate file attached (↓ Download visible)");
 
   // 5. ACE -> ProTrack auto-sync demo (a claimable DentalACE certificate).
   const company = await prisma.company.findFirst({

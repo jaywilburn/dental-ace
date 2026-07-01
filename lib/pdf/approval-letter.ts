@@ -23,6 +23,10 @@ export type ApprovalLetterInput = {
   reviewerName?: string;
 };
 
+// The reviewer (rendered in the signature block) is the signatory. This is a
+// standing program credit beneath that block. No em dash in the title line.
+const AADB_PRESIDENT = "Dr. Clifford Feingold, DDS";
+
 export async function renderApprovalLetterPdf(
   input: ApprovalLetterInput,
 ): Promise<Buffer> {
@@ -154,16 +158,41 @@ export async function renderApprovalLetterPdf(
       // Accreditation seal, set to the right of the signature block.
       drawAadbSeal(doc, { cx: doc.page.width - 110, cy: 640, r: 38 });
 
-      // Footer
+      // AADB President credit, beneath the reviewer signature block. The
+      // reviewer above remains the signatory; this is a standing program
+      // credit. Drawn at fixed coordinates so it always clears the seal
+      // (bottom ~678) and sits above the footer.
       doc
+        .font("Helvetica-Bold")
+        .fontSize(11)
+        .fillColor(NAVY)
+        .text(AADB_PRESIDENT, 56, 680);
+      doc
+        .font("Helvetica")
+        .fontSize(10)
+        .fillColor(TEXT_MUTED)
+        .text("President, American Association of Dental Boards", 56, 695);
+
+      // Footer: two short centered lines so neither can wrap and clip off the
+      // page bottom. Both lines stay above the bottom-margin line
+      // (page.height - 56 = 736 on LETTER); drawing below it makes PDFKit
+      // auto-paginate, which is the original clipping bug. The middots are
+      // middots (U+00B7), not em dashes.
+      const footerWidth = doc.page.width - 112;
+      doc
+        .font("Helvetica")
         .fontSize(9)
         .fillColor(TEXT_MUTED)
-        .text(
-          "DentalACE · AADB Continuing Education Program · dentalace.org · info@dentalace.org",
-          56,
-          doc.page.height - 64,
-          { align: "center", width: doc.page.width - 112 },
-        );
+        .text("DentalACE · AADB Continuing Education Program", 56, 712, {
+          align: "center",
+          width: footerWidth,
+          lineBreak: false,
+        })
+        .text("dentalace.org · info@dentalace.org", 56, 723, {
+          align: "center",
+          width: footerWidth,
+          lineBreak: false,
+        });
 
       doc.end();
     } catch (err) {

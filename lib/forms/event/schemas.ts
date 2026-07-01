@@ -42,6 +42,17 @@ export function isEventOnly(type: EventType): boolean {
   );
 }
 
+/*
+  Inline full-course path (event-only types). Each session is captured as a full
+  CourseApplication inside the Event wizard and accredited as an event-scoped
+  course; the event is billed one application credit per session. Coverage
+  (FULL vs SELECTIVE) only affects attendee/cert logic, not accreditation.
+  (Same set as isEventOnly today, named for intent at the call sites.)
+*/
+export function isInlineFullCourse(type: EventType): boolean {
+  return isEventOnly(type);
+}
+
 /** Selective attendance (attendee picks sessions/courses). */
 export function isSelective(type: EventType): boolean {
   return (

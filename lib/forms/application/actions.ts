@@ -30,6 +30,7 @@ import {
   sanitizeRichText,
   richTextPlainLength,
 } from "@/lib/forms/application/rich-text";
+import { mergeApplicationStep } from "@/lib/forms/application/merge-step";
 import { sendEmail } from "@/lib/email/send";
 import ApplicationSubmittedEmail from "@/emails/application-submitted";
 
@@ -67,7 +68,9 @@ export async function ensureDraft(): Promise<string> {
   const companyId = await getCustomerCompanyId();
 
   const existing = await prisma.courseApplication.findFirst({
-    where: { companyId, status: "DRAFT" },
+    // eventId:null so the standalone wizard never resumes an inline event-scoped
+    // session draft (those are edited only inside the Event wizard).
+    where: { companyId, status: "DRAFT", eventId: null },
     orderBy: { createdAt: "desc" },
     select: { id: true },
   });
@@ -107,32 +110,7 @@ async function mergeStep<T>(
   stepRoute: string,
 ): Promise<T> {
   const companyId = await getCustomerCompanyId();
-  const result = schema.safeParse(raw);
-  if (!result.success) {
-    const issue = result.error.issues[0];
-    const detail = issue
-      ? `${String(issue.path[0] ?? "Form")}: ${issue.message}`.slice(0, 200)
-      : "Please check the highlighted fields.";
-    redirect(`${stepRoute}?error=validation&detail=${encodeURIComponent(detail)}`);
-  }
-  const parsed = result.data as T;
-
-  const existing = await prisma.courseApplication.findFirst({
-    where: { id: applicationId, companyId, status: "DRAFT" },
-    select: { applicationData: true },
-  });
-  if (!existing) throw new Error("Draft not found");
-
-  const merged = {
-    ...((existing.applicationData as Record<string, unknown>) ?? {}),
-    ...(parsed as Record<string, unknown>),
-  };
-  await prisma.courseApplication.update({
-    where: { id: applicationId },
-    data: { applicationData: merged as Prisma.InputJsonValue },
-  });
-
-  return parsed;
+  return mergeApplicationStep<T>(applicationId, companyId, schema, raw, stepRoute);
 }
 
 export async function saveOrgStep(formData: FormData) {

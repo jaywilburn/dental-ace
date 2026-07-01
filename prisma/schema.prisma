@@ -296,9 +296,19 @@ model CourseApplication {
   renewalOfCourseId String?           @map("renewal_of_course_id") @db.Uuid
   renewalOfCourse   AccreditedCourse? @relation("CourseRenewals", fields: [renewalOfCourseId], references: [id])
 
+  // When set, this is an inline, event-scoped session application captured in the
+  // Event wizard (event-only full-course path). It is NOT a reusable standalone
+  // course: excluded from /company/courses, the event attach picker, the standalone
+  // application wizard, and the reviewer's standalone application queue. sessionPosition
+  // orders the sessions within the event.
+  eventId         String?           @map("event_id") @db.Uuid
+  event           Event?            @relation("EventSessionApplications", fields: [eventId], references: [id], onDelete: Cascade)
+  sessionPosition Int?              @map("session_position")
+
   @@index([companyId, status])
   @@index([status, submittedAt])
   @@index([renewalOfCourseId])
+  @@index([eventId])
   @@map("course_applications")
 }
 
@@ -319,6 +329,12 @@ model AccreditedCourse {
   // Set when a renewal of this course is approved; the old row is kept for
   // history (issued certs still reference it) but is no longer the live course.
   supersededAt      DateTime?         @map("superseded_at")
+  // Denormalized event-scope marker: null = ordinary reusable course; non-null =
+  // a session of that event (event-only full-course path), hidden from
+  // /company/courses and the attach picker. Set at approval alongside the
+  // matching EventSession(courseId).
+  eventId           String?           @map("event_id") @db.Uuid
+  event             Event?            @relation("EventScopedCourses", fields: [eventId], references: [id])
   createdAt         DateTime          @default(now()) @map("created_at")
 
   issuedCertificates  IssuedCertificate[]
@@ -327,6 +343,7 @@ model AccreditedCourse {
 
   @@index([companyId])
   @@index([expiresAt])
+  @@index([eventId])
   @@map("accredited_courses")
 }
 
@@ -369,6 +386,10 @@ model Event {
 
   sessions           EventSession[]
   issuedCertificates IssuedCertificate[]
+  // Inline session applications captured in the wizard (event-only full-course
+  // path) before approval, and the event-scoped courses they become after.
+  sessionApplications CourseApplication[] @relation("EventSessionApplications")
+  scopedCourses       AccreditedCourse[]  @relation("EventScopedCourses")
 
   @@index([companyId])
   @@index([status, submittedAt])

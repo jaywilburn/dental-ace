@@ -13,6 +13,7 @@
     "seed:verify": "tsx scripts/seed-verify.ts",
     "seed:events": "tsx scripts/seed-event-courses.ts",
     "import:requirements": "tsx scripts/import-state-requirements.ts",
+    "build:worksheet": "tsx scripts/build-application-worksheet.ts",
     "test": "vitest run",
     "test:watch": "vitest"
   },
