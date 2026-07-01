@@ -13,6 +13,7 @@ import { recordAdminAction } from "@/lib/admin/audit";
 import type { CompanyRegisterInput } from "@/lib/company/register-schema";
 import AccessRequestApprovedEmail from "@/emails/access-request-approved";
 import AccessRequestDeniedEmail from "@/emails/access-request-denied";
+import { ONBOARDING_SCHEDULER_URL } from "@/lib/onboarding";
 
 export function roleLabelFor(kind: AccessRequestKind): string {
   switch (kind) {
@@ -93,8 +94,13 @@ export async function createRequest(
     react: AccessRequestReceivedEmail(receivedProps),
   }).catch(() => {});
 
-  const adminEmail = process.env.AADB_ADMIN_EMAIL;
-  if (adminEmail) {
+  // AADB_ADMIN_EMAIL may be a single shared inbox (info@dentalace.org) or a
+  // comma-separated list, so AADB can add individual admins without a code change.
+  const adminEmails = (process.env.AADB_ADMIN_EMAIL ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (adminEmails.length > 0) {
     const adminProps = {
       roleLabel,
       requestLabel: v.label,
@@ -103,7 +109,7 @@ export async function createRequest(
       queueUrl: `${appBaseUrl(origin)}/admin/access-requests`,
     };
     void sendEmail({
-      to: adminEmail,
+      to: adminEmails,
       subject: AccessRequestNewAdminEmail.subject(adminProps),
       react: AccessRequestNewAdminEmail(adminProps),
     }).catch(() => {});
@@ -160,7 +166,13 @@ export async function approveRequest(requestId: string, adminId: string, origin:
   }
 
   const areaUrl = `${appBaseUrl(origin)}${approvedAreaPath(approved.kind)}`;
-  const approvedProps = { firstName: approved.firstName ?? approved.email, roleLabel: roleLabelFor(approved.kind), areaUrl };
+  const approvedProps = {
+    firstName: approved.firstName ?? approved.email,
+    roleLabel: roleLabelFor(approved.kind),
+    areaUrl,
+    // Only CE Company customers get the onboarding-call invite.
+    onboardingUrl: approved.kind === "COMPANY" ? ONBOARDING_SCHEDULER_URL : undefined,
+  };
   void sendEmail({
     to: approved.email,
     subject: AccessRequestApprovedEmail.subject(approvedProps),

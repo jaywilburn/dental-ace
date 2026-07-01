@@ -4,6 +4,8 @@ import { PortalStatCard } from "@/components/portal-stat-card";
 import { TrainingVideoCta } from "@/components/company/training-video-cta";
 import { requireDentalAce } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
+import { ONBOARDING_SCHEDULER_URL } from "@/lib/onboarding";
+import { dismissOnboarding } from "./actions";
 
 /*
   Customer (provider) dashboard. Real numbers from the company's row +
@@ -38,6 +40,7 @@ export default async function CompanyDashboard({
       certBalance: true,
       certAlertThreshold: true,
       totalCertsIssued: true,
+      onboardingDismissedAt: true,
     },
   });
   if (!company) {
@@ -80,6 +83,37 @@ export default async function CompanyDashboard({
           <Link href="/company/buy/credits" className="font-semibold underline">
             Buy App Credits
           </Link>
+        </div>
+      ) : null}
+
+      {company.onboardingDismissedAt === null ? (
+        <div className="mb-4 rounded-lg border border-ace bg-ace-bg px-4 py-3 sm:flex sm:items-center sm:justify-between sm:gap-4">
+          <div>
+            <p className="text-[13px] font-semibold text-navy">
+              Schedule your onboarding call with the AADB team
+            </p>
+            <p className="mt-0.5 text-[12px] text-text-mid text-pretty">
+              Book a short walkthrough and we will help you get set up on the platform.
+            </p>
+          </div>
+          <div className="mt-3 flex shrink-0 items-center gap-2 sm:mt-0">
+            <a
+              href={ONBOARDING_SCHEDULER_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="rounded-md bg-navy px-3.5 py-2 text-[12px] font-semibold text-white transition-colors hover:bg-navy/90"
+            >
+              Schedule call
+            </a>
+            <form action={dismissOnboarding}>
+              <button
+                type="submit"
+                className="rounded-md border border-border bg-white px-3 py-2 text-[12px] font-semibold text-text-muted transition-colors hover:text-navy"
+              >
+                Dismiss
+              </button>
+            </form>
+          </div>
         </div>
       ) : null}
       <PageHeader

@@ -6,6 +6,7 @@ import { syncIssuedCertsForLicensee } from "@/lib/protrack/ace-sync";
 import { sendEmail } from "@/lib/email/send";
 import { appBaseUrl } from "@/lib/app-url";
 import ProtrackWelcomeEmail from "@/emails/protrack-welcome";
+import WelcomeDentalAceOneEmail from "@/emails/welcome-dental-ace-one";
 
 /*
   GET /api/auth/verify-email?token=... — the link in the verification email.
@@ -39,6 +40,7 @@ export async function GET(request: NextRequest) {
       email: true,
       firstName: true,
       emailVerifiedAt: true,
+      signupIntent: true,
       licenses: {
         where: { isPrimary: true },
         select: { state: true, licenseType: true },
@@ -60,20 +62,36 @@ export async function GET(request: NextRequest) {
       .catch(() => {});
     // Email is now proven — backfill any matching DentalACE-issued certificates.
     await syncIssuedCertsForLicensee(userId).catch(() => {});
-    // The account is now active: send the ProTrack welcome. Fires once (inside
-    // the first-verification block), so re-clicks / scanner pre-fetches don't
-    // resend it. Best-effort — a send failure must not break verification.
-    const primary = user.licenses[0];
-    await sendEmail({
-      to: user.email,
-      subject: ProtrackWelcomeEmail.subject(),
-      react: ProtrackWelcomeEmail({
-        firstName: user.firstName ?? "there",
-        state: primary?.state ?? null,
-        licenseType: primary?.licenseType ?? null,
-        dashboardUrl: `${appBaseUrl(origin)}/protrack`,
-      }),
-    }).catch(() => {});
+    // The account is now active: send the welcome. Fires once (inside the
+    // first-verification block), so re-clicks / scanner pre-fetches don't resend
+    // it. Best-effort — a send failure must not break verification.
+    //
+    // Company / staff signups may never use ProTrack, so they get the platform
+    // welcome instead of leading with "Welcome to ProTrack" (client feedback).
+    // Individuals (and legacy null rows) keep the ProTrack welcome.
+    if (user.signupIntent === "COMPANY" || user.signupIntent === "STAFF") {
+      await sendEmail({
+        to: user.email,
+        subject: WelcomeDentalAceOneEmail.subject(),
+        react: WelcomeDentalAceOneEmail({
+          firstName: user.firstName ?? "there",
+          intent: user.signupIntent === "STAFF" ? "staff" : "company",
+          homeUrl: `${appBaseUrl(origin)}/home`,
+        }),
+      }).catch(() => {});
+    } else {
+      const primary = user.licenses[0];
+      await sendEmail({
+        to: user.email,
+        subject: ProtrackWelcomeEmail.subject(),
+        react: ProtrackWelcomeEmail({
+          firstName: user.firstName ?? "there",
+          state: primary?.state ?? null,
+          licenseType: primary?.licenseType ?? null,
+          dashboardUrl: `${appBaseUrl(origin)}/protrack`,
+        }),
+      }).catch(() => {});
+    }
   }
 
   // No session minted (see SECURITY note above). Send them to sign in.

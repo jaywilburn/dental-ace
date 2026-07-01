@@ -120,6 +120,11 @@ export async function POST(request: NextRequest) {
           firstName: data.firstName,
           lastName: data.lastName,
           protrackTier: "FREE",
+          // Persist what they picked at /signup so verify-email can tailor the
+          // welcome (company/staff shouldn't lead with "Welcome to ProTrack").
+          signupIntent: asParam
+            ? (asParam.toUpperCase() as "INDIVIDUAL" | "COMPANY" | "STAFF")
+            : null,
         },
       });
       if (hasLicense && renewalDate) {

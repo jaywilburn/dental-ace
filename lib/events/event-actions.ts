@@ -26,6 +26,10 @@ import {
 } from "@/lib/forms/application/schemas";
 import { sendEmail } from "@/lib/email/send";
 import ApplicationSubmittedEmail from "@/emails/application-submitted";
+import {
+  getReviewerNotificationRecipients,
+  reviewerNotificationToAddress,
+} from "@/lib/reviewer/notify";
 
 /*
   Server actions for the event-submission wizard. Mirrors the course application
@@ -552,11 +556,9 @@ export async function submitEvent(formData: FormData) {
 
   const submittedAt = new Date();
 
-  // Reviewer notification (reuses the application-submitted template).
-  const reviewerEmails = (process.env.REVIEWER_NOTIFICATION_EMAILS ?? "")
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
+  // Reviewer notification (reuses the application-submitted template). Notifies
+  // all active Reviewer + Admin accounts (BCC'd) plus the env fallback list.
+  const reviewerEmails = await getReviewerNotificationRecipients();
   if (reviewerEmails.length > 0) {
     const props = {
       recipientName: "AADB Reviewer",
@@ -569,7 +571,8 @@ export async function submitEvent(formData: FormData) {
     };
     try {
       await sendEmail({
-        to: reviewerEmails,
+        to: reviewerNotificationToAddress(),
+        bcc: reviewerEmails,
         subject: ApplicationSubmittedEmail.subject(props),
         react: ApplicationSubmittedEmail(props),
       });

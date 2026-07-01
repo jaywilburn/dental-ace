@@ -106,6 +106,16 @@ enum AccessRequestStatus {
   DENIED
 }
 
+// What a person declared they were here to do at /signup (the ?as= param). Drives
+// the post-verification welcome email: INDIVIDUAL gets the ProTrack welcome, the
+// others get the platform welcome (they may never use ProTrack). Nullable: rows
+// created before this column fall through to the ProTrack welcome.
+enum SignupIntent {
+  INDIVIDUAL
+  COMPANY
+  STAFF
+}
+
 // ── Phase 3 (Verify) enums ──────────────────────────────────────────────────
 
 enum BatchStatus {
@@ -149,6 +159,7 @@ model User {
   companyId        String?   @map("company_id") @db.Uuid
   company          Company?  @relation(fields: [companyId], references: [id])
   protrackTier     PlanTier  @default(FREE) @map("protrack_tier")
+  signupIntent     SignupIntent? @map("signup_intent") // what they picked at /signup; tailors the welcome email
   proExpiresAt     DateTime? @map("pro_expires_at")
   verifyAccess     Boolean   @default(false) @map("verify_access")
   // Set for users who registered through /signup/board. Multiple verify users for
@@ -260,6 +271,9 @@ model Company {
   certBalance                 Int       @default(0) @map("cert_balance")
   certAlertThreshold          Int       @default(25) @map("cert_alert_threshold")
   totalCertsIssued            Int       @default(0) @map("total_certs_issued")
+  // Set when the customer dismisses the "schedule your onboarding call" banner on
+  // the company dashboard. Null = still show the banner (new customer).
+  onboardingDismissedAt       DateTime? @map("onboarding_dismissed_at")
   createdAt                   DateTime  @default(now()) @map("created_at")
 
   users               User[]

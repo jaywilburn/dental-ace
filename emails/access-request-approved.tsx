@@ -5,12 +5,15 @@ export type AccessRequestApprovedProps = {
   firstName: string;
   roleLabel: string;
   areaUrl: string;
+  /** When set (CE Company approvals), invites them to book an onboarding call. */
+  onboardingUrl?: string;
 };
 
 export default function AccessRequestApprovedEmail({
   firstName,
   roleLabel,
   areaUrl,
+  onboardingUrl,
 }: AccessRequestApprovedProps) {
   return (
     <BrandEmail
@@ -29,6 +32,22 @@ export default function AccessRequestApprovedEmail({
         and you will land in your new area.
       </Text>
       <CtaButton href={areaUrl} label="Sign in" />
+      {onboardingUrl ? (
+        <>
+          <Text
+            style={{
+              margin: "18px 0 6px 0",
+              fontSize: 14,
+              lineHeight: 1.65,
+              color: emailColors.textMid,
+            }}
+          >
+            Want a hand getting started? Book a short onboarding call and the AADB team will walk
+            you through the platform.
+          </Text>
+          <CtaButton href={onboardingUrl} label="Schedule your onboarding call" />
+        </>
+      ) : null}
     </BrandEmail>
   );
 }

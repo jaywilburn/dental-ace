@@ -33,6 +33,10 @@ import {
 import { mergeApplicationStep } from "@/lib/forms/application/merge-step";
 import { sendEmail } from "@/lib/email/send";
 import ApplicationSubmittedEmail from "@/emails/application-submitted";
+import {
+  getReviewerNotificationRecipients,
+  reviewerNotificationToAddress,
+} from "@/lib/reviewer/notify";
 
 /*
   Server actions for the multi-step course application form.
@@ -307,34 +311,26 @@ export async function submitApplication(formData: FormData) {
     }
   });
 
-  // Fire reviewer notification email (log mode until Resend domain is verified).
-  const reviewerEmails = (process.env.REVIEWER_NOTIFICATION_EMAILS ?? "")
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
+  // Notify all active Reviewer + Admin accounts (BCC'd) plus any external
+  // reviewers in REVIEWER_NOTIFICATION_EMAILS. Log mode until Resend is verified.
+  const reviewerEmails = await getReviewerNotificationRecipients();
 
   if (reviewerEmails.length > 0) {
+    const props = {
+      recipientName: "AADB Reviewer",
+      companyName: draft.company.name,
+      courseTitle: fullData.courseTitle,
+      ceHours: fullData.ceCreditHours,
+      deliveryFormat: fullData.deliveryFormat,
+      submittedAt: submittedAt.toLocaleString(),
+      reviewUrl: `${process.env.NEXT_PUBLIC_APP_URL ?? ""}/reviewer/${applicationId}`,
+    };
     try {
       await sendEmail({
-        to: reviewerEmails,
-        subject: ApplicationSubmittedEmail.subject({
-          recipientName: "AADB Reviewer",
-          companyName: draft.company.name,
-          courseTitle: fullData.courseTitle,
-          ceHours: fullData.ceCreditHours,
-          deliveryFormat: fullData.deliveryFormat,
-          submittedAt: submittedAt.toLocaleString(),
-          reviewUrl: `${process.env.NEXT_PUBLIC_APP_URL ?? ""}/reviewer/${applicationId}`,
-        }),
-        react: ApplicationSubmittedEmail({
-          recipientName: "AADB Reviewer",
-          companyName: draft.company.name,
-          courseTitle: fullData.courseTitle,
-          ceHours: fullData.ceCreditHours,
-          deliveryFormat: fullData.deliveryFormat,
-          submittedAt: submittedAt.toLocaleString(),
-          reviewUrl: `${process.env.NEXT_PUBLIC_APP_URL ?? ""}/reviewer/${applicationId}`,
-        }),
+        to: reviewerNotificationToAddress(),
+        bcc: reviewerEmails,
+        subject: ApplicationSubmittedEmail.subject(props),
+        react: ApplicationSubmittedEmail(props),
       });
     } catch (err) {
       // Don't fail the submission if email logging hiccups.
