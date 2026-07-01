@@ -157,9 +157,22 @@ export default async function EventsIndexPage({
                             Approval Letter
                           </a>
                         ) : null}
-                        <a href={`/api/events/${event.id}/badge`} className="text-ace underline">
-                          Marketing Logo
-                        </a>
+                        <span className="inline-flex items-center gap-1">
+                          <a
+                            href={`/api/events/${event.id}/badge`}
+                            className="text-ace underline"
+                            title="Download marketing logo (PNG)"
+                          >
+                            Marketing Logo
+                          </a>
+                          <a
+                            href={`/api/events/${event.id}/badge?format=jpeg`}
+                            className="text-text-muted underline"
+                            title="Download as JPEG instead"
+                          >
+                            (or JPEG)
+                          </a>
+                        </span>
                       </div>
                     ) : event.eventIdNumber ? (
                       <span className="font-mono text-[11px] text-text-muted">{event.eventIdNumber}</span>

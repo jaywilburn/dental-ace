@@ -1,26 +1,11 @@
 import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/portal-shell";
 import { ApplicationStepBar } from "@/components/application-form/step-bar";
-import {
-  FormCard,
-  FormErrorBanner,
-  FormField,
-  FormInput,
-  FormLabel,
-  FormNav,
-  FormSelect,
-  FormTextarea,
-} from "@/components/application-form/form-controls";
+import { FormErrorBanner, FormNav } from "@/components/application-form/form-controls";
+import { PresentersFields } from "@/components/application-form/steps/presenters-fields";
 import { requireApplicationCredits } from "@/lib/company/credit-guards";
 import { ensureDraft, getDraftData, saveStep3 } from "@/lib/forms/application/actions";
 
-const PRESENTER_ROLES = ["Primary Presenter", "Co-Presenter", "Moderator"] as const;
-
-/*
-  Step 3 — Presenters. Phase 1 ships with a single primary presenter; the
-  multi-presenter UI lands later. The schema already supports up to 8 so
-  expansion is additive.
-*/
 export default async function ApplicationStep3Page({
   searchParams,
 }: {
@@ -32,8 +17,6 @@ export default async function ApplicationStep3Page({
   const draft = await getDraftData(applicationId);
   if (!draft.creatorName) redirect("/company/applications/new/creator");
 
-  const primary = draft.presenters?.[0];
-
   return (
     <>
       <PageHeader title="Course Application" subtitle="Step 4 of 6 — Presenters" />
@@ -41,74 +24,7 @@ export default async function ApplicationStep3Page({
       {error === "validation" ? <FormErrorBanner detail={detail} /> : null}
       <form action={saveStep3} className="space-y-5">
         <input type="hidden" name="applicationId" value={applicationId} />
-        <FormCard title="Step 3 — Primary Presenter">
-          <FormField>
-            <FormLabel required>Presenter Name</FormLabel>
-            <FormInput
-              name="presenter_0_name"
-              defaultValue={primary?.name ?? ""}
-              required
-              minLength={2}
-              maxLength={200}
-            />
-          </FormField>
-          <FormField>
-            <FormLabel required>Role</FormLabel>
-            <FormSelect
-              name="presenter_0_role"
-              defaultValue={primary?.role ?? PRESENTER_ROLES[0]}
-              options={PRESENTER_ROLES}
-            />
-          </FormField>
-          <FormField fullWidth>
-            <FormLabel required>Commercial Disclosure</FormLabel>
-            <FormTextarea
-              name="presenter_0_commercialDisclosure"
-              defaultValue={primary?.commercialDisclosure ?? "No relevant financial relationships to disclose"}
-              required
-              minLength={2}
-              maxLength={1000}
-            />
-          </FormField>
-          <FormField fullWidth>
-            <FormLabel required hint="Last Name, First Name, experience relative to course matter">
-              Experience Relative to Course Matter
-            </FormLabel>
-            <FormTextarea
-              name="presenter_0_experience"
-              defaultValue={primary?.experience ?? ""}
-              required
-              minLength={2}
-              maxLength={1000}
-            />
-          </FormField>
-          <FormField fullWidth>
-            <FormLabel required hint="How much time, and a description: live, paper, or digital?">
-              Training Received by Presenter
-            </FormLabel>
-            <FormTextarea
-              name="presenter_0_training"
-              defaultValue={primary?.training ?? ""}
-              required
-              minLength={2}
-              maxLength={1000}
-            />
-          </FormField>
-          <FormField fullWidth>
-            <FormLabel required hint="Include name and title">Presenter Bio</FormLabel>
-            <FormTextarea
-              name="presenter_0_bio"
-              defaultValue={primary?.bio ?? ""}
-              required
-              minLength={2}
-              maxLength={2000}
-            />
-          </FormField>
-        </FormCard>
-        <p className="text-[11px] text-text-muted">
-          Additional presenter slots ship in a follow-up. The schema supports up
-          to 8 presenters per course.
-        </p>
+        <PresentersFields draft={draft} />
         <FormNav
           back={{ href: "/company/applications/new/creator", label: "Back" }}
           nextLabel="Next: Quiz Builder"

@@ -6,6 +6,7 @@ import { JURISDICTION_CODES } from "@/lib/protrack/reference";
 import { signEmailVerificationToken } from "@/lib/auth/verification-token";
 import { sendEmail } from "@/lib/email/send";
 import { appBaseUrl } from "@/lib/app-url";
+import { isValidSignupRole } from "@/lib/auth/signup-role";
 import VerifyEmail from "@/emails/verify-email";
 
 /*
@@ -29,11 +30,20 @@ export async function POST(request: NextRequest) {
   const origin = request.nextUrl.origin;
   const form = await request.formData();
 
-  const back = (message: string) =>
-    NextResponse.redirect(
-      `${origin}/signup?error=${encodeURIComponent(message)}`,
-      303,
-    );
+  // Preserve the user's context on an error redirect: `as` keeps them on the
+  // right variant of the form (not the role chooser), and `email` re-fills the
+  // field. Both are read off the raw form so they survive even a parse failure.
+  const asRaw = form.get("as");
+  const asParam = typeof asRaw === "string" && isValidSignupRole(asRaw) ? asRaw : undefined;
+  const emailRaw = form.get("email");
+  const emailParam = typeof emailRaw === "string" ? emailRaw : undefined;
+
+  const back = (message: string) => {
+    const params = new URLSearchParams({ error: message });
+    if (asParam) params.set("as", asParam);
+    if (emailParam) params.set("email", emailParam);
+    return NextResponse.redirect(`${origin}/signup?${params.toString()}`, 303);
+  };
 
   const parsed = registerSchema.safeParse({
     firstName: form.get("firstName"),

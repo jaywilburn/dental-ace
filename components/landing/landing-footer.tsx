@@ -16,6 +16,7 @@ const products: FooterLink[] = [
   { label: "DentalACE", href: "/company", color: "ace" },
   { label: "ProTrack", href: "/protrack", color: "pro" },
   { label: "Verify", href: "/verify", color: "ver" },
+  { label: "VerifyIQ", href: "/verifyiq", color: "ver" },
 ];
 
 const forYou: FooterLink[] = [

@@ -195,20 +195,20 @@ export default function PricingPage() {
           </div>
           <div className="flex flex-col rounded-2xl border border-ver bg-white p-7">
             <p className="mb-2 font-mono text-[10px] uppercase tracking-[2px] text-ver-dark">
-              VerifyIQ · For state boards
+              VerifyIQ · For groups &amp; boards
             </p>
             <p className="mb-3 font-serif text-3xl font-bold text-ver">
               Coming soon
             </p>
             <p className="mb-5 text-sm leading-relaxed text-text-mid">
-              An advanced compliance intelligence add-on to Verify for state
-              dental boards. Contact us for details and early access.
+              The compliance intelligence layer of DentalACE One, for DSOs and
+              dental groups and for state boards. Join the early-access list.
             </p>
             <Link
-              href="/verify/contact"
+              href="/verifyiq"
               className="mt-auto rounded-lg bg-ver px-4 py-2 text-center text-[13px] font-semibold text-white transition-colors hover:bg-ver-dark"
             >
-              Contact us
+              Learn more
             </Link>
           </div>
         </div>

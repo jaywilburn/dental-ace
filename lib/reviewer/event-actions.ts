@@ -13,6 +13,9 @@ import { sendEmail } from "@/lib/email/send";
 import ApplicationApprovedEmail from "@/emails/application-approved";
 import ApplicationRejectedEmail from "@/emails/application-rejected";
 import { formatEventId, nextSeqFromLast } from "@/lib/reviewer/event-id";
+import { applicationDataReadSchema } from "@/lib/forms/application/schemas";
+import { isInlineFullCourse } from "@/lib/forms/event/schemas";
+import { accreditApplicationTx, renderCourseAssets } from "@/lib/reviewer/accredit";
 
 /*
   Approve / reject server actions for events, mirroring lib/reviewer/actions.ts.
@@ -55,23 +58,108 @@ export async function approveEvent(formData: FormData) {
       company: {
         select: { id: true, name: true, users: { select: { email: true }, take: 1 } },
       },
+      // Inline event-scoped session applications (event-only full-course path).
+      sessionApplications: {
+        where: { status: "PENDING" },
+        orderBy: { sessionPosition: "asc" },
+        select: {
+          id: true,
+          companyId: true,
+          applicationData: true,
+          renewalOfCourseId: true,
+          sessionPosition: true,
+        },
+      },
     },
   });
   if (!event) throw new Error("Event not found");
   if (event.status !== "PENDING") throw new Error("Only PENDING events can be approved");
+  if (!event.eventType) throw new Error("Event has no type");
+
+  const inlineFull = isInlineFullCourse(event.eventType);
+
+  // Event-only events accredit each inline session as its own event-scoped
+  // course. Parse every session's application up front (tolerant read schema).
+  const sessions = inlineFull
+    ? event.sessionApplications.map((a) => {
+        const parsed = applicationDataReadSchema.safeParse(a.applicationData);
+        if (!parsed.success) {
+          throw new Error(`Session ${a.id} application data invalid`);
+        }
+        return { app: a, data: parsed.data };
+      })
+    : [];
+  if (inlineFull && sessions.length === 0) {
+    throw new Error("Event has no sessions to accredit");
+  }
 
   const approvedAt = new Date();
   const expiresAt = new Date(approvedAt);
   expiresAt.setFullYear(expiresAt.getFullYear() + 3);
   const year = approvedAt.getFullYear();
-  const totalHours = event.totalHours ? Number(event.totalHours) : 0;
+  const totalHours = inlineFull
+    ? sessions.reduce((sum, s) => sum + s.data.ceCreditHours, 0)
+    : event.totalHours
+      ? Number(event.totalHours)
+      : 0;
 
   // Deterministic, event-id-keyed asset paths (retry-safe via upsert).
   const qrStoragePath = `qrcodes/event-${event.id}.png`;
   const pdfStoragePath = `approval-letters/event-${event.id}.pdf`;
 
-  const eventIdNumber = await prisma.$transaction(async (tx) => {
+  // One transaction accredits every session (event-only path) AND finalizes the
+  // event. Locks are taken in a fixed global order — course namespace first (so
+  // it never deadlocks with standalone approveApplication, which takes only the
+  // course lock), then the event namespace.
+  const { eventIdNumber, sessionResults } = await prisma.$transaction(async (tx) => {
+    if (inlineFull) {
+      await tx.$executeRaw`select pg_advisory_xact_lock(${year})`;
+    }
     await tx.$executeRaw`select pg_advisory_xact_lock(${year}, 1)`;
+
+    const results: Array<{
+      applicationId: string;
+      courseIdNumber: string;
+      attendeeLinkToken: string;
+      qrStoragePath: string;
+      pdfStoragePath: string;
+      courseTitle: string;
+      ceHours: number;
+    }> = [];
+
+    for (const s of sessions) {
+      const r = await accreditApplicationTx(tx, {
+        application: {
+          id: s.app.id,
+          companyId: s.app.companyId,
+          renewalOfCourseId: s.app.renewalOfCourseId,
+        },
+        data: s.data,
+        reviewerId: reviewer.id,
+        approvedAt,
+        expiresAt,
+        year,
+        eventId: event.id,
+      });
+      // Link the freshly-accredited course to the event as a session.
+      await tx.eventSession.create({
+        data: {
+          eventId: event.id,
+          courseId: r.courseId,
+          position: s.app.sessionPosition ?? 0,
+        },
+      });
+      results.push({
+        applicationId: r.applicationId,
+        courseIdNumber: r.courseIdNumber,
+        attendeeLinkToken: r.attendeeLinkToken,
+        qrStoragePath: r.qrStoragePath,
+        pdfStoragePath: r.pdfStoragePath,
+        courseTitle: s.data.courseTitle,
+        ceHours: s.data.ceCreditHours,
+      });
+    }
+
     const id = await nextEventIdNumber(tx, year);
     const updated = await tx.event.updateMany({
       where: { id: event.id, status: "PENDING" },
@@ -85,11 +173,31 @@ export async function approveEvent(formData: FormData) {
         reviewedById: reviewer.id,
         reviewedAt: approvedAt,
         reviewerNotes,
+        totalHours: new Prisma.Decimal(totalHours),
       },
     });
     if (updated.count !== 1) throw new Error("Event status changed during approval");
-    return id;
+    return { eventIdNumber: id, sessionResults: results };
   });
+
+  // Per-session approval letters (event-scoped courses attend via the event
+  // token, so no per-session QR). Non-fatal, best-effort.
+  for (const s of sessionResults) {
+    await renderCourseAssets({
+      applicationId: s.applicationId,
+      courseIdNumber: s.courseIdNumber,
+      attendeeLinkToken: s.attendeeLinkToken,
+      qrStoragePath: s.qrStoragePath,
+      pdfStoragePath: s.pdfStoragePath,
+      companyName: event.company.name,
+      courseTitle: s.courseTitle,
+      ceHours: s.ceHours,
+      approvedAt,
+      expiresAt,
+      reviewerName: reviewer.email.split("@")[0],
+      withQr: false,
+    });
+  }
 
   // Assets after commit (non-fatal; the events list self-heals via eventAssetUrls).
   const attendeeUrl = `${appBaseUrl()}/attend/event/${event.attendeeLinkToken}`;

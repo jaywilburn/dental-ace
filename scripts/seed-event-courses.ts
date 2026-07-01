@@ -113,6 +113,26 @@ const INLINE_SESSIONS = [
   { name: "Dental Practice Ethics", durationHours: 1, question: mc("Informed consent must include:", ["Only the fee", "Risks, benefits, and alternatives", "Just the diagnosis", "Nothing in writing"], 1) },
 ];
 
+// Full-course sessions for the NEW-MODEL event-only example: each is a complete
+// course application, accredited as its own event-scoped course (not reusable).
+const NEW_MODEL_EVENT_NAME = "TDA Hands-On Workshop 2026 (per-session accreditation)";
+const NEW_MODEL_SESSIONS = [
+  {
+    courseTitle: "Digital Impressions Hands-On Lab",
+    ceCreditHours: 2,
+    shortDescription: "A two-hour hands-on lab on intraoral scanning workflows and common capture errors.",
+    courseObjectives: "1. Capture a full-arch digital impression.\n2. Identify and correct scan artifacts.\n3. Export cases to the lab.",
+    courseOutline: "Hour 1: Scanning technique. Hour 2: Troubleshooting and lab export.",
+  },
+  {
+    courseTitle: "Chairside Provisional Ceramics Workshop",
+    ceCreditHours: 3,
+    shortDescription: "A three-hour workshop on fabricating and finishing chairside provisional restorations.",
+    courseObjectives: "1. Fabricate a chairside provisional.\n2. Adjust occlusion and contour.\n3. Polish for tissue health.",
+    courseOutline: "Hour 1: Fabrication. Hour 2: Adjustment. Hour 3: Finishing and cases.",
+  },
+];
+
 async function ensureCourses(companyId: string, reviewerId: string | null, approvedAt: Date, expiresAt: Date, year: number) {
   const last = await prisma.accreditedCourse.findFirst({
     where: { courseIdNumber: { startsWith: `ACE-${year}-` } },
@@ -155,6 +175,128 @@ async function ensureCourses(companyId: string, reviewerId: string | null, appro
     });
     console.log(`  ✓ approved ${courseIdNumber}: ${course.courseTitle}`);
   }
+}
+
+/**
+ * NEW-MODEL example: a non-reusable event whose sessions are each a full course
+ * application accredited as an event-scoped course (eventId set, hidden from
+ * /company/courses) and linked via EventSession(courseId). Demonstrates the
+ * event-only full-course path end to end. Idempotent.
+ */
+async function ensureNewModelEvent(
+  companyId: string,
+  reviewerId: string | null,
+  approvedAt: Date,
+  expiresAt: Date,
+  year: number,
+  evtSeq: number,
+): Promise<number> {
+  // Idempotent cleanup. Deleting the event alone would SetNull the scoped
+  // courses' eventId (orphaning them into /company/courses), so remove the
+  // sessions, scoped courses, and their applications explicitly, in FK order.
+  const prior = await prisma.event.findFirst({
+    where: { companyId, name: NEW_MODEL_EVENT_NAME },
+    select: { id: true },
+  });
+  if (prior) {
+    const scoped = await prisma.accreditedCourse.findMany({
+      where: { eventId: prior.id },
+      select: { applicationId: true },
+    });
+    await prisma.eventSession.deleteMany({ where: { eventId: prior.id } });
+    await prisma.accreditedCourse.deleteMany({ where: { eventId: prior.id } });
+    await prisma.courseApplication.deleteMany({
+      where: { id: { in: scoped.map((s) => s.applicationId) } },
+    });
+    await prisma.event.delete({ where: { id: prior.id } });
+  }
+
+  const lastCourse = await prisma.accreditedCourse.findFirst({
+    where: { courseIdNumber: { startsWith: `ACE-${year}-` } },
+    orderBy: { courseIdNumber: "desc" },
+    select: { courseIdNumber: true },
+  });
+  let seq = nextSeqFromLast(lastCourse?.courseIdNumber ?? null);
+
+  const totalHours = NEW_MODEL_SESSIONS.reduce((s, x) => s + x.ceCreditHours, 0);
+  const eventIdNumber = formatEventId(year, evtSeq);
+  const eventData = {
+    ...ORG,
+    name: NEW_MODEL_EVENT_NAME,
+    eventDate: "June 18, 2026",
+    coverage: "SELECTIVE",
+    reuse: "EVENT_ONLY",
+  } as unknown as Prisma.InputJsonValue;
+
+  const event = await prisma.event.create({
+    data: {
+      companyId,
+      name: NEW_MODEL_EVENT_NAME,
+      eventDate: "June 18, 2026",
+      status: "APPROVED",
+      eventType: EventType.SELECTIVE_INLINE,
+      eventData,
+      totalHours: new Prisma.Decimal(totalHours),
+      eventIdNumber,
+      approvedAt,
+      expiresAt,
+      reviewedById: reviewerId,
+      reviewedAt: approvedAt,
+      reviewerNotes: "Seeded event (per-session accreditation).",
+    },
+    select: { id: true },
+  });
+  await prisma.event.update({
+    where: { id: event.id },
+    data: {
+      qrCodeUrl: `qrcodes/event-${event.id}.png`,
+      approvalLetterUrl: `approval-letters/event-${event.id}.pdf`,
+    },
+  });
+
+  let position = 0;
+  for (const s of NEW_MODEL_SESSIONS) {
+    const applicationData = { ...BASE, ...s } as unknown as Prisma.InputJsonValue;
+    const courseIdNumber = formatCourseId(year, seq++);
+    const app = await prisma.courseApplication.create({
+      data: {
+        companyId,
+        status: "APPROVED",
+        eventId: event.id,
+        sessionPosition: position,
+        courseTitle: s.courseTitle,
+        ceHours: s.ceCreditHours,
+        courseType: BASE.subjectMatter,
+        deliveryMethod: BASE.deliveryFormat,
+        applicationData,
+        submittedAt: approvedAt,
+        reviewedById: reviewerId,
+        reviewedAt: approvedAt,
+        reviewerNotes: "Seeded session.",
+      },
+      select: { id: true },
+    });
+    const course = await prisma.accreditedCourse.create({
+      data: {
+        applicationId: app.id,
+        companyId,
+        eventId: event.id,
+        courseIdNumber,
+        approvedAt,
+        expiresAt,
+        quizQuestions: BASE.quiz as unknown as Prisma.InputJsonValue,
+      },
+      select: { id: true },
+    });
+    await prisma.eventSession.create({
+      data: { eventId: event.id, courseId: course.id, position },
+    });
+    position++;
+  }
+  console.log(
+    `  ✓ approved event ${eventIdNumber}: ${NEW_MODEL_EVENT_NAME} [new model, ${NEW_MODEL_SESSIONS.length} session courses]`,
+  );
+  return evtSeq + 1;
 }
 
 async function main() {
@@ -277,6 +419,11 @@ async function main() {
     created++;
     console.log(`  ✓ approved event ${eventIdNumber}: ${ev.name} [${ev.type}]`);
   }
+
+  // New-model example (per-session full-course accreditation). Reuses the same
+  // evtSeq run so ids stay contiguous with the four legacy examples above.
+  evtSeq = await ensureNewModelEvent(company.id, reviewer?.id ?? null, approvedAt, expiresAt, year, evtSeq);
+  created++;
 
   console.log(`\nDone. ${created} new event(s) approved. Visit http://localhost:3000/company/events`);
 }

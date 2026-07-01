@@ -46,12 +46,15 @@ export default async function MyCoursesPage({
       where: {
         companyId: user.companyId,
         status: { in: ["PENDING", "REJECTED"] },
+        // Exclude inline event-scoped session applications (event-only path).
+        eventId: null,
       },
       orderBy: { submittedAt: "desc" },
       take: 50,
     }),
     prisma.accreditedCourse.findMany({
-      where: { companyId: user.companyId },
+      // eventId:null hides event-scoped session courses from the reusable list.
+      where: { companyId: user.companyId, eventId: null },
       orderBy: { approvedAt: "desc" },
       take: 50,
       include: {
@@ -220,20 +223,20 @@ export default async function MyCoursesPage({
                       ) : (
                         <span className="text-text-muted">Letter unavailable</span>
                       )}
-                      <span className="inline-flex items-center gap-1 text-ace">
+                      <span className="inline-flex items-center gap-1">
                         <a
                           href={`/api/courses/${course.id}/badge`}
-                          className="underline"
+                          className="text-ace underline"
+                          title="Download marketing logo (PNG)"
                         >
                           Marketing Logo
                         </a>
-                        <span className="text-text-muted">·</span>
                         <a
                           href={`/api/courses/${course.id}/badge?format=jpeg`}
-                          className="underline"
-                          title="Download as JPEG"
+                          className="text-text-muted underline"
+                          title="Download as JPEG instead"
                         >
-                          JPEG
+                          (or JPEG)
                         </a>
                       </span>
                       <Link

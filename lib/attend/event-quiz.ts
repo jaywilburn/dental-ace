@@ -10,10 +10,14 @@ import { quizQuestionSchema, type QuizQuestion } from "@/lib/forms/application/s
   and the submit action (full questions, for scoring). Keeping it in one module
   guarantees the page and the server score the exact same set in the same order.
 
-  - Opt 1 FULL_EVENT_QUIZ: the 5 event-level questions (eventData.quiz).
-  - Opt 2 FULL_PER_COURSE: one question per attached course (first MC), all of them.
-  - Opt 3 SELECTIVE_INLINE: one question per attended inline session.
-  - Opt 4 SELECTIVE_PER_COURSE: one question per attended course (first MC).
+  Keyed off SESSION SHAPE, not just event type, so both the current model and
+  already-approved legacy events work:
+
+  - Course-backed sessions (EventSession.courseId set) — every event-only event
+    approved under the full-course model, plus per-course events (Opt 2/4): one
+    MC question per course. FULL coverage asks all; SELECTIVE asks the attended.
+  - Legacy FULL_EVENT_QUIZ (no sessions): the 5 event-level questions (eventData.quiz).
+  - Legacy SELECTIVE_INLINE (courseId null): one question per attended inline session.
 */
 
 const quizArray = z.array(quizQuestionSchema);
@@ -97,19 +101,27 @@ function eventQuiz(event: EventForAttend): QuizQuestion[] | null {
   return parsed.success ? parsed.data : null;
 }
 
+/** True when every session points at an accredited course (vs legacy inline). */
+function sessionsCourseBacked(event: EventForAttend): boolean {
+  return event.sessions.length > 0 && event.sessions.every((s) => s.course != null);
+}
+
+function isSelectiveType(t: EventType | null): boolean {
+  return t === EventType.SELECTIVE_INLINE || t === EventType.SELECTIVE_PER_COURSE;
+}
+
 /** Shape the public (answer-stripped) form for the attendee page. */
 export function buildPublicForm(event: EventForAttend): EventPublicForm | null {
-  switch (event.eventType) {
-    case EventType.FULL_EVENT_QUIZ: {
+  if (!event.eventType) return null;
+  const courseBacked = sessionsCourseBacked(event);
+
+  // Legacy event-only events (no course-backed sessions).
+  if (!courseBacked) {
+    if (event.eventType === EventType.FULL_EVENT_QUIZ) {
       const q = eventQuiz(event);
       return q ? { mode: "full", questions: q.map(strip) } : null;
     }
-    case EventType.FULL_PER_COURSE: {
-      const qs = event.sessions.map(firstCourseMc);
-      if (qs.some((q) => q === null)) return null;
-      return { mode: "full", questions: (qs as QuizQuestion[]).map(strip) };
-    }
-    case EventType.SELECTIVE_INLINE: {
+    if (event.eventType === EventType.SELECTIVE_INLINE) {
       const items = event.sessions.map((s) => {
         const q = inlineQuestion(s);
         return q
@@ -125,25 +137,30 @@ export function buildPublicForm(event: EventForAttend): EventPublicForm | null {
         ? null
         : { mode: "selective", items: items as Exclude<(typeof items)[number], null>[] };
     }
-    case EventType.SELECTIVE_PER_COURSE: {
-      const items = event.sessions.map((s) => {
-        const q = firstCourseMc(s);
-        return q
-          ? {
-              id: s.id,
-              label: s.course?.application.courseTitle ?? "Course",
-              sub: `${s.course?.application.ceHours ? Number(s.course.application.ceHours).toFixed(1) : "?"} hrs`,
-              question: strip(q),
-            }
-          : null;
-      });
-      return items.some((i) => i === null)
-        ? null
-        : { mode: "selective", items: items as Exclude<(typeof items)[number], null>[] };
-    }
-    default:
-      return null;
+    // Per-course event with no attached courses — nothing to ask.
+    return null;
   }
+
+  // Course-backed: one MC question per course.
+  if (!isSelectiveType(event.eventType)) {
+    const qs = event.sessions.map(firstCourseMc);
+    if (qs.some((q) => q === null)) return null;
+    return { mode: "full", questions: (qs as QuizQuestion[]).map(strip) };
+  }
+  const items = event.sessions.map((s) => {
+    const q = firstCourseMc(s);
+    return q
+      ? {
+          id: s.id,
+          label: s.course?.application.courseTitle ?? "Course",
+          sub: `${s.course?.application.ceHours ? Number(s.course.application.ceHours).toFixed(1) : "?"} hrs`,
+          question: strip(q),
+        }
+      : null;
+  });
+  return items.some((i) => i === null)
+    ? null
+    : { mode: "selective", items: items as Exclude<(typeof items)[number], null>[] };
 }
 
 /**
@@ -156,15 +173,20 @@ export function assembleForSubmit(
   event: EventForAttend,
   selectedSessionIds: string[],
 ): AssembledQuiz | null {
+  if (!event.eventType) return null;
   const totalHours = event.totalHours ? Number(event.totalHours) : 0;
+  const courseBacked = sessionsCourseBacked(event);
 
-  if (event.eventType === EventType.FULL_EVENT_QUIZ) {
+  // Legacy event-level quiz (full attendance, no course-backed sessions).
+  if (event.eventType === EventType.FULL_EVENT_QUIZ && !courseBacked) {
     const q = eventQuiz(event);
     if (!q) return null;
     return { questions: q, hours: totalHours, attendedSessionIds: [], sessionNames: [], passPct: 0.6 };
   }
 
-  if (event.eventType === EventType.FULL_PER_COURSE) {
+  // Full coverage, course-backed (FULL_PER_COURSE, or event-only under the
+  // full-course model): one MC question per course, all of them.
+  if (!isSelectiveType(event.eventType)) {
     const qs = event.sessions.map(firstCourseMc);
     if (qs.length === 0 || qs.some((q) => q === null)) return null;
     return {
@@ -176,8 +198,10 @@ export function assembleForSubmit(
     };
   }
 
-  // Selective: derive from the selected ids, in order.
+  // Selective: derive from the selected ids, in order. Legacy inline sessions
+  // read their inline question; course-backed sessions read the course's first MC.
   if (selectedSessionIds.length === 0) return null;
+  const useInline = event.eventType === EventType.SELECTIVE_INLINE && !courseBacked;
   const byId = new Map(event.sessions.map((s) => [s.id, s]));
   const questions: QuizQuestion[] = [];
   const sessionNames: string[] = [];
@@ -185,7 +209,7 @@ export function assembleForSubmit(
   for (const id of selectedSessionIds) {
     const s = byId.get(id);
     if (!s) return null;
-    if (event.eventType === EventType.SELECTIVE_INLINE) {
+    if (useInline) {
       const q = inlineQuestion(s);
       if (!q) return null;
       questions.push(q);

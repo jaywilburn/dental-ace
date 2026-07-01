@@ -4,20 +4,18 @@ import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import Stripe from "stripe";
 import { getCurrentUser } from "@/lib/auth/session";
-import {
-  appCourseUnitCents,
-  clampAppCourseQty,
-  getSku,
-  type Sku,
-} from "@/lib/billing/catalog";
+import { clampAppCourseQty, getSku } from "@/lib/billing/catalog";
+import { buildCheckoutLineItem } from "@/lib/billing/checkout-line-item";
 import { isMockMode } from "@/lib/billing/checkout-mode";
 
 /*
   Server action invoked from the Buy Credits / Buy Cert Bundles pages.
 
   - Mock mode: redirects to the dev mock-checkout page with the chosen SKU.
-  - Real mode: creates a Stripe Checkout Session (one-time payment) and
-    redirects to its hosted URL.
+  - Real mode: creates a Stripe Checkout Session (one-time payment) against the
+    pre-created catalog (stored Price for fixed packs; inline tiered price_data
+    referencing the Course Application product for app_course) and redirects to
+    its hosted URL.
 
   The session carries skuId + quantity in metadata and the companyId as
   client_reference_id; the webhook (app/api/webhooks/stripe/route.ts →
@@ -52,13 +50,22 @@ export async function startCheckout(formData: FormData) {
   const secret = process.env.STRIPE_SECRET_KEY;
   if (!secret) redirect(`${buyPath}?error=config`);
 
+  // Resolve the SKU's Stripe catalog reference. A fixed pack needs its stored
+  // Price ID; app_course needs the Course Application product ID (its price is
+  // computed inline per tier). A missing value means the env isn't configured.
+  const priceId = process.env[sku.envPriceIdKey];
+  const appCourseProductId = process.env.STRIPE_PRODUCT_ID_APP_COURSE;
+  if (sku.quantityPriced ? !appCourseProductId : !priceId) {
+    redirect(`${buyPath}?error=config`);
+  }
+
   const stripe = new Stripe(secret);
   const host = (await headers()).get("host") ?? "dentalace.org";
   const origin = `https://${host}`;
 
   const session = await stripe.checkout.sessions.create({
     mode: "payment",
-    line_items: [lineItem(sku, quantity)],
+    line_items: [buildCheckoutLineItem(sku, quantity, { priceId, appCourseProductId })],
     // Webhook reads the company off client_reference_id (NOT the user id).
     client_reference_id: user.companyId,
     // Stripe metadata values must be strings; the webhook does Number(quantity).
@@ -73,37 +80,4 @@ export async function startCheckout(formData: FormData) {
 
   if (!session.url) redirect(`${buyPath}?error=session`);
   redirect(session.url);
-}
-
-/*
-  Inline price_data keyed off the catalog (the single source of truth) instead
-  of pre-created Stripe Price IDs. For app_course this makes the volume tier
-  exact: unit_amount(qty) * qty === appCourseTotalCents(qty). product_data.name
-  is required by Stripe.
-*/
-function lineItem(
-  sku: Sku,
-  quantity: number,
-): Stripe.Checkout.SessionCreateParams.LineItem {
-  if (sku.quantityPriced) {
-    const noun = quantity === 1 ? "course" : "courses";
-    return {
-      quantity,
-      price_data: {
-        currency: "usd",
-        unit_amount: appCourseUnitCents(quantity),
-        product_data: {
-          name: `${sku.name} (${quantity} ${noun})`,
-        },
-      },
-    };
-  }
-  return {
-    quantity: 1,
-    price_data: {
-      currency: "usd",
-      unit_amount: sku.amountCents,
-      product_data: { name: sku.name },
-    },
-  };
 }
