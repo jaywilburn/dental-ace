@@ -1,6 +1,7 @@
 import "server-only";
 import PDFDocument from "pdfkit";
 import { drawAadbSeal } from "./seal";
+import { courseFormatLabel } from "./course-format-label";
 
 /*
   PDFKit-rendered completion certificate (landscape). Mirrors the approval
@@ -17,6 +18,7 @@ export type CertificateInput = {
   certificateId: string;
   ceHours: number;
   completedAt: Date;
+  deliveryMethod?: string | null;
 };
 
 export async function renderCertificatePdf(
@@ -100,6 +102,15 @@ export async function renderCertificatePdf(
           322,
           { align: "center" },
         );
+
+      const formatLabel = courseFormatLabel(input.deliveryMethod);
+      if (formatLabel) {
+        doc
+          .fillColor(TEXT_MID)
+          .font("Helvetica")
+          .fontSize(12)
+          .text(`Course Format: ${formatLabel}`, 0, 344, { align: "center" });
+      }
 
       drawAadbSeal(doc, { cx: W / 2, cy: 440, r: 40 });
 

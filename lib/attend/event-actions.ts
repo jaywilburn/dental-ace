@@ -144,6 +144,9 @@ export async function submitEventAttendance(input: unknown): Promise<EventAttend
       ceHours: assembled.hours,
       completedAt,
       sessions: assembled.sessionNames,
+      // Matches the deliveryMethod written to the event cert row
+      // (event-issue.ts / the FAIL path above); mapper -> "LIVE In Person".
+      deliveryMethod: "Live Event",
     });
     await uploadToStorage({ kind: "certs", path: pdfPath, body: pdf, contentType: "application/pdf" });
     await prisma.issuedCertificate.update({ where: { id: certificateId }, data: { certPdfUrl: pdfPath } });

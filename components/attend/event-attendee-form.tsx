@@ -41,6 +41,9 @@ export function EventAttendeeForm({
   const [licenseNumber, setLicenseNumber] = useState("");
   const [licenseType, setLicenseType] = useState("");
   const [licenseStates, setLicenseStates] = useState<string[]>([""]);
+  // Additional states are gated behind an explicit "licensed in more than one
+  // state?" question (client "Course Completion" form, item 7).
+  const [multiState, setMultiState] = useState(false);
   const [affirmed, setAffirmed] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [answers, setAnswers] = useState<Record<string, Answer>>({});
@@ -119,30 +122,62 @@ export function EventAttendeeForm({
             </select>
           </label>
           <div className="space-y-2">
-            <span className="block text-sm text-slate-700">State(s) of licensure</span>
-            {licenseStates.map((st, i) => (
-              <div key={i} className="flex items-center gap-2">
-                <select
-                  value={st}
-                  onChange={(e) => setLicenseStates((p) => p.map((s, idx) => (idx === i ? e.target.value : s)))}
-                  className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-                >
-                  <option value="">{i === 0 ? "Select your state…" : "Select another state…"}</option>
-                  <JurisdictionOptions />
-                </select>
-                {i > 0 && (
-                  <button type="button" onClick={() => setLicenseStates((p) => p.filter((_, idx) => idx !== i))} className="shrink-0 rounded-md border border-slate-300 px-2.5 py-2 text-xs text-slate-500">
-                    Remove
-                  </button>
-                )}
-              </div>
-            ))}
-            {licenseStates.length < 5 && (
-              <button type="button" onClick={() => setLicenseStates((p) => [...p, ""])} className="text-sm font-medium text-ace-dark hover:underline">
-                + Add another state where you are licensed
-              </button>
-            )}
+            <span className="block text-sm text-slate-700">State of licensure</span>
+            <select
+              value={licenseStates[0] ?? ""}
+              onChange={(e) => setLicenseStates((p) => p.map((s, idx) => (idx === 0 ? e.target.value : s)))}
+              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+            >
+              <option value="">Select your state…</option>
+              <JurisdictionOptions />
+            </select>
           </div>
+          <div className="space-y-1">
+            <span className="block text-sm text-slate-700">Are you licensed in more than one state?</span>
+            <div className="flex gap-2">
+              {([["Yes", true], ["No", false]] as const).map(([label, val]) => (
+                <button
+                  key={label}
+                  type="button"
+                  onClick={() => {
+                    setMultiState(val);
+                    setLicenseStates((p) => (val ? (p.length < 2 ? [...p, ""] : p) : [p[0] ?? ""]));
+                  }}
+                  className={`flex-1 rounded-md border px-3 py-2 text-sm ${multiState === val ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 text-slate-700"}`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+          {multiState && (
+            <div className="space-y-2">
+              <span className="block text-sm text-slate-700">Additional state(s) of licensure</span>
+              {licenseStates.slice(1).map((st, idx) => {
+                const i = idx + 1;
+                return (
+                  <div key={i} className="flex items-center gap-2">
+                    <select
+                      value={st}
+                      onChange={(e) => setLicenseStates((p) => p.map((s, j) => (j === i ? e.target.value : s)))}
+                      className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                    >
+                      <option value="">Select another state…</option>
+                      <JurisdictionOptions />
+                    </select>
+                    <button type="button" onClick={() => setLicenseStates((p) => p.filter((_, j) => j !== i))} className="shrink-0 rounded-md border border-slate-300 px-2.5 py-2 text-xs text-slate-500">
+                      Remove
+                    </button>
+                  </div>
+                );
+              })}
+              {licenseStates.length < 5 && (
+                <button type="button" onClick={() => setLicenseStates((p) => [...p, ""])} className="text-sm font-medium text-ace-dark hover:underline">
+                  + Add another state where you are licensed
+                </button>
+              )}
+            </div>
+          )}
           <NavButtons onNext={() => setStep(1)} nextDisabled={!name || !email || !completedOn || !cleanStates.length} />
         </section>
       )}

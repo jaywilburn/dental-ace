@@ -184,6 +184,7 @@ export async function submitAttendance(input: unknown): Promise<AttendResult> {
       certificateId,
       ceHours: Number(course.application.ceHours ?? 0),
       completedAt,
+      deliveryMethod: course.application.deliveryMethod,
     });
     await uploadToStorage({ kind: "certs", path: pdfPath, body: pdf, contentType: "application/pdf" });
     await prisma.issuedCertificate.update({
