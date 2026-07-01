@@ -17,6 +17,7 @@ const navLinks: { label: string; href: string; color?: "ace" | "pro" | "ver" }[]
   { label: "DentalACE", href: "/#ace", color: "ace" },
   { label: "ProTrack", href: "/#protrack", color: "pro" },
   { label: "Verify", href: "/#verify", color: "ver" },
+  { label: "VerifyIQ", href: "/verifyiq", color: "ver" },
   { label: "How it works", href: "/how-it-works" },
   { label: "About", href: "/about" },
 ];

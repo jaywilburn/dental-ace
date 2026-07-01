@@ -157,11 +157,14 @@ body {
 }
 
 /* ===========================================================================
-   VERIFYIQ landing section — client-provided design (2026-06-28). All rules
-   scoped under .viq-section so they don't collide with the rest of the app.
+   VERIFYIQ landing section — client-provided design (2026-06-28). Layout/type
+   rules are scoped under .viq-section so they don't collide with the rest of
+   the app, but the --viq-* custom properties live on :root so the dashboard
+   mockup (components/landing/verifyiq-dashboard-mockup.tsx) can be reused
+   outside .viq-section, e.g. on the dedicated /verifyiq page.
    Markup: components/landing/verifyiq-section.tsx.
    =========================================================================== */
-.viq-section {
+:root {
   --viq-navy: #0b1a2e;
   --viq-gold: #c8971a;
   --viq-gold-light: #e4c060;
@@ -172,7 +175,8 @@ body {
   --viq-text: #0b1a2e;
   --viq-text-mid: #475d77;
   --viq-text-muted: #7d93ac;
-
+}
+.viq-section {
   box-sizing: border-box;
   width: 100%;
   padding: 80px 6%;
