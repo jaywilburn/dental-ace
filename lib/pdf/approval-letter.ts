@@ -165,17 +165,21 @@ export async function renderApprovalLetterPdf(
       const sigGraphicTop = sigBlockTop + 20;
       doc.image(signatureImage, 56, sigGraphicTop, { fit: [230, 46] });
 
-      // Typed name + title beneath the signature graphic.
+      // Typed name + title beneath the signature graphic. Width is clamped and
+      // line-breaking disabled (same discipline as the footer) so a long but
+      // schema-valid name/title can never wrap to a second line and collide
+      // with the seal/footer, which would break the single-page invariant.
+      // width 400 keeps the text clear of the seal (starts near x=464).
       doc
         .font("Helvetica-Bold")
         .fontSize(11)
         .fillColor(NAVY)
-        .text(input.presidentName, 56, sigGraphicTop + 52);
+        .text(input.presidentName, 56, sigGraphicTop + 52, { width: 400, lineBreak: false });
       doc
         .font("Helvetica")
         .fontSize(10)
         .fillColor(TEXT_MUTED)
-        .text(input.presidentTitle, 56, sigGraphicTop + 67);
+        .text(input.presidentTitle, 56, sigGraphicTop + 67, { width: 400, lineBreak: false });
 
       // Accreditation seal, to the right of the signature block.
       drawAadbSeal(doc, { cx: doc.page.width - 110, cy: 640, r: 38 });

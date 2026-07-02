@@ -58,4 +58,16 @@ describe("renderApprovalLetterPdf", () => {
     });
     expect(a.equals(b)).toBe(false);
   });
+
+  it("stays on a single page with a long name and title", async () => {
+    // Near schema-max lengths (name ~120 chars, title ~160 chars). The clamped
+    // width + lineBreak:false on the signatory lines must keep these on a single
+    // line so they can't wrap into the seal/footer and force a second page.
+    const buf = await renderApprovalLetterPdf({
+      ...baseInput,
+      presidentName: "Dr. " + "Wilhelmina".repeat(11) + ", DDS",
+      presidentTitle: "President and Chair, ".repeat(7) + "AADB",
+    });
+    expect(countPdfPages(buf)).toBe(1);
+  });
 });
