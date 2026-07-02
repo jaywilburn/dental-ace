@@ -26,6 +26,18 @@ describe("validateSignatory", () => {
   it("rejects an em dash", () => {
     expect(validateSignatory("Dr. A — B", "President").ok).toBe(false);
   });
+
+  it("rejects an empty title", () => {
+    expect(validateSignatory("Dr. A, DDS", "   ").ok).toBe(false);
+  });
+
+  it("rejects an over-long title", () => {
+    expect(validateSignatory("Dr. A, DDS", "x".repeat(161)).ok).toBe(false);
+  });
+
+  it("rejects an em dash in the title", () => {
+    expect(validateSignatory("Dr. A, DDS", "President — AADB").ok).toBe(false);
+  });
 });
 
 describe("validateSignatureImage", () => {
