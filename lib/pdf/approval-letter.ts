@@ -4,7 +4,7 @@ import { drawAadbSeal } from "./seal";
 import { renderScriptSignaturePng } from "./signature-image";
 
 /*
-  PDFKit-rendered approval letter. Generates a single-page A4 letter with
+  PDFKit-rendered approval letter. Generates a single-page US Letter with
   navy header, gold accent rule, body copy referring to the approved course,
   Course ID + expiry callout, and a footer.
 
