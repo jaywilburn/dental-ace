@@ -2,6 +2,12 @@ import { requireStaff } from "@/lib/auth/session";
 import { getLetterSignatory } from "@/lib/admin/letter-settings";
 import { renderApprovalLetterPdf } from "@/lib/pdf/approval-letter";
 
+// The PDF renderer loads the @napi-rs/canvas native addon (script-signature
+// path), which cannot run on the edge runtime. Pin Node, matching the repo's
+// other PDF-emitting route handlers.
+export const runtime = "nodejs";
+export const maxDuration = 60;
+
 /*
   Admin-only sample approval-letter preview. Renders the letter with the CURRENT
   signatory settings + placeholder course data so an admin can eyeball the
