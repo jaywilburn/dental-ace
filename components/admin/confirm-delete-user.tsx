@@ -47,10 +47,14 @@ export function ConfirmDeleteUser({ userId, email }: { userId: string; email: st
             cannot be undone.
           </p>
           <div>
-            <label className="mb-1 block text-[11px] font-medium text-text-mid">
+            <label
+              htmlFor="confirm-delete-email"
+              className="mb-1 block text-[11px] font-medium text-text-mid"
+            >
               Type the account email to confirm
             </label>
             <input
+              id="confirm-delete-email"
               value={confirmText}
               onChange={(e) => setConfirmText(e.target.value)}
               placeholder={email}
