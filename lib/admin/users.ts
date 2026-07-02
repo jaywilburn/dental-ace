@@ -27,7 +27,10 @@ import StaffInviteEmail from "@/emails/staff-invite";
   own require* guards re-read Prisma each request so access flips immediately on
   their next request. The UI surfaces "applies on next sign-in" accordingly.
 
-  We never hard-delete (compliance/audit); suspendAccount is the terminal state.
+  Account lifecycle is two-tier: suspendAccount (reversible; the terminal state
+  for accounts with real history) and deleteAccount (hard delete, permitted only
+  for guard-cleared "clean" accounts, frees the email for re-signup). The guard
+  lives in lib/admin/deletion.ts (gatherDeletionFacts) + deletion-rules.ts.
 */
 
 // ── helpers ──────────────────────────────────────────────────────────────────
