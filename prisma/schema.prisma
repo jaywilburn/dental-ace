@@ -186,6 +186,7 @@ model User {
   adminActionsTargeting AdminAuditLog[]     @relation("AdminTarget")
   accessRequests        AccessRequest[]     @relation("AccessRequester")
   accessRequestsDecided AccessRequest[]     @relation("AccessDecider")
+  platformSettingsUpdated PlatformSettings[] @relation("PlatformSettingsUpdatedBy")
 
   @@map("users")
 }
@@ -212,6 +213,7 @@ enum AdminAuditAction {
   ACCOUNT_DELETED
   ACCESS_REQUEST_APPROVED
   ACCESS_REQUEST_DENIED
+  LETTER_SETTINGS_UPDATED
 }
 
 model AdminAuditLog {
@@ -229,6 +231,21 @@ model AdminAuditLog {
   @@index([targetUserId, createdAt])
   @@index([actorUserId, createdAt])
   @@map("admin_audit_log")
+}
+
+model PlatformSettings {
+  id                 String   @id @default("singleton")
+  presidentName      String   @default("Dr. Clifford Feingold, DDS") @map("president_name")
+  presidentTitle     String   @default("President, American Association of Dental Boards") @map("president_title")
+  // Path in the private `uploads` bucket, e.g. "admin/president-signature.png".
+  // Null => render the president name in the embedded script font instead.
+  signatureImagePath String?  @map("signature_image_path")
+  signatureImageMime String?  @map("signature_image_mime")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+  updatedById        String?  @map("updated_by_id") @db.Uuid
+  updatedBy          User?    @relation("PlatformSettingsUpdatedBy", fields: [updatedById], references: [id])
+
+  @@map("platform_settings")
 }
 
 model AccessRequest {
