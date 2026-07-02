@@ -1,6 +1,7 @@
 import "server-only";
 import PDFDocument from "pdfkit";
 import { drawAadbSeal } from "./seal";
+import { renderScriptSignaturePng } from "./signature-image";
 
 /*
   PDFKit-rendered approval letter. Generates a single-page A4 letter with
@@ -20,16 +21,20 @@ export type ApprovalLetterInput = {
   ceHours: number;
   approvedAt: Date;
   expiresAt: Date;
-  reviewerName?: string;
+  presidentName: string;
+  presidentTitle: string;
+  // Uploaded signature bytes; when absent, the president name is drawn in the
+  // embedded script font as the signature.
+  signatureImage?: Buffer | null;
 };
-
-// The reviewer (rendered in the signature block) is the signatory. This is a
-// standing program credit beneath that block. No em dash in the title line.
-const AADB_PRESIDENT = "Dr. Clifford Feingold, DDS";
 
 export async function renderApprovalLetterPdf(
   input: ApprovalLetterInput,
 ): Promise<Buffer> {
+  // The signature is always an image: the uploaded one, or a script-font
+  // rendering of the president name (canvas -> PNG, no pdfkit custom fonts).
+  const signatureImage =
+    input.signatureImage ?? (await renderScriptSignaturePng(input.presidentName));
   return await new Promise<Buffer>((resolve, reject) => {
     try {
       const doc = new PDFDocument({ size: "LETTER", margin: 56 });
@@ -144,34 +149,36 @@ export async function renderApprovalLetterPdf(
           { lineGap: 4 },
         );
 
-      // Signature
-      doc.moveDown(2);
-      doc.fillColor(NAVY).font("Helvetica").fontSize(11).text("Sincerely,");
-      doc.moveDown(2);
+      // Signatory block: the AADB president signs the letter. `signatureImage`
+      // is either the uploaded signature or a script-font rendering of the
+      // president name (resolved above). Fixed coordinates (same discipline as
+      // the footer below) keep it clear of the seal and above the bottom-margin
+      // line, so the letter stays a single page.
+      const sigBlockTop = 596;
       doc
-        .font("Helvetica-Bold")
-        .text(input.reviewerName ?? "AADB Accreditation Review");
-      doc.font("Helvetica").fontSize(10).fillColor(TEXT_MUTED).text(
-        "American Association of Dental Boards",
-      );
+        .fillColor(NAVY)
+        .font("Helvetica")
+        .fontSize(11)
+        .text("Sincerely,", 56, sigBlockTop);
 
-      // Accreditation seal, set to the right of the signature block.
-      drawAadbSeal(doc, { cx: doc.page.width - 110, cy: 640, r: 38 });
+      // Height is clamped so a tall image can never push content onto page 2.
+      const sigGraphicTop = sigBlockTop + 20;
+      doc.image(signatureImage, 56, sigGraphicTop, { fit: [230, 46] });
 
-      // AADB President credit, beneath the reviewer signature block. The
-      // reviewer above remains the signatory; this is a standing program
-      // credit. Drawn at fixed coordinates so it always clears the seal
-      // (bottom ~678) and sits above the footer.
+      // Typed name + title beneath the signature graphic.
       doc
         .font("Helvetica-Bold")
         .fontSize(11)
         .fillColor(NAVY)
-        .text(AADB_PRESIDENT, 56, 680);
+        .text(input.presidentName, 56, sigGraphicTop + 52);
       doc
         .font("Helvetica")
         .fontSize(10)
         .fillColor(TEXT_MUTED)
-        .text("President, American Association of Dental Boards", 56, 695);
+        .text(input.presidentTitle, 56, sigGraphicTop + 67);
+
+      // Accreditation seal, to the right of the signature block.
+      drawAadbSeal(doc, { cx: doc.page.width - 110, cy: 640, r: 38 });
 
       // Footer: two short centered lines so neither can wrap and clip off the
       // page bottom. Both lines stay above the bottom-margin line

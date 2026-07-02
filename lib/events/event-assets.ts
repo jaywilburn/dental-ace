@@ -3,6 +3,7 @@ import { renderQrPng } from "@/lib/qrcode";
 import { renderApprovalLetterPdf } from "@/lib/pdf/approval-letter";
 import { appBaseUrl } from "@/lib/app-url";
 import { signOrRegenerateAssetUrl } from "@/lib/courses/course-assets";
+import { getLetterSignatory } from "@/lib/admin/letter-settings";
 
 /*
   Self-healing signed URLs for an approved event's QR + approval letter, mirroring
@@ -46,6 +47,7 @@ export async function eventAssetUrls(
             ceHours: event.totalHours,
             approvedAt: event.approvedAt,
             expiresAt: event.expiresAt,
+            ...(await getLetterSignatory()),
           }),
           contentType: "application/pdf",
         }))
