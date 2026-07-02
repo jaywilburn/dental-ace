@@ -13,6 +13,7 @@ import {
   validateSignatureImage,
   signatureExt,
 } from "@/lib/admin/letter-settings-rules";
+import { isRenderablePdfImage } from "@/lib/pdf/validate-image";
 
 /*
   Admin writes for the platform letter-signatory settings (the president credit
@@ -76,6 +77,11 @@ export async function uploadSignatureImage(formData: FormData) {
 
   const path = `admin/president-signature.${signatureExt(f.type)}`;
   const body = Buffer.from(await f.arrayBuffer());
+  if (!isRenderablePdfImage(body)) {
+    redirect(
+      `${SETTINGS_PATH}?error=${encodeURIComponent("That image could not be read as a signature. Upload a standard PNG or JPG.")}`,
+    );
+  }
   await uploadToStorage({ kind: "uploads", path, body, contentType: f.type });
 
   await prisma.$transaction(async (tx) => {
