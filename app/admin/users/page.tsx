@@ -20,6 +20,7 @@ const FILTERS: { key: string; label: string; where: Prisma.UserWhereInput }[] = 
 
 const OK_MESSAGES: Record<string, string> = {
   created: "Account created and a set-password invite was sent.",
+  deleted: "Account deleted.",
 };
 
 export default async function AdminUsersPage({
