@@ -4,8 +4,8 @@ import { BrandMark } from "@/components/brand-mark";
 
 /*
   /verifyiq/contact — early-access waitlist / inquiry form for VerifyIQ. VerifyIQ
-  is pre-launch, so this captures interest from both audiences: DSOs / dental
-  groups and state dental boards (the audience <select> lets a lead self-identify).
+  is pre-launch and built for DSOs and dental groups only (not state boards), so
+  this captures interest from group / practice leads.
 
   Posts to a mailto: for now, matching /verify/contact. When the lead pipeline is
   wired (CRM or a /api/leads route), swap the form action. No em dashes (brand rule).
@@ -14,7 +14,7 @@ import { BrandMark } from "@/components/brand-mark";
 export const metadata: Metadata = {
   title: "Join the VerifyIQ early-access list",
   description:
-    "VerifyIQ is coming soon. Tell us about your dental group or state board and we will reach out the moment early access opens.",
+    "VerifyIQ is coming soon. Tell us about your dental group and we will reach out the moment early access opens.",
 };
 
 const fieldClass =
@@ -34,8 +34,8 @@ export default function VerifyIQContactPage() {
             Join the VerifyIQ early-access list
           </h1>
           <p className="mt-1 max-w-sm text-pretty text-[12px] text-white/55">
-            Tell us a little about your group or board and we will reach out the
-            moment early access opens.
+            Tell us a little about your group and we will reach out the moment
+            early access opens.
           </p>
         </div>
 
@@ -72,28 +72,8 @@ export default function VerifyIQContactPage() {
             </div>
 
             <div>
-              <label htmlFor="audience" className={labelClass}>
-                You are a
-              </label>
-              <select
-                id="audience"
-                name="audience"
-                className={fieldClass}
-                defaultValue=""
-                required
-              >
-                <option value="" disabled>
-                  Select one
-                </option>
-                <option value="dso">DSO or dental group</option>
-                <option value="board">State dental board</option>
-                <option value="other">Other</option>
-              </select>
-            </div>
-
-            <div>
               <label htmlFor="organization" className={labelClass}>
-                Organization
+                Dental group or practice
               </label>
               <input
                 id="organization"
@@ -126,7 +106,7 @@ export default function VerifyIQContactPage() {
                 name="message"
                 rows={4}
                 className={fieldClass}
-                placeholder="How many providers or licensees, which states, and what you are hoping VerifyIQ can help with."
+                placeholder="How many providers, which states, and what you are hoping VerifyIQ can help with."
               />
             </div>
 
