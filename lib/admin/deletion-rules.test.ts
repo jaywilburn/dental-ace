@@ -75,4 +75,20 @@ describe("evaluateDeletable", () => {
     const r = evaluateDeletable({ ...CLEAN, isSelf: true, hasProSubscription: true });
     if (!r.deletable) expect(r.reason).toBe("You can't delete your own account.");
   });
+
+  it("prefers the last-active-admin reason over compliance reasons", () => {
+    const r = evaluateDeletable({ ...CLEAN, isLastActiveAdmin: true, hasCeCertificates: true });
+    if (!r.deletable) expect(r.reason).toBe("This is the last active admin, so it can't be deleted.");
+  });
+
+  it("prefers admin-actions over a later compliance reason", () => {
+    const r = evaluateDeletable({
+      ...CLEAN,
+      hasPerformedAdminActions: true,
+      companyHasActivity: true,
+    });
+    if (!r.deletable) {
+      expect(r.reason).toBe("This account has performed admin actions. Suspend it instead.");
+    }
+  });
 });

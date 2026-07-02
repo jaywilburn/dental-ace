@@ -405,8 +405,10 @@ export async function deleteAccount(formData: FormData) {
 
   // 1. Free the email in Supabase Auth first. Treat "already gone" (404) as
   //    success so a retry after a mid-op failure still converges.
+  //    shouldSoftDelete MUST stay false (a soft delete keeps the email reserved
+  //    and would defeat the whole point of freeing it for re-signup).
   const sb = createServiceRoleClient();
-  const { error: authErr } = await sb.auth.admin.deleteUser(userId);
+  const { error: authErr } = await sb.auth.admin.deleteUser(userId, false);
   if (authErr && authErr.status !== 404) {
     console.error("[deleteAccount] Supabase auth deletion failed", authErr);
     fail(userId, "Could not remove the login. Please try again.");
