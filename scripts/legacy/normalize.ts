@@ -188,38 +188,41 @@ export function resolveIssuedAt(
 // Test / internal row exclusion
 // ---------------------------------------------------------------------------
 
-// The explicit ids the client flagged for deletion in the SQL's commented-out
-// DELETE (test rows by name, plus internal CE-Exchange / John Stamper emails).
-export const EXCLUDED_CERT_IDS: ReadonlySet<number> = new Set([
-  25, 26, 140, 849, 1063, 1223, 1465, 1471, 1538, 1652, 1668, 1746, 1831, 1841,
-  1862, 1866, 1872, 1924, 2752, 2929, 2930, 3066, 3285, 3532, 3533, 3534, 3700,
-  3724, 3791, 3801, 3809, 4521, 4676, 4677,
-]);
-
+// Internal operator domains. CE Exchange (ceexchange.io) operates the platform
+// and John Stamper (johnstampermedia.com) runs its marketing; every submission
+// from these is a staff test/internal record, never a real licensee. This is the
+// primary exclusion rule and covers 32 of the 40 excluded rows, including 6 that
+// the client's manual DELETE list missed (the same operator, Prudence Khupe,
+// submitting from ce@/john@ceexchange.io aliases rather than ea@).
 const INTERNAL_EMAIL_DOMAINS = ["ceexchange.io", "johnstampermedia.com"];
 
+// The remaining test rows that are NOT on an internal domain, curated from the
+// client's flagged DELETE list: provider-staff test submissions from storypath.us
+// ("Stefan test", "PF Test") and two "Test Test" gmail rows. Kept as an explicit
+// id list, not a name match, so real storypath.us attendees are never swept up.
+export const NON_DOMAIN_TEST_CERT_IDS: ReadonlySet<number> = new Set([
+  1831, 1841, 1866, 2752, 3791, 3801, 3809, 4521,
+]);
+
 /**
- * Decide whether a legacy cert row is a test/internal record to skip. Honors the
- * explicit id list AND re-derives by name='test' / internal email domain, so a
- * mismatch between the two can be surfaced by the caller.
+ * Decide whether a legacy cert row is a test/internal record to skip.
+ * Domain-first: any internal operator domain is excluded; the small curated id
+ * list covers the handful of test rows on non-internal domains.
  */
 export function classifyCertExclusion(row: {
   id: number;
   attendeeName: string | null;
   attendeeEmail: string | null;
-}): { excluded: boolean; byId: boolean; byHeuristic: boolean; reason: string | null } {
-  const byId = EXCLUDED_CERT_IDS.has(row.id);
-  const name = (row.attendeeName ?? "").trim().toLowerCase();
+}): { excluded: boolean; byInternalDomain: boolean; byCuratedId: boolean; reason: string | null } {
   const email = (row.attendeeEmail ?? "").trim().toLowerCase();
   const domain = email.includes("@") ? email.slice(email.lastIndexOf("@") + 1) : "";
-  const nameIsTest = name === "test" || name === "test test";
-  const emailIsInternal = INTERNAL_EMAIL_DOMAINS.includes(domain);
-  const byHeuristic = nameIsTest || emailIsInternal;
-  const excluded = byId || byHeuristic;
+  const byInternalDomain = INTERNAL_EMAIL_DOMAINS.includes(domain);
+  const byCuratedId = NON_DOMAIN_TEST_CERT_IDS.has(row.id);
+  const excluded = byInternalDomain || byCuratedId;
   const reason = !excluded
     ? null
-    : [byId ? "flagged-id" : null, nameIsTest ? "name=test" : null, emailIsInternal ? `internal:${domain}` : null]
+    : [byInternalDomain ? `internal:${domain}` : null, byCuratedId ? "test-row" : null]
         .filter(Boolean)
         .join("+");
-  return { excluded, byId, byHeuristic, reason };
+  return { excluded, byInternalDomain, byCuratedId, reason };
 }

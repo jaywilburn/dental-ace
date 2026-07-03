@@ -140,21 +140,24 @@ describe("resolveIssuedAt", () => {
 });
 
 describe("classifyCertExclusion", () => {
-  it("excludes a flagged id", () => {
-    const r = classifyCertExclusion({ id: 25, attendeeName: "Real Person", attendeeEmail: "a@b.com" });
+  it("excludes any internal operator domain", () => {
+    const ce = classifyCertExclusion({ id: 999999, attendeeName: "Prudence Khupe", attendeeEmail: "ce@ceexchange.io" });
+    expect(ce.excluded).toBe(true);
+    expect(ce.byInternalDomain).toBe(true);
+    expect(ce.reason).toContain("internal:ceexchange.io");
+    expect(classifyCertExclusion({ id: 888888, attendeeName: "John Stamper", attendeeEmail: "john@johnstampermedia.com" }).excluded).toBe(true);
+  });
+  it("excludes a curated non-domain test row by id", () => {
+    const r = classifyCertExclusion({ id: 1831, attendeeName: "Stefan test", attendeeEmail: "stefanb@storypath.us" });
     expect(r.excluded).toBe(true);
-    expect(r.byId).toBe(true);
-    expect(r.reason).toContain("flagged-id");
+    expect(r.byCuratedId).toBe(true);
+    expect(r.reason).toContain("test-row");
   });
-  it("excludes by name=test and by internal email domain", () => {
-    expect(classifyCertExclusion({ id: 999999, attendeeName: "test", attendeeEmail: "x@y.com" }).excluded).toBe(true);
-    const internal = classifyCertExclusion({ id: 999998, attendeeName: "Jane", attendeeEmail: "ea@ceexchange.io" });
-    expect(internal.excluded).toBe(true);
-    expect(internal.reason).toContain("internal:ceexchange.io");
-  });
-  it("keeps a normal row", () => {
-    const r = classifyCertExclusion({ id: 12345, attendeeName: "Krystal Youmans", attendeeEmail: "k@fdhonline.com" });
-    expect(r.excluded).toBe(false);
-    expect(r.reason).toBeNull();
+  it("keeps normal rows, including real storypath.us attendees not on the curated list", () => {
+    const normal = classifyCertExclusion({ id: 12345, attendeeName: "Krystal Youmans", attendeeEmail: "k@fdhonline.com" });
+    expect(normal.excluded).toBe(false);
+    expect(normal.reason).toBeNull();
+    // a storypath.us row NOT in the curated id list is a real attendee -> kept
+    expect(classifyCertExclusion({ id: 77777, attendeeName: "Real Attendee", attendeeEmail: "someone@storypath.us" }).excluded).toBe(false);
   });
 });
