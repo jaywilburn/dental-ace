@@ -12,6 +12,7 @@ import { recordAdminAction } from "@/lib/admin/audit";
 import { signEmailVerificationToken } from "@/lib/auth/verification-token";
 import { signSetPasswordToken } from "@/lib/auth/set-password-token";
 import { sendEmail } from "@/lib/email/send";
+import { notifyAccountCreated } from "@/lib/auth/signup-notification";
 import VerifyEmail from "@/emails/verify-email";
 import StaffInviteEmail from "@/emails/staff-invite";
 
@@ -389,20 +390,32 @@ export async function markEmailVerified(formData: FormData) {
 
   const before = await loadTarget(userId);
   if (!before) fail(userId, "Account not found.");
-  if (before.emailVerifiedAt) back(userId, { ok: "verified" });
 
-  await prisma.user.update({ where: { id: userId }, data: { emailVerifiedAt: new Date() } });
-  // Sign-in checks BOTH the Supabase "Confirm email" gate and emailVerifiedAt,
-  // so mirror the confirmation into Auth.
-  const sb = createServiceRoleClient();
-  await sb.auth.admin.updateUserById(userId, { email_confirm: true }).catch(() => {});
-
-  await recordAdminAction(prisma, {
-    actorUserId: admin.id,
-    targetUserId: userId,
-    action: "EMAIL_VERIFIED_MANUALLY",
-    summary: `Manually verified ${before.email}`,
+  // Atomically claim the transition (null -> now) so this admin action and a
+  // concurrent user link-click can't both run the one-time activation side
+  // effects. Only the winner (count === 1) mirrors to Auth, audits, and notifies.
+  const claimed = await prisma.user.updateMany({
+    where: { id: userId, emailVerifiedAt: null },
+    data: { emailVerifiedAt: new Date() },
   });
+  if (claimed.count === 1) {
+    // Sign-in checks BOTH the Supabase "Confirm email" gate and emailVerifiedAt,
+    // so mirror the confirmation into Auth.
+    const sb = createServiceRoleClient();
+    await sb.auth.admin.updateUserById(userId, { email_confirm: true }).catch(() => {});
+
+    await recordAdminAction(prisma, {
+      actorUserId: admin.id,
+      targetUserId: userId,
+      action: "EMAIL_VERIFIED_MANUALLY",
+      summary: `Manually verified ${before.email}`,
+    });
+
+    // This is a self-serve account's activation point when the user never
+    // clicked their link; without this it would go live with no ops notice
+    // (and the later link click is now a no-op that skips the verify-email hook).
+    await notifyAccountCreated(userId);
+  }
 
   revalidatePath(`/admin/users/${userId}`);
   back(userId, { ok: "verified" });
@@ -555,6 +568,11 @@ export async function createUserAccount(formData: FormData) {
     summary: `Created account ${data.email} (${data.staffRole})`,
     details: { staffRole: data.staffRole },
   });
+
+  // Notify AADB ops of the new account (who + which type). Admin-created accounts
+  // are verified at creation, so they never hit the verify-email hook; this is
+  // their one activation point. Best-effort (logs, never throws).
+  await notifyAccountCreated(userId);
 
   const token = signSetPasswordToken(userId);
   const setPasswordUrl = `${resolveBaseUrl()}/set-password?token=${encodeURIComponent(token)}`;
