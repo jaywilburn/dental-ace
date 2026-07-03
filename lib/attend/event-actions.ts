@@ -14,8 +14,8 @@ import { appBaseUrl } from "@/lib/app-url";
 import { renderEventCertificatePdf } from "@/lib/pdf/event-certificate";
 import { uploadToStorage } from "@/lib/storage";
 import { sendEmail } from "@/lib/email/send";
+import { signCertClaimToken } from "@/lib/protrack/cert-claim-token";
 import CertificateIssuedEmail from "@/emails/certificate-issued";
-import { syncNewIssuedCertificate } from "@/lib/protrack/ace-sync";
 
 /*
   Public event attendee submission. Mirrors lib/attend/actions.ts submitAttendance
@@ -160,7 +160,10 @@ export async function submitEventAttendance(input: unknown): Promise<EventAttend
       ceHours: assembled.hours,
       completedAt: completedAt.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }),
       verifyUrl: `${appBase}/attend/event/${sub.token}`,
-      activateUrl: `${appBase}/signup?email=${encodeURIComponent(sub.attendeeEmail)}`,
+      // Signed claim link (mailed only to attendeeEmail, so clicking it proves
+      // inbox control). Replaces the old auto-push into any matching account,
+      // which trusted a self-reported email. See app/api/protrack/claim-certificate.
+      claimUrl: `${appBase}/api/protrack/claim-certificate?token=${signCertClaimToken(certificateId)}`,
     };
     await sendEmail({
       to: sub.attendeeEmail,
@@ -168,7 +171,6 @@ export async function submitEventAttendance(input: unknown): Promise<EventAttend
       react: CertificateIssuedEmail(emailProps),
       attachments: [{ filename: `${event.eventIdNumber ?? "event"}-certificate.pdf`, content: pdf }],
     });
-    await syncNewIssuedCertificate(certificateId);
   } catch (err) {
     console.error("[submitEventAttendance] post-issue PDF/email failed", err);
   }
