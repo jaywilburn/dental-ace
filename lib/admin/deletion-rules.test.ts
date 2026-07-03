@@ -3,7 +3,7 @@ import { evaluateDeletable, type DeletionFacts } from "@/lib/admin/deletion-rule
 
 const CLEAN: DeletionFacts = {
   isSelf: false,
-  isLastActiveAdmin: false,
+  isAdmin: false,
   hasPerformedAdminActions: false,
   hasInitiatedAudits: false,
   isUnderAudit: false,
@@ -22,10 +22,12 @@ describe("evaluateDeletable", () => {
     expect(r).toEqual({ deletable: false, reason: "You can't delete your own account." });
   });
 
-  it("blocks the last active admin", () => {
-    const r = evaluateDeletable({ ...CLEAN, isLastActiveAdmin: true });
-    expect(r.deletable).toBe(false);
-    if (!r.deletable) expect(r.reason).toContain("last active admin");
+  it("blocks any admin account (regardless of activity)", () => {
+    const r = evaluateDeletable({ ...CLEAN, isAdmin: true });
+    expect(r).toEqual({
+      deletable: false,
+      reason: "Admin accounts can't be deleted. Suspend it instead.",
+    });
   });
 
   it("blocks an account that performed admin actions, suggesting suspend", () => {
@@ -76,9 +78,9 @@ describe("evaluateDeletable", () => {
     if (!r.deletable) expect(r.reason).toBe("You can't delete your own account.");
   });
 
-  it("prefers the last-active-admin reason over compliance reasons", () => {
-    const r = evaluateDeletable({ ...CLEAN, isLastActiveAdmin: true, hasCeCertificates: true });
-    if (!r.deletable) expect(r.reason).toBe("This is the last active admin, so it can't be deleted.");
+  it("prefers the admin-account reason over compliance reasons", () => {
+    const r = evaluateDeletable({ ...CLEAN, isAdmin: true, hasCeCertificates: true });
+    if (!r.deletable) expect(r.reason).toBe("Admin accounts can't be deleted. Suspend it instead.");
   });
 
   it("prefers admin-actions over a later compliance reason", () => {

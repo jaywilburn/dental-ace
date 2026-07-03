@@ -12,8 +12,8 @@
 export type DeletionFacts = {
   /** Target is the acting admin. */
   isSelf: boolean;
-  /** Target is an enabled ADMIN and the only one left. */
-  isLastActiveAdmin: boolean;
+  /** Target is an AADB admin. Admin accounts are never hard-deleted (suspend instead). */
+  isAdmin: boolean;
   /** Target has authored admin-audit-log entries (blocks the required actor FK). */
   hasPerformedAdminActions: boolean;
   /** Target initiated any Verify audit batch. */
@@ -34,8 +34,8 @@ export function evaluateDeletable(facts: DeletionFacts): DeletionDecision {
   if (facts.isSelf) {
     return { deletable: false, reason: "You can't delete your own account." };
   }
-  if (facts.isLastActiveAdmin) {
-    return { deletable: false, reason: "This is the last active admin, so it can't be deleted." };
+  if (facts.isAdmin) {
+    return { deletable: false, reason: "Admin accounts can't be deleted. Suspend it instead." };
   }
   if (facts.hasPerformedAdminActions) {
     return { deletable: false, reason: "This account has performed admin actions. Suspend it instead." };

@@ -14,7 +14,6 @@ export async function gatherDeletionFacts(
 ): Promise<DeletionFacts> {
   const [
     target,
-    enabledAdmins,
     adminActions,
     initiatedAudits,
     auditSelections,
@@ -24,9 +23,8 @@ export async function gatherDeletionFacts(
   ] = await Promise.all([
     prisma.user.findUnique({
       where: { id: userId },
-      select: { staffRole: true, disabledAt: true, companyId: true },
+      select: { staffRole: true, companyId: true },
     }),
-    prisma.user.count({ where: { staffRole: "ADMIN", disabledAt: null } }),
     prisma.adminAuditLog.count({ where: { actorUserId: userId } }),
     prisma.auditBatch.count({ where: { initiatedById: userId } }),
     prisma.auditSelection.count({ where: { userLicense: { licenseeId: userId } } }),
@@ -47,12 +45,9 @@ export async function gatherDeletionFacts(
     companyHasActivity = apps + courses + issued + billing > 0;
   }
 
-  const isLastActiveAdmin =
-    !!target && target.staffRole === "ADMIN" && !target.disabledAt && enabledAdmins <= 1;
-
   return {
     isSelf: userId === actingAdminId,
-    isLastActiveAdmin,
+    isAdmin: target?.staffRole === "ADMIN",
     hasPerformedAdminActions: adminActions > 0,
     hasInitiatedAudits: initiatedAudits > 0,
     isUnderAudit: auditSelections + deficiencies > 0,
