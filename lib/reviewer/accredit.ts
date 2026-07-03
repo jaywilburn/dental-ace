@@ -6,6 +6,7 @@ import { uploadToStorage } from "@/lib/storage";
 import { renderApprovalLetterPdf } from "@/lib/pdf/approval-letter";
 import { renderQrPng } from "@/lib/qrcode";
 import { formatCourseId, nextSeqFromLast } from "@/lib/reviewer/course-id";
+import { getLetterSignatory } from "@/lib/admin/letter-settings";
 import type { ApplicationDataRead } from "@/lib/forms/application/schemas";
 
 /*
@@ -139,7 +140,6 @@ export type RenderCourseAssetsInput = {
   ceHours: number;
   approvedAt: Date;
   expiresAt: Date;
-  reviewerName: string;
   /** Event-scoped sessions attend via the event token, so skip the per-course QR. */
   withQr?: boolean;
 };
@@ -157,6 +157,7 @@ export async function renderCourseAssets(
   let qrPng: Buffer | null = null;
   let letterPdf: Buffer | null = null;
   try {
+    const signatory = await getLetterSignatory();
     const attendeeUrl = `${appBaseUrl()}/attend/${input.attendeeLinkToken}`;
     const jobs: Promise<unknown>[] = [];
 
@@ -167,7 +168,7 @@ export async function renderCourseAssets(
       ceHours: input.ceHours,
       approvedAt: input.approvedAt,
       expiresAt: input.expiresAt,
-      reviewerName: input.reviewerName,
+      ...signatory,
     }).then((pdf) => {
       letterPdf = pdf;
     });

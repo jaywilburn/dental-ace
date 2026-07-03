@@ -57,3 +57,19 @@ export async function createSignedUrl(
   }
   return data.signedUrl;
 }
+
+export async function downloadFromStorage(args: {
+  kind: BucketKind;
+  path: string;
+}): Promise<Buffer> {
+  const supabase = createServiceRoleClient();
+  const { data, error } = await supabase.storage
+    .from(bucketName(args.kind))
+    .download(args.path);
+  if (error || !data) {
+    throw new Error(
+      `Storage download failed (${args.path}): ${error?.message ?? "no data"}`,
+    );
+  }
+  return Buffer.from(await data.arrayBuffer());
+}

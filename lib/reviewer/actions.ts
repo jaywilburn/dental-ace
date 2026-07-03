@@ -91,7 +91,6 @@ export async function approveApplication(formData: FormData) {
     ceHours: data.ceCreditHours,
     approvedAt,
     expiresAt,
-    reviewerName: reviewer.email.split("@")[0],
     withQr: true,
   });
 

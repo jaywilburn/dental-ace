@@ -3,6 +3,9 @@ import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/portal-shell";
 import { EntitlementBadges } from "@/components/admin/entitlement-badges";
 import { ConfirmSuspendUser } from "@/components/admin/confirm-suspend-user";
+import { ConfirmDeleteUser } from "@/components/admin/confirm-delete-user";
+import { evaluateDeletable } from "@/lib/admin/deletion-rules";
+import { gatherDeletionFacts } from "@/lib/admin/deletion";
 import { requireStaff } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import {
@@ -49,7 +52,7 @@ export default async function AdminUserDetailPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ ok?: string; error?: string }>;
 }) {
-  await requireStaff("ADMIN");
+  const admin = await requireStaff("ADMIN");
   const { id } = await params;
   const { ok, error } = await searchParams;
 
@@ -87,6 +90,9 @@ export default async function AdminUserDetailPage({
   if (user._count.initiatedAuditBatches) owned.push(`${user._count.initiatedAuditBatches} audit batch(es)`);
   if (user._count.sentNotices) owned.push(`${user._count.sentNotices} sent notice(s)`);
   const ownershipSummary = owned.join(", ");
+
+  // Danger-zone eligibility: same rule the deleteAccount action enforces.
+  const deletion = evaluateDeletable(await gatherDeletionFacts(user.id, admin.id));
 
   return (
     <>
@@ -291,6 +297,30 @@ export default async function AdminUserDetailPage({
           <Row label="Email verified" value={fmtDate(user.emailVerifiedAt)} />
           <Row label="Suspended" value={fmtDate(user.disabledAt)} />
         </dl>
+      </div>
+
+      {/* Danger zone */}
+      <h2 className="mt-8 mb-3 text-[13px] font-semibold text-red">Danger zone</h2>
+      <div className="rounded-lg border border-red/40 bg-red-bg/40 p-4">
+        <p className="mb-3 text-[12px] text-text-mid">
+          Permanently delete this account and free its email for re-signup. Use
+          this to reset test accounts. Accounts with real records are protected,
+          suspend those instead.
+        </p>
+        {deletion.deletable ? (
+          <ConfirmDeleteUser userId={user.id} email={user.email} />
+        ) : (
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              disabled
+              className="rounded-md border border-border px-3 py-1.5 text-[12px] font-semibold text-text-muted opacity-60"
+            >
+              Delete account
+            </button>
+            <span className="text-[12px] text-text-mid">{deletion.reason}</span>
+          </div>
+        )}
       </div>
     </>
   );

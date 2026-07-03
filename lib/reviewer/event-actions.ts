@@ -16,6 +16,7 @@ import { formatEventId, nextSeqFromLast } from "@/lib/reviewer/event-id";
 import { applicationDataReadSchema } from "@/lib/forms/application/schemas";
 import { isInlineFullCourse } from "@/lib/forms/event/schemas";
 import { accreditApplicationTx, renderCourseAssets } from "@/lib/reviewer/accredit";
+import { getLetterSignatory } from "@/lib/admin/letter-settings";
 
 /*
   Approve / reject server actions for events, mirroring lib/reviewer/actions.ts.
@@ -194,7 +195,6 @@ export async function approveEvent(formData: FormData) {
       ceHours: s.ceHours,
       approvedAt,
       expiresAt,
-      reviewerName: reviewer.email.split("@")[0],
       withQr: false,
     });
   }
@@ -203,6 +203,7 @@ export async function approveEvent(formData: FormData) {
   const attendeeUrl = `${appBaseUrl()}/attend/event/${event.attendeeLinkToken}`;
   let qrPng: Buffer | null = null;
   let letterPdf: Buffer | null = null;
+  const signatory = await getLetterSignatory();
   try {
     [qrPng, letterPdf] = await Promise.all([
       renderQrPng(attendeeUrl),
@@ -213,7 +214,7 @@ export async function approveEvent(formData: FormData) {
         ceHours: totalHours,
         approvedAt,
         expiresAt,
-        reviewerName: reviewer.email.split("@")[0],
+        ...signatory,
       }),
     ]);
     await Promise.all([

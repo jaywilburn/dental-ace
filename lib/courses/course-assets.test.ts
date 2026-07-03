@@ -5,6 +5,19 @@ import {
   type AssetIo,
 } from "./course-assets";
 
+// The real approval-letter regeneration path (courseAssetUrls -> ... ->
+// renderApprovalLetterPdf) now loads the signatory via getLetterSignatory(),
+// which reads PlatformSettings through Prisma. The shared vitest Prisma stub
+// (test/stubs/prisma.ts) is an empty object with no DB behind it, so mock the
+// signatory lookup directly rather than reaching for a live database.
+vi.mock("@/lib/admin/letter-settings", () => ({
+  getLetterSignatory: vi.fn().mockResolvedValue({
+    presidentName: "Dr. Clifford Feingold, DDS",
+    presidentTitle: "President, American Association of Dental Boards",
+    signatureImage: null,
+  }),
+}));
+
 const pngRender = async () => ({
   body: Buffer.from("png-bytes"),
   contentType: "image/png",

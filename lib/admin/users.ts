@@ -9,6 +9,8 @@ import { requireStaff } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { recordAdminAction } from "@/lib/admin/audit";
+import { evaluateDeletable } from "@/lib/admin/deletion-rules";
+import { gatherDeletionFacts } from "@/lib/admin/deletion";
 import { signEmailVerificationToken } from "@/lib/auth/verification-token";
 import { signSetPasswordToken } from "@/lib/auth/set-password-token";
 import { sendEmail } from "@/lib/email/send";
@@ -25,7 +27,10 @@ import StaffInviteEmail from "@/emails/staff-invite";
   own require* guards re-read Prisma each request so access flips immediately on
   their next request. The UI surfaces "applies on next sign-in" accordingly.
 
-  We never hard-delete (compliance/audit); suspendAccount is the terminal state.
+  Account lifecycle is two-tier: suspendAccount (reversible; the terminal state
+  for accounts with real history) and deleteAccount (hard delete, permitted only
+  for guard-cleared "clean" accounts, frees the email for re-signup). The guard
+  lives in lib/admin/deletion.ts (gatherDeletionFacts) + deletion-rules.ts.
 */
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -377,6 +382,70 @@ export async function unsuspendAccount(formData: FormData) {
 
   revalidatePath(`/admin/users/${userId}`);
   back(userId, { ok: "unsuspended" });
+}
+
+// ── lifecycle: hard delete (test-reset) ──────────────────────────────────────
+//
+// Permanently removes the account from BOTH Prisma and Supabase Auth so the
+// email can be re-used at /signup. Guarded to "clean" accounts only (see
+// evaluateDeletable); anything with real records is blocked and must be
+// suspended. Auth is deleted first so the whole op is retry-safe. See the
+// design spec dated 2026-07-01.
+export async function deleteAccount(formData: FormData) {
+  const admin = await requireStaff("ADMIN");
+  const parsed = resolveSchema.safeParse({ userId: field(formData, "userId") });
+  if (!parsed.success) fail(field(formData, "userId"), "Invalid request.");
+  const { userId } = parsed.data;
+
+  const before = await loadTarget(userId);
+  if (!before) fail(userId, "Account not found.");
+
+  const decision = evaluateDeletable(await gatherDeletionFacts(userId, admin.id));
+  if (!decision.deletable) fail(userId, decision.reason);
+
+  // 1. Free the email in Supabase Auth first. Treat "already gone" (404) as
+  //    success so a retry after a mid-op failure still converges.
+  //    shouldSoftDelete MUST stay false (a soft delete keeps the email reserved
+  //    and would defeat the whole point of freeing it for re-signup).
+  const sb = createServiceRoleClient();
+  const { error: authErr } = await sb.auth.admin.deleteUser(userId, false);
+  if (authErr && authErr.status !== 404) {
+    console.error("[deleteAccount] Supabase auth deletion failed", authErr);
+    fail(userId, "Could not remove the login. Please try again.");
+  }
+
+  // 2. Remove the row + dependent workflow rows + write the audit entry
+  //    atomically. Owned ProTrack children cascade; optional attribution refs
+  //    (reviewedById, audit-log targetUserId, etc.) SET NULL automatically.
+  //    Access requests are a required FK (ON DELETE RESTRICT), so clear them first.
+  try {
+    await prisma.$transaction(async (tx) => {
+      await tx.accessRequest.deleteMany({ where: { userId } });
+      await tx.user.delete({ where: { id: userId } });
+      await recordAdminAction(tx, {
+        actorUserId: admin.id,
+        targetUserId: null,
+        action: "ACCOUNT_DELETED",
+        summary: `Deleted ${before.email}`,
+        details: {
+          email: before.email,
+          firstName: before.firstName,
+          lastName: before.lastName,
+          staffRole: before.staffRole,
+          companyId: before.companyId,
+          protrackTier: before.protrackTier,
+          verifyAccess: before.verifyAccess,
+          boardId: before.boardId,
+        },
+      });
+    });
+  } catch (err) {
+    console.error("[deleteAccount] row deletion failed after auth removal", err);
+    fail(userId, "Could not finish deleting the account. Please retry.");
+  }
+
+  revalidatePath("/admin/users");
+  redirect("/admin/users?ok=deleted");
 }
 
 // ── verification & password ──────────────────────────────────────────────────
