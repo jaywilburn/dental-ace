@@ -12,6 +12,7 @@ import { appBaseUrl } from "@/lib/app-url";
 import { renderCertificatePdf } from "@/lib/pdf/certificate";
 import { uploadToStorage } from "@/lib/storage";
 import { sendEmail } from "@/lib/email/send";
+import { signCertClaimToken } from "@/lib/protrack/cert-claim-token";
 import CertificateIssuedEmail from "@/emails/certificate-issued";
 import { quizQuestionSchema, type QuizQuestion } from "@/lib/forms/application/schemas";
 
@@ -205,10 +206,10 @@ export async function submitAttendance(input: unknown): Promise<AttendResult> {
         year: "numeric",
       }),
       verifyUrl: `${appBase}/attend/${sub.token}`,
-      // Lands on sign-up prefilled with their email; ProTrack Free is created
-      // on registration and this cert is auto-claimed on email verification
-      // (syncIssuedCertsForLicensee). See lib/protrack/ace-sync.ts.
-      activateUrl: `${appBase}/signup?email=${encodeURIComponent(sub.attendeeEmail)}`,
+      // Signed claim link (mailed only to attendeeEmail, so clicking it proves
+      // inbox control). Adds this cert to the matching ProTrack account, or
+      // routes to sign-up if none exists yet. See app/api/protrack/claim-certificate.
+      claimUrl: `${appBase}/api/protrack/claim-certificate?token=${signCertClaimToken(certificateId)}`,
     };
     await sendEmail({
       to: sub.attendeeEmail,

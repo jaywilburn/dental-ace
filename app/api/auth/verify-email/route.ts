@@ -5,6 +5,7 @@ import { verifyEmailVerificationToken } from "@/lib/auth/verification-token";
 import { syncIssuedCertsForLicensee } from "@/lib/protrack/ace-sync";
 import { sendEmail } from "@/lib/email/send";
 import { appBaseUrl } from "@/lib/app-url";
+import { notifyAccountCreated } from "@/lib/auth/signup-notification";
 import ProtrackWelcomeEmail from "@/emails/protrack-welcome";
 import WelcomeDentalAceOneEmail from "@/emails/welcome-dental-ace-one";
 
@@ -39,7 +40,6 @@ export async function GET(request: NextRequest) {
       id: true,
       email: true,
       firstName: true,
-      emailVerifiedAt: true,
       signupIntent: true,
       licenses: {
         where: { isPrimary: true },
@@ -50,11 +50,16 @@ export async function GET(request: NextRequest) {
   });
   if (!user) return fail();
 
-  if (!user.emailVerifiedAt) {
-    await prisma.user.update({
-      where: { id: userId },
-      data: { emailVerifiedAt: new Date() },
-    });
+  // Atomically claim the first verification: flip emailVerifiedAt null -> now in
+  // a single conditional UPDATE. Concurrent requests (an email-scanner prefetch
+  // racing the user's click) then can't both pass a read-then-check guard and
+  // double-fire the welcome + ops notification — only the request that wins the
+  // claim (count === 1) runs the one-time side effects.
+  const claimed = await prisma.user.updateMany({
+    where: { id: userId, emailVerifiedAt: null },
+    data: { emailVerifiedAt: new Date() },
+  });
+  if (claimed.count === 1) {
     // Mirror to Supabase Auth so signInWithPassword accepts the account later.
     const admin = createServiceRoleClient();
     await admin.auth.admin
@@ -62,9 +67,8 @@ export async function GET(request: NextRequest) {
       .catch(() => {});
     // Email is now proven — backfill any matching DentalACE-issued certificates.
     await syncIssuedCertsForLicensee(userId).catch(() => {});
-    // The account is now active: send the welcome. Fires once (inside the
-    // first-verification block), so re-clicks / scanner pre-fetches don't resend
-    // it. Best-effort — a send failure must not break verification.
+    // The account is now active: send the welcome. Best-effort — a send failure
+    // must not break verification.
     //
     // Company / staff signups may never use ProTrack, so they get the platform
     // welcome instead of leading with "Welcome to ProTrack" (client feedback).
@@ -92,6 +96,10 @@ export async function GET(request: NextRequest) {
         }),
       }).catch(() => {});
     }
+
+    // Notify AADB ops that a new account is now active (who + which type).
+    // Best-effort (logs, never throws). Inside the claim so it fires exactly once.
+    await notifyAccountCreated(userId, origin);
   }
 
   // No session minted (see SECURITY note above). Send them to sign in.
