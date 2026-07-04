@@ -1,0 +1,71 @@
+DentalACE legacy migration extract report
+generatedAt: 2026-07-03T20:17:41.111Z
+source: /Users/jasonwilburn/Downloads/dentalace_migration_v3.sql
+
+companies:     39
+courses:       106
+certificates:  4637 imported, 40 excluded (of 4677 source rows)
+
+nulled completion dates (out-of-window / impossible): 195
+
+excluded certificates (40):
+  id=25  internal:ceexchange.io  Prudence <ea@ceexchange.io>
+  id=26  internal:ceexchange.io  Prudence Khupe <ea@ceexchange.io>
+  id=140  internal:ceexchange.io  Prudence <ea@ceexchange.io>
+  id=849  internal:ceexchange.io  Prudence Khupe <ea@ceexchange.io>
+  id=1063  internal:ceexchange.io  Prudence <ea@ceexchange.io>
+  id=1223  internal:ceexchange.io  Kim Roudenbush (Test) <ea@ceexchange.io>
+  id=1323  internal:ceexchange.io  Prudence Khupe <ce@ceexchange.io>
+  id=1465  internal:ceexchange.io  Prudence Khupe <ea@ceexchange.io>
+  id=1471  internal:johnstampermedia.com  Kim Roudenbush, DMD <ea@johnstampermedia.com>
+  id=1538  internal:ceexchange.io  Prudence Khupe <ea@ceexchange.io>
+  id=1638  internal:ceexchange.io  Prudence Khupe <ce@ceexchange.io>
+  id=1652  internal:ceexchange.io  Kim Roudenbush (Test) <ea@ceexchange.io>
+  id=1667  internal:ceexchange.io  Prudence Khupe <ce@ceexchange.io>
+  id=1668  internal:ceexchange.io  Prudence Khupe <ea@ceexchange.io>
+  id=1746  internal:ceexchange.io  Prudence Khupe <ea@ceexchange.io>
+  id=1831  test-row  Stefan test <stefanb@storypath.us>
+  id=1841  test-row  Stefan Test Submission <stefanb@storypath.us>
+  id=1862  internal:ceexchange.io  Prudence Khupe <ea@ceexchange.io>
+  id=1866  test-row  PF Test <nickb@storypath.us>
+  id=1872  internal:ceexchange.io  Prudence Khupe <ea@ceexchange.io>
+  id=1886  internal:ceexchange.io  Prudence Khupe <ce@ceexchange.io>
+  id=1887  internal:ceexchange.io  Prudence Khupe <ce@ceexchange.io>
+  id=1924  internal:ceexchange.io  Prudence Khupe <ea@ceexchange.io>
+  id=1926  internal:ceexchange.io  Prudence Khupe <john@ceexchange.io>
+  id=2752  test-row  Test Test <donavand503@gmail.com>
+  id=2929  internal:ceexchange.io  Kim Roudenbush (Testing New Link) <ea@ceexchange.io>
+  id=2930  internal:ceexchange.io  Kim Roudenbush (Test #2) <ea@ceexchange.io>
+  id=3066  internal:ceexchange.io  Kim Roudenbush <ea@ceexchange.io>
+  id=3285  internal:johnstampermedia.com  John Stamper <john@johnstampermedia.com>
+  id=3532  internal:johnstampermedia.com  John Stamper <john@johnstampermedia.com>
+  id=3533  internal:ceexchange.io  Caroline Davis <ea@ceexchange.io>
+  id=3534  internal:johnstampermedia.com  John Stamper <john@johnstampermedia.com>
+  id=3700  internal:ceexchange.io  Kim Roudenbush (Test) <ea@ceexchange.io>
+  id=3724  internal:ceexchange.io  Kim Roudenbush (Test) <ea@ceexchange.io>
+  id=3791  test-row  Stefan test <stefanb@storypath.us>
+  id=3801  test-row  Stefan Test Submission <stefanb@storypath.us>
+  id=3809  test-row  PF Test <nickb@storypath.us>
+  id=4521  test-row  Test Test <donavand503@gmail.com>
+  id=4676  internal:ceexchange.io  Kim Roudenbush (Testing New Link) <ea@ceexchange.io>
+  id=4677  internal:ceexchange.io  Kim Roudenbush (Test #2) <ea@ceexchange.io>
+
+dropped license states (unmappable jurisdictions):
+  68x  Jamaica
+  6x  N/A
+  2x  WyomingAlberta
+  2x  Out of of the US
+  1x  Bucharest, Romania
+  1x  Out of USA
+  1x  Caribbean
+
+occupations with no license-type mapping (stored as null):
+  46x  Dental Therapist
+  4x  Office Manager
+  3x  Front Office
+  3x  Business Manager
+
+subject_matter with no courseType mapping (stored as null):
+
+course_format with no deliveryMethod mapping (stored as null):
+

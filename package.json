@@ -13,6 +13,7 @@
     "seed:verify": "tsx scripts/seed-verify.ts",
     "seed:events": "tsx scripts/seed-event-courses.ts",
     "import:requirements": "tsx scripts/import-state-requirements.ts",
+    "migrate:legacy": "tsx scripts/migrate-legacy.ts",
     "provision:legacy": "tsx scripts/provision-legacy-accounts.ts",
     "invite:legacy": "tsx scripts/send-legacy-invites.ts",
     "build:worksheet": "tsx scripts/build-application-worksheet.ts",
