@@ -174,6 +174,13 @@ model User {
   disabledAt       DateTime? @map("disabled_at")
   createdAt        DateTime  @default(now()) @map("created_at")
   lastLogin        DateTime? @map("last_login")
+  // Set by scripts/provision-legacy-accounts.ts when this account was created from
+  // a migrated legacy attendee email (not a self-serve signup). Marks the cohort
+  // eligible for the one-time set-password activation email. Null for everyone else.
+  legacyProvisionedAt   DateTime? @map("legacy_provisioned_at")
+  // Set by scripts/send-legacy-invites.ts when the activation email was sent, so
+  // the batch is resumable and never double-sends. Null = not yet invited.
+  activationEmailSentAt DateTime? @map("activation_email_sent_at")
 
   reviewedApplications  CourseApplication[] @relation("ReviewedBy")
   reviewedEvents        Event[]             @relation("EventReviewedBy")
