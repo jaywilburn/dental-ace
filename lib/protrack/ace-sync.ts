@@ -10,8 +10,11 @@ import { mapCategory, mapDeliveryFormat } from "@/lib/protrack/category-map";
   email, it appears in their ProTrack dashboard automatically as a trusted,
   AUTO-verified certificate. This module is the single home for that logic.
 
-  - syncIssuedCertsForLicensee: backfill, run at registration and re-runnable.
-  - syncNewIssuedCertificate: forward hook for the future attendee-issuance flow.
+  - syncIssuedCertsForLicensee: backfill, run at email verification (matches the
+    account's own, now-proven email) and re-runnable.
+  - claimIssuedCertificate: attaches ONE issued cert to the matching account,
+    called only from /api/protrack/claim-certificate after the recipient proved
+    control of attendeeEmail by clicking the signed claim link in the cert email.
 
   SECURITY: matching is by attendeeEmail ONLY, never by license number. License
   numbers are user-supplied at registration / add-license and are effectively
@@ -19,12 +22,12 @@ import { mapCategory, mapDeliveryFormat } from "@/lib/protrack/category-map";
   another person's CE history by claiming their license number (IDOR). The
   account email is the only attacker-non-arbitrary key we have here.
 
-  Remaining hardening (tracked for before real issued certs exist in Weeks 5-6):
-  registration sets email_confirm=true without a verification round-trip, so the
-  email is not yet proven. Add email verification (or a per-cert claim code
-  mailed to the original attendeeEmail) before go-live so the email key is
-  trustworthy. Until then this is bounded: it only surfaces certificates issued
-  to an email that is not already a registered account.
+  Email ownership is proven on BOTH paths (neither auto-attaches from a merely
+  self-reported email): the backfill runs in /api/auth/verify-email, only after
+  the account holder clicked their own verification link; the forward attach
+  (claimIssuedCertificate) runs only from the claim route, reached by clicking a
+  signed link mailed to attendeeEmail, so the clicker proved control of that
+  inbox first.
 
   Both dedupe on ce_certificates.issuedCertificateId (unique) via createMany
   skipDuplicates, so they are safe to re-run. Prisma queries here run as the
@@ -128,20 +131,30 @@ export async function syncIssuedCertsForLicensee(
   return result.count;
 }
 
+export type CertClaimResult =
+  | { status: "attached"; email: string } // matching account exists; cert now in ProTrack
+  | { status: "no_account"; email: string } // nobody registered that email yet
+  | { status: "invalid" }; // unknown id, or a non-passing cert
+
 /**
- * Forward hook: sync a single freshly-issued DentalACE certificate to its
- * licensee, if one exists. Called by the attendee-issuance flow (Weeks 5-6).
- * No-ops when no matching licensee has registered yet; their later registration
- * backfill will pick it up. Returns the number created (0 or 1).
+ * Attach ONE freshly-issued DentalACE certificate to the ProTrack account that
+ * owns its attendeeEmail. Call ONLY after the recipient proved control of that
+ * email (the claim route verifies a signed link mailed to attendeeEmail — see
+ * SECURITY note above). Idempotent via the unique issuedCertificateId +
+ * skipDuplicates. Returns:
+ *   - attached:   a matching account exists and now has the cert,
+ *   - no_account: nobody has registered that email yet (route them to sign-up;
+ *                 the verification backfill picks it up when they do),
+ *   - invalid:    the id is unknown or the cert did not pass.
  */
-export async function syncNewIssuedCertificate(
+export async function claimIssuedCertificate(
   issuedCertId: string,
-): Promise<number> {
+): Promise<CertClaimResult> {
   const issued = await prisma.issuedCertificate.findUnique({
     where: { id: issuedCertId },
     select: { ...ISSUED_SELECT, passed: true, attendeeEmail: true },
   });
-  if (!issued || !issued.passed) return 0;
+  if (!issued || !issued.passed) return { status: "invalid" };
 
   // Match the account by its email only (see SECURITY note above).
   const match = await prisma.user.findFirst({
@@ -150,11 +163,11 @@ export async function syncNewIssuedCertificate(
     },
     select: { id: true },
   });
-  if (!match) return 0;
+  if (!match) return { status: "no_account", email: issued.attendeeEmail };
 
-  const result = await prisma.ceCertificate.createMany({
+  await prisma.ceCertificate.createMany({
     data: [toCeCertData(issued, match.id)],
     skipDuplicates: true,
   });
-  return result.count;
+  return { status: "attached", email: issued.attendeeEmail };
 }

@@ -3,6 +3,7 @@ import { createSignedUrl, uploadToStorage } from "@/lib/storage";
 import { renderQrPng } from "@/lib/qrcode";
 import { renderApprovalLetterPdf } from "@/lib/pdf/approval-letter";
 import { appBaseUrl } from "@/lib/app-url";
+import { getLetterSignatory } from "@/lib/admin/letter-settings";
 
 /*
   Self-healing signed URLs for the post-approval course assets (attendee QR
@@ -106,6 +107,7 @@ export async function courseAssetUrls(
               ceHours: course.ceHours,
               approvedAt: course.approvedAt,
               expiresAt: course.expiresAt,
+              ...(await getLetterSignatory()),
             }),
             contentType: "application/pdf",
           }),

@@ -174,6 +174,13 @@ model User {
   disabledAt       DateTime? @map("disabled_at")
   createdAt        DateTime  @default(now()) @map("created_at")
   lastLogin        DateTime? @map("last_login")
+  // Set by scripts/provision-legacy-accounts.ts when this account was created from
+  // a migrated legacy attendee email (not a self-serve signup). Marks the cohort
+  // eligible for the one-time set-password activation email. Null for everyone else.
+  legacyProvisionedAt   DateTime? @map("legacy_provisioned_at")
+  // Set by scripts/send-legacy-invites.ts when the activation email was sent, so
+  // the batch is resumable and never double-sends. Null = not yet invited.
+  activationEmailSentAt DateTime? @map("activation_email_sent_at")
 
   reviewedApplications  CourseApplication[] @relation("ReviewedBy")
   reviewedEvents        Event[]             @relation("EventReviewedBy")
@@ -186,6 +193,7 @@ model User {
   adminActionsTargeting AdminAuditLog[]     @relation("AdminTarget")
   accessRequests        AccessRequest[]     @relation("AccessRequester")
   accessRequestsDecided AccessRequest[]     @relation("AccessDecider")
+  platformSettingsUpdated PlatformSettings[] @relation("PlatformSettingsUpdatedBy")
 
   @@map("users")
 }
@@ -209,8 +217,10 @@ enum AdminAuditAction {
   VERIFICATION_RESENT
   SET_PASSWORD_LINK_SENT
   STAFF_ACCOUNT_CREATED
+  ACCOUNT_DELETED
   ACCESS_REQUEST_APPROVED
   ACCESS_REQUEST_DENIED
+  LETTER_SETTINGS_UPDATED
 }
 
 model AdminAuditLog {
@@ -228,6 +238,21 @@ model AdminAuditLog {
   @@index([targetUserId, createdAt])
   @@index([actorUserId, createdAt])
   @@map("admin_audit_log")
+}
+
+model PlatformSettings {
+  id                 String   @id @default("singleton")
+  presidentName      String   @default("Dr. Clifford Feingold, DDS") @map("president_name")
+  presidentTitle     String   @default("President, American Association of Dental Boards") @map("president_title")
+  // Path in the private `uploads` bucket, e.g. "admin/president-signature.png".
+  // Null => render the president name in the embedded script font instead.
+  signatureImagePath String?  @map("signature_image_path")
+  signatureImageMime String?  @map("signature_image_mime")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+  updatedById        String?  @map("updated_by_id") @db.Uuid
+  updatedBy          User?    @relation("PlatformSettingsUpdatedBy", fields: [updatedById], references: [id])
+
+  @@map("platform_settings")
 }
 
 model AccessRequest {

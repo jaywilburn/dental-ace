@@ -27,6 +27,24 @@ describe("set-password-token", () => {
     expect(verifySetPasswordToken(token, issuedAt + 10)).toBe("user-123");
   });
 
+  it("honors a custom ttlSeconds (longer invite window)", async () => {
+    const { signSetPasswordToken, verifySetPasswordToken } = await import("@/lib/auth/set-password-token");
+    const issuedAt = 1_000_000; // seconds
+    const thirtyDays = 60 * 60 * 24 * 30;
+    const token = signSetPasswordToken("user-123", issuedAt, thirtyDays);
+    // Still valid at 29 days (would be long expired under the default 24h window)...
+    expect(verifySetPasswordToken(token, issuedAt + 60 * 60 * 24 * 29)).toBe("user-123");
+    // ...and expired past 30 days.
+    expect(verifySetPasswordToken(token, issuedAt + 60 * 60 * 24 * 31)).toBe(null);
+  });
+
+  it("core and server-only re-export produce interchangeable tokens", async () => {
+    const core = await import("@/lib/auth/set-password-token-core");
+    const reexport = await import("@/lib/auth/set-password-token");
+    const token = core.signSetPasswordToken("user-abc");
+    expect(reexport.verifySetPasswordToken(token)).toBe("user-abc");
+  });
+
   it("does not accept an email-verification token (prefix isolation)", async () => {
     const { verifySetPasswordToken } = await import("@/lib/auth/set-password-token");
     const { signEmailVerificationToken } = await import("@/lib/auth/verification-token");

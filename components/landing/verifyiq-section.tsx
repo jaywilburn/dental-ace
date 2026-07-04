@@ -4,8 +4,8 @@ import { VerifyIQDashboardMockup } from "@/components/landing/verifyiq-dashboard
 /*
   VerifyIQ "coming soon" landing section. Client-provided design (2026-06-28),
   ported to a server component. Styles live in app/globals.css scoped under
-  .viq-section. The DSO product accent is gold to distinguish it from the blue
-  Verify (state boards) section above it. CTA points at the VerifyIQ waitlist
+  .viq-section. VerifyIQ is built for DSOs and dental groups only (not state
+  boards), so the copy stays team-focused. CTA points at the VerifyIQ waitlist
   route. The dashboard mockup is shared with the dedicated /verifyiq page via
   VerifyIQDashboardMockup. No em dashes (brand rule).
 */
@@ -29,7 +29,6 @@ export function VerifyIQSection() {
           </p>
 
           <p className="viq-lede">
-            Verify is built for state boards.{" "}
             <strong>VerifyIQ is built for DSOs and dental groups.</strong> Get
             full visibility into the continuing education your dentists,
             hygienists, and assistants complete across every state you operate

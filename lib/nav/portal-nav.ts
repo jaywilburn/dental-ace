@@ -71,6 +71,7 @@ export const portalNav: Record<PortalArea, NavSection[]> = {
       items: [
         { label: "Access Requests", href: "/admin/access-requests", icon: "🔑" },
         { label: "Audit Log", href: "/admin/audit", icon: "🧾" },
+        { label: "Settings", href: "/admin/settings", icon: "⚙️" },
       ],
     },
   ],

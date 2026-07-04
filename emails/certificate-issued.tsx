@@ -15,7 +15,7 @@ export type CertificateIssuedProps = {
   ceHours: number;
   completedAt: string;
   verifyUrl: string;
-  activateUrl: string;
+  claimUrl: string;
 };
 
 export default function CertificateIssuedEmail({
@@ -26,7 +26,7 @@ export default function CertificateIssuedEmail({
   ceHours,
   completedAt,
   verifyUrl,
-  activateUrl,
+  claimUrl,
 }: CertificateIssuedProps) {
   return (
     <BrandEmail
@@ -56,7 +56,7 @@ export default function CertificateIssuedEmail({
           { label: "Certificate ID", value: certificateId },
         ]}
       />
-      <CtaButton href={activateUrl} label="Activate my ProTrack Account" />
+      <CtaButton href={claimUrl} label="Add this certificate to ProTrack" />
       <Text
         style={{
           margin: "14px 0 0 0",
@@ -65,9 +65,10 @@ export default function CertificateIssuedEmail({
           color: emailColors.textMid,
         }}
       >
-        ProTrack is a free CE tracker. Activate your account and this
-        certificate is added to your record automatically, so you always have a
-        board-ready summary of your continuing education.
+        ProTrack is a free CE tracker. Use the button above to add this
+        certificate to your ProTrack record; a free account is created for you if
+        you do not have one yet, so you always have a board-ready summary of your
+        continuing education.
       </Text>
       <CtaButton href={verifyUrl} label="View course details →" />
     </BrandEmail>

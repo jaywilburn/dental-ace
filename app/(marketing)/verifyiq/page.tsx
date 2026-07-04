@@ -6,18 +6,19 @@ import { VerifyIQDashboardMockup } from "@/components/landing/verifyiq-dashboard
   Dedicated VerifyIQ feature landing page. Lives in the (marketing) route group,
   so it inherits LandingNav + LandingFooter and resolves to /verifyiq.
 
-  Positioning (per client, 2026): VerifyIQ is the compliance-intelligence layer
-  of DentalACE One, serving BOTH audiences: DSOs / dental groups (team-wide CE
-  visibility) and state dental boards (population analytics on top of Verify).
-  It is pre-launch, so the whole page is "coming soon" and drives to the
-  /verifyiq/contact early-access waitlist. Accent is blue (--ver). No dollar
-  figures. No em dashes in copy (brand rule).
+  Positioning (per client, 2026-07): VerifyIQ is the compliance-intelligence
+  layer of DentalACE One, built for DSOs and dental groups: a live, team-wide
+  view of CE across every provider and every state they operate in. It is NOT a
+  board product (Verify is the separate board-facing product), so no state-board
+  copy appears here. It is pre-launch, so the whole page is "coming soon" and
+  drives to the /verifyiq/contact early-access waitlist. Accent is blue (--ver).
+  No dollar figures. No em dashes in copy (brand rule).
 */
 
 export const metadata: Metadata = {
   title: "VerifyIQ",
   description:
-    "VerifyIQ is the compliance-intelligence layer of DentalACE One. For DSOs and dental groups, a live view of your whole team's CE. For state boards, population-wide analytics on top of Verify. Coming soon.",
+    "VerifyIQ is the compliance-intelligence layer of DentalACE One, built for DSOs and dental groups. Turn scattered certificates into a live view of your whole team's CE, with automatic flags for at-risk and overdue providers. Coming soon.",
 };
 
 const ctaHref = "/verifyiq/contact";
@@ -45,23 +46,24 @@ const groupFeatures: { title: string; body: string }[] = [
   },
 ];
 
-// State board value: analytics layered on the Verify audit engine.
-const boardFeatures: { title: string; body: string }[] = [
+// A second set of DSO-facing capabilities for the feature grid, distinct from
+// the deep-dive bullets above (which cover what/category/gaps/privacy).
+const groupHighlights: { title: string; body: string }[] = [
   {
-    title: "Population-wide analytics.",
-    body: "See CE compliance across your entire licensee base, not just the sampled audit cohort, pulled live from ProTrack and refreshed daily.",
+    title: "Every location, one view.",
+    body: "Roll up CE across all your offices and every state you operate in, so you never have to chase certificates location by location.",
   },
   {
-    title: "Early-warning risk scoring.",
-    body: "VerifyIQ surfaces the licensees trending toward a deficiency before renewal, so notices go out earlier and resolve sooner.",
+    title: "Renewal-ready reports.",
+    body: "Export an audit-ready CE summary for any provider or state in seconds, so proof of compliance is always a click away.",
   },
   {
-    title: "Category and trend breakdowns.",
-    body: "Slice CE completion by category, license type, and renewal cycle to spot systemic gaps across your state, cycle over cycle.",
+    title: "Nothing for your team to enter.",
+    body: "Providers self-link their license with a private org code. DentalACE certificates sync automatically and ProTrack keeps the rest current.",
   },
   {
-    title: "Built on Verify.",
-    body: "VerifyIQ layers on the audit data Verify already collects. No new workflow, no new data entry, no new logins for your staff.",
+    title: "Always up to date.",
+    body: "Your dashboard refreshes as providers complete CE, so the picture you see is today's, not last quarter's.",
   },
 ];
 
@@ -70,7 +72,6 @@ const boardFeatures: { title: string; body: string }[] = [
 const sources: { name: string; dot: string }[] = [
   { name: "DentalACE", dot: "bg-ace" },
   { name: "ProTrack", dot: "bg-pro" },
-  { name: "Verify", dot: "bg-ver" },
 ];
 
 function CheckBullet({ title, body }: { title: string; body: string }) {
@@ -114,14 +115,14 @@ export default function VerifyIQPage() {
           </div>
 
           <h1 className="text-balance font-serif text-4xl font-bold text-white md:text-[52px] md:leading-[1.08]">
-            See every CE hour, and every gap, across your whole population
+            See every CE hour, and every gap, across your whole team
           </h1>
 
           <p className="mx-auto mt-5 max-w-[620px] text-pretty text-base leading-relaxed text-white/50 md:text-lg">
-            VerifyIQ is the intelligence layer of DentalACE One. For DSOs and
-            dental groups, it turns scattered certificates into a live view of
-            your team. For state boards, it adds population-wide analytics on top
-            of the Verify audit engine.
+            VerifyIQ is the intelligence layer of DentalACE One, built for DSOs
+            and dental groups. It turns the scattered CE certificates your
+            providers earn into a live view of your whole team: what they are
+            learning, how it breaks down, and exactly where the gaps are.
           </p>
 
           <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
@@ -139,38 +140,37 @@ export default function VerifyIQPage() {
       <section className="bg-white px-5 py-16 md:px-10 md:py-20">
         <div className="mx-auto max-w-[900px]">
           <p className="mb-2 text-center font-mono text-[11px] uppercase tracking-[2.5px] text-ver">
-            One product, two audiences
+            Built for dental groups
           </p>
           <h2 className="mb-10 text-balance text-center font-serif text-3xl font-bold text-navy md:text-[38px]">
-            Built for the people responsible for CE
+            Made for the people responsible for team CE
           </h2>
 
           <div className="grid gap-6 md:grid-cols-2">
             <div className="rounded-r-xl border border-l-4 border-border border-l-ver bg-surface p-6">
               <p className="mb-1.5 font-mono text-[10px] uppercase tracking-[2px] text-ver">
-                For DSOs &amp; dental groups
+                For multi-location groups
               </p>
               <h3 className="mb-2 font-serif text-xl font-bold text-navy">
-                Your whole team&apos;s CE, in one view
+                Every office, every state, one view
               </h3>
               <p className="text-pretty text-sm leading-relaxed text-text-mid">
                 Full visibility into the continuing education your dentists,
-                hygienists, and assistants complete across every state you
-                operate in, and exactly where they are short.
+                hygienists, and assistants complete across every location and
+                state you operate in, and exactly where they are short.
               </p>
             </div>
 
             <div className="rounded-r-xl border border-l-4 border-border border-l-ver bg-surface p-6">
               <p className="mb-1.5 font-mono text-[10px] uppercase tracking-[2px] text-ver">
-                For state dental boards
+                For compliance &amp; HR leads
               </p>
               <h3 className="mb-2 font-serif text-xl font-bold text-navy">
-                Intelligence on top of your audits
+                No surprises at renewal
               </h3>
               <p className="text-pretty text-sm leading-relaxed text-text-mid">
-                Population-wide compliance analytics and early-warning risk
-                scoring, layered on the Verify audit engine your board already
-                uses. No new workflow to learn.
+                Know who is on track and who is at risk long before a deadline,
+                so a lapsed license never catches your group off guard.
               </p>
             </div>
           </div>
@@ -206,25 +206,25 @@ export default function VerifyIQPage() {
         </div>
       </section>
 
-      {/* ---- Board deep-dive (2x2 feature grid) --------------------------- */}
+      {/* ---- DSO highlights (2x2 feature grid) ---------------------------- */}
       <section className="bg-white px-5 py-16 md:px-10 md:py-20">
         <div className="mx-auto max-w-[1000px]">
           <div className="mb-10 text-center">
             <p className="mb-2 font-mono text-[10px] uppercase tracking-[2px] text-ver">
-              For state dental boards
+              What you get
             </p>
             <h2 className="mb-3 text-balance font-serif text-3xl font-bold text-navy md:text-[34px]">
-              Intelligence on top of your audits
+              Built for how dental groups actually work
             </h2>
             <p className="mx-auto max-w-[600px] text-pretty text-sm leading-relaxed text-text-mid md:text-base">
-              Verify runs the audit. VerifyIQ reads the same data to give your
-              board a live, statewide picture of CE compliance between audit
-              cycles.
+              From a single office to a multi-state group, VerifyIQ keeps your
+              whole team&apos;s CE visible and current, without adding a step to
+              anyone&apos;s day.
             </p>
           </div>
 
           <div className="grid gap-5 sm:grid-cols-2">
-            {boardFeatures.map((f) => (
+            {groupHighlights.map((f) => (
               <div
                 key={f.title}
                 className="rounded-xl border border-border bg-surface p-6"
@@ -257,9 +257,9 @@ export default function VerifyIQPage() {
             VerifyIQ reads the CE data you already generate
           </h2>
           <p className="mx-auto mb-10 max-w-[600px] text-pretty text-sm leading-relaxed text-white/50 md:text-base">
-            Every certificate accredited in DentalACE and tracked in ProTrack,
-            and every audit run in Verify, becomes intelligence in VerifyIQ. No
-            spreadsheets, no imports, no duplicate work.
+            Every certificate accredited in DentalACE and every hour tracked in
+            ProTrack becomes intelligence in VerifyIQ. No spreadsheets, no
+            imports, no duplicate work.
           </p>
 
           <div className="flex flex-wrap items-center justify-center gap-3">
@@ -299,8 +299,8 @@ export default function VerifyIQPage() {
             VerifyIQ is coming soon
           </h2>
           <p className="mx-auto mb-8 max-w-[520px] text-pretty text-sm leading-relaxed text-text-mid md:text-base">
-            Tell us a little about your group or board and we will reach out the
-            moment early access opens.
+            Tell us a little about your group and we will reach out the moment
+            early access opens.
           </p>
           <div className="flex flex-col items-center justify-center gap-3 sm:flex-row">
             <Link href={ctaHref} className={primaryBtn}>
