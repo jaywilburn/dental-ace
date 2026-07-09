@@ -46,7 +46,10 @@ export default async function EventsIndexPage({
     : [];
 
   // Signed download URLs (self-healing) for approved events' QR + approval letter.
-  const assets = new Map<string, { qrDownloadUrl: string | null; letterDownloadUrl: string | null }>();
+  const assets = new Map<
+    string,
+    { qrViewUrl: string | null; qrDownloadUrl: string | null; letterDownloadUrl: string | null }
+  >();
   await Promise.all(
     events
       .filter((e) => e.status === "APPROVED" && e.eventIdNumber && e.approvedAt && e.expiresAt)
@@ -117,7 +120,9 @@ export default async function EventsIndexPage({
               </tr>
             </thead>
             <tbody>
-              {events.map((event) => (
+              {events.map((event) => {
+                const asset = assets.get(event.id);
+                return (
                 <tr key={event.id} className="border-b border-border last:border-b-0">
                   <td className="px-4 py-2 font-medium text-navy">
                     {event.name || "(untitled draft)"}
@@ -143,17 +148,29 @@ export default async function EventsIndexPage({
                         Continue
                       </Link>
                     ) : event.status === "APPROVED" ? (
-                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]">
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-[11px]">
                         <Link href={`/attend/event/${event.attendeeLinkToken}`} className="text-ace underline">
                           Attendee Link
                         </Link>
-                        {assets.get(event.id)?.qrDownloadUrl ? (
-                          <a href={assets.get(event.id)!.qrDownloadUrl!} target="_blank" rel="noopener noreferrer" className="text-ace underline">
-                            QR Code
-                          </a>
-                        ) : null}
-                        {assets.get(event.id)?.letterDownloadUrl ? (
-                          <a href={assets.get(event.id)!.letterDownloadUrl!} target="_blank" rel="noopener noreferrer" className="text-ace underline">
+                        {asset?.qrViewUrl && asset?.qrDownloadUrl ? (
+                          <span className="inline-flex flex-col items-center gap-1">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={asset.qrViewUrl}
+                              alt={`Attendee QR code for ${event.name || event.eventIdNumber}`}
+                              width={112}
+                              height={112}
+                              className="h-28 w-28 rounded-md border border-border bg-white p-1.5"
+                            />
+                            <a href={asset.qrDownloadUrl} className="text-ace underline">
+                              Download QR
+                            </a>
+                          </span>
+                        ) : (
+                          <span className="text-text-muted">QR unavailable</span>
+                        )}
+                        {asset?.letterDownloadUrl ? (
+                          <a href={asset.letterDownloadUrl} target="_blank" rel="noopener noreferrer" className="text-ace underline">
                             Approval Letter
                           </a>
                         ) : null}
@@ -172,7 +189,8 @@ export default async function EventsIndexPage({
                     )}
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         )}
