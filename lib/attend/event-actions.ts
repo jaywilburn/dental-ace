@@ -133,10 +133,17 @@ export async function submitEventAttendance(input: unknown): Promise<EventAttend
     throw err;
   }
 
-  // Post-commit: PDF + upload + email + ProTrack sync. Non-fatal.
+  // Post-commit delivery is staged, best-effort, and never throws: the event
+  // cert already exists and is downloadable from the company log. Each stage is
+  // isolated so a PDF-render / storage / persist failure can no longer silently
+  // suppress the certificate email — the attendee still gets the verify +
+  // ProTrack claim links (just without the attachment).
   const pdfPath = `${certificateId}.pdf`;
+
+  // 1. Render the event certificate PDF. On failure keep pdf null and press on.
+  let pdf: Buffer | null = null;
   try {
-    const pdf = await renderEventCertificatePdf({
+    pdf = await renderEventCertificatePdf({
       attendeeName: sub.attendeeName,
       eventName: event.name,
       eventIdNumber: event.eventIdNumber ?? "ACE-EVT",
@@ -148,31 +155,50 @@ export async function submitEventAttendance(input: unknown): Promise<EventAttend
       // (event-issue.ts / the FAIL path above); mapper -> "LIVE In Person".
       deliveryMethod: "Live Event",
     });
-    await uploadToStorage({ kind: "certs", path: pdfPath, body: pdf, contentType: "application/pdf" });
-    await prisma.issuedCertificate.update({ where: { id: certificateId }, data: { certPdfUrl: pdfPath } });
+  } catch (err) {
+    console.error("[submitEventAttendance] cert PDF render failed", err);
+  }
 
-    const appBase = appBaseUrl();
-    const emailProps = {
-      attendeeName: sub.attendeeName,
-      courseTitle: event.name,
-      courseIdNumber: event.eventIdNumber ?? "ACE-EVT",
-      certificateId,
-      ceHours: assembled.hours,
-      completedAt: completedAt.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }),
-      verifyUrl: `${appBase}/attend/event/${sub.token}`,
-      // Signed claim link (mailed only to attendeeEmail, so clicking it proves
-      // inbox control). Replaces the old auto-push into any matching account,
-      // which trusted a self-reported email. See app/api/protrack/claim-certificate.
-      claimUrl: `${appBase}/api/protrack/claim-certificate?token=${signCertClaimToken(certificateId)}`,
-    };
+  // 2. Upload + persist the storage URL. Must NOT block the email — we still
+  //    hold the pdf bytes for the attachment and the links.
+  if (pdf) {
+    try {
+      await uploadToStorage({ kind: "certs", path: pdfPath, body: pdf, contentType: "application/pdf" });
+      await prisma.issuedCertificate.update({ where: { id: certificateId }, data: { certPdfUrl: pdfPath } });
+    } catch (err) {
+      console.error("[submitEventAttendance] cert PDF storage/persist failed", err);
+    }
+  }
+
+  // 3. Send the certificate email in its own try so a send failure is
+  //    individually greppable. Email props are independent of storage.
+  const appBase = appBaseUrl();
+  const emailProps = {
+    attendeeName: sub.attendeeName,
+    courseTitle: event.name,
+    courseIdNumber: event.eventIdNumber ?? "ACE-EVT",
+    certificateId,
+    ceHours: assembled.hours,
+    completedAt: completedAt.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }),
+    verifyUrl: `${appBase}/attend/event/${sub.token}`,
+    // Signed claim link (mailed only to attendeeEmail, so clicking it proves
+    // inbox control). Replaces the old auto-push into any matching account,
+    // which trusted a self-reported email. See app/api/protrack/claim-certificate.
+    claimUrl: `${appBase}/api/protrack/claim-certificate?token=${signCertClaimToken(certificateId)}`,
+  };
+  try {
     await sendEmail({
+      // RAW entered address — the lowercased `email` copy is for DB
+      // storage/dedupe only and must never become the recipient.
       to: sub.attendeeEmail,
       subject: CertificateIssuedEmail.subject(emailProps),
       react: CertificateIssuedEmail(emailProps),
-      attachments: [{ filename: `${event.eventIdNumber ?? "event"}-certificate.pdf`, content: pdf }],
+      attachments: pdf
+        ? [{ filename: `${event.eventIdNumber ?? "event"}-certificate.pdf`, content: pdf }]
+        : undefined,
     });
   } catch (err) {
-    console.error("[submitEventAttendance] post-issue PDF/email failed", err);
+    console.error(`[submitEventAttendance] cert email send FAILED to ${sub.attendeeEmail}`, err);
   }
 
   return { status: "passed", certificateId };
