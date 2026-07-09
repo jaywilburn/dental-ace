@@ -59,6 +59,10 @@ function recentDate(): string {
 
 const ENTERED_EMAIL = "John@CEExchange.io";
 
+// The attendee's chosen Course Format (not the event's live default), so the
+// assertions prove the attendee's pick lands on the event certificate.
+const CHOSEN_FORMAT = "On Demand Recording";
+
 function buildInput(overrides: Record<string, unknown> = {}) {
   return {
     token: "22222222-2222-2222-2222-222222222222",
@@ -67,6 +71,7 @@ function buildInput(overrides: Record<string, unknown> = {}) {
     licenseNumber: "TX-RDH-1",
     licenseType: "RDH",
     licenseStates: ["TX"],
+    courseFormat: CHOSEN_FORMAT,
     completionDate: recentDate(),
     selectedSessionIds: [],
     affirmed: true,
@@ -113,6 +118,24 @@ describe("submitEventAttendance — certificate email recipient + hardening", ()
     expect(arg.attachments).toHaveLength(1);
     expect(arg.attachments[0].content).toEqual(Buffer.from("EVT-PDF-BYTES"));
     expect(arg.attachments[0].filename).toBe("ACE-EVT-1-certificate.pdf");
+  });
+
+  it("renders the event certificate PDF with the attendee's chosen course format", async () => {
+    await submitEventAttendance(buildInput());
+
+    expect(renderEventCertificatePdf).toHaveBeenCalledTimes(1);
+    expect(renderEventCertificatePdf.mock.calls[0][0].deliveryMethod).toBe(CHOSEN_FORMAT);
+  });
+
+  it("stamps the attendee's chosen course format on a failed attempt's cert row", async () => {
+    // One wrong answer -> 0/1 -> below the 0.7 threshold -> fail branch.
+    const result = await submitEventAttendance(buildInput({ answers: [{ type: "MC", answer: 1 }] }));
+
+    expect(result.status).toBe("failed");
+    expect(prismaMock.issuedCertificate.create).toHaveBeenCalledTimes(1);
+    expect(prismaMock.issuedCertificate.create.mock.calls[0][0].data.deliveryMethod).toBe(
+      CHOSEN_FORMAT,
+    );
   });
 
   it("still sends the email (no attachment) when the PDF render fails", async () => {

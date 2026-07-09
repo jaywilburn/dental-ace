@@ -138,6 +138,8 @@ export type RenderCourseAssetsInput = {
   companyName: string;
   courseTitle: string;
   ceHours: number;
+  /** Provider-declared course format; printed on the Letter of Accreditation. */
+  deliveryMethod?: string | null;
   approvedAt: Date;
   expiresAt: Date;
   /** Event-scoped sessions attend via the event token, so skip the per-course QR. */
@@ -166,6 +168,7 @@ export async function renderCourseAssets(
       courseTitle: input.courseTitle,
       courseIdNumber: input.courseIdNumber,
       ceHours: input.ceHours,
+      deliveryMethod: input.deliveryMethod ?? null,
       approvedAt: input.approvedAt,
       expiresAt: input.expiresAt,
       ...signatory,

@@ -89,6 +89,7 @@ export async function approveApplication(formData: FormData) {
     companyName: application.company.name,
     courseTitle: data.courseTitle,
     ceHours: data.ceCreditHours,
+    deliveryMethod: data.deliveryFormat,
     approvedAt,
     expiresAt,
     withQr: true,

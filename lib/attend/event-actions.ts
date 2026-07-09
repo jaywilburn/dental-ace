@@ -46,6 +46,9 @@ export async function submitEventAttendance(input: unknown): Promise<EventAttend
   const sub = parsed.data;
   const email = sub.attendeeEmail.toLowerCase();
   const completedAt = new Date(`${sub.completionDate}T12:00:00`);
+  // The attendee's chosen Course Format becomes the event certificate's
+  // deliveryMethod (defaults to the event's live format if somehow absent).
+  const certFormat = sub.courseFormat ?? "LIVE In Person";
 
   const h = await headers();
   const ip = (h.get("x-forwarded-for") ?? "unknown").split(",")[0].trim();
@@ -89,7 +92,7 @@ export async function submitEventAttendance(input: unknown): Promise<EventAttend
         licenseNumber: sub.licenseNumber ?? null,
         licenseType: sub.licenseType ?? null,
         licenseStates: sub.licenseStates,
-        deliveryMethod: "Live Event",
+        deliveryMethod: certFormat,
         quizResponses: sub.answers,
         score: scored.score,
         passed: false,
@@ -119,6 +122,7 @@ export async function submitEventAttendance(input: unknown): Promise<EventAttend
         licenseNumber: sub.licenseNumber ?? null,
         licenseType: sub.licenseType ?? null,
         licenseStates: sub.licenseStates,
+        deliveryMethod: certFormat,
         quizResponses: sub.answers,
         score: scored.score,
         ceHours: assembled.hours,
@@ -152,8 +156,8 @@ export async function submitEventAttendance(input: unknown): Promise<EventAttend
       completedAt,
       sessions: assembled.sessionNames,
       // Matches the deliveryMethod written to the event cert row
-      // (event-issue.ts / the FAIL path above); mapper -> "LIVE In Person".
-      deliveryMethod: "Live Event",
+      // (event-issue.ts / the FAIL path above): the attendee's chosen format.
+      deliveryMethod: certFormat,
     });
   } catch (err) {
     console.error("[submitEventAttendance] cert PDF render failed", err);

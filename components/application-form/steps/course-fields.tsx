@@ -6,7 +6,11 @@ import {
   FormSelect,
   FormTextarea,
 } from "@/components/application-form/form-controls";
-import { DELIVERY_FORMATS, CATEGORIES } from "@/lib/forms/application/schemas";
+import {
+  COURSE_FORMATS,
+  DELIVERY_FORMATS,
+  CATEGORIES,
+} from "@/lib/forms/application/schemas";
 import type { ApplicationData } from "@/lib/forms/application/schemas";
 
 /*
@@ -22,6 +26,14 @@ const CATEGORY_LABELS: Record<string, string> = {
 };
 
 export function CourseFields({ draft }: { draft: Partial<ApplicationData> }) {
+  // Tolerate legacy drafts: a stored deliveryFormat that predates the four
+  // canonical COURSE_FORMATS (e.g. "Live/Online") falls back to the first
+  // option rather than rendering a value that isn't in the list.
+  const deliveryFormatDefault =
+    draft.deliveryFormat &&
+    (COURSE_FORMATS as readonly string[]).includes(draft.deliveryFormat)
+      ? draft.deliveryFormat
+      : COURSE_FORMATS[0];
   return (
     <FormCard title="Course Information">
       <FormField fullWidth>
@@ -64,8 +76,8 @@ export function CourseFields({ draft }: { draft: Partial<ApplicationData> }) {
         <FormLabel required>Course Format</FormLabel>
         <FormSelect
           name="deliveryFormat"
-          defaultValue={draft.deliveryFormat ?? DELIVERY_FORMATS[0]}
-          options={DELIVERY_FORMATS}
+          defaultValue={deliveryFormatDefault}
+          options={COURSE_FORMATS}
         />
       </FormField>
       <FormField fullWidth>

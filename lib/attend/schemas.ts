@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { COURSE_FORMATS } from "@/lib/forms/application/schemas";
 
 /*
   Attendee submission boundary. Validated server-side in submitAttendance.
@@ -23,6 +24,11 @@ export const attendeeSubmissionSchema = z.object({
   licenseNumber: z.string().max(100).optional(),
   licenseType: z.string().max(100).optional(),
   licenseStates: z.array(z.string().length(2)).min(1).max(10),
+  // How the attendee took the course. Pre-filled from the course's declared
+  // format on the /attend form, but the attendee may change it to any of the
+  // four canonical options; the chosen value becomes the certificate's
+  // deliveryMethod (drives the "Course Format" line + ProTrack sync).
+  courseFormat: z.enum(COURSE_FORMATS),
   // Course completion date the attendee enters ("what day did you take the
   // course?"). yyyy-mm-dd from <input type="date">; must be a real date in the
   // last 10 years and not in the future.

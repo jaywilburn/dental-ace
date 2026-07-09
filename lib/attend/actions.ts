@@ -91,6 +91,11 @@ export async function submitAttendance(input: unknown): Promise<AttendResult> {
   if (!quizParsed.success) return { status: "course_inactive" };
   const questions = quizParsed.data;
 
+  // The attendee's chosen Course Format becomes the certificate's deliveryMethod
+  // (drives the cert's "Course Format" line + ProTrack sync). Falls back to the
+  // course's declared format if somehow absent (the schema requires it).
+  const certFormat = sub.courseFormat ?? course.application.deliveryMethod;
+
   // Prior attempts for (course, lowercased email).
   const prior = await prisma.issuedCertificate.findMany({
     where: { courseId: course.id, attendeeEmail: { equals: email, mode: "insensitive" } },
@@ -116,7 +121,7 @@ export async function submitAttendance(input: unknown): Promise<AttendResult> {
         licenseNumber: sub.licenseNumber ?? null,
         licenseType: sub.licenseType ?? null,
         licenseStates: sub.licenseStates,
-        deliveryMethod: course.application.deliveryMethod,
+        deliveryMethod: certFormat,
         courseType: course.application.courseType,
         quizResponses: sub.answers,
         score: scored.score,
@@ -160,7 +165,7 @@ export async function submitAttendance(input: unknown): Promise<AttendResult> {
         licenseNumber: sub.licenseNumber ?? null,
         licenseType: sub.licenseType ?? null,
         licenseStates: sub.licenseStates,
-        deliveryMethod: course.application.deliveryMethod,
+        deliveryMethod: certFormat,
         courseType: course.application.courseType,
         quizResponses: sub.answers,
         score: scored.score,
@@ -191,7 +196,7 @@ export async function submitAttendance(input: unknown): Promise<AttendResult> {
       certificateId,
       ceHours: Number(course.application.ceHours ?? 0),
       completedAt,
-      deliveryMethod: course.application.deliveryMethod,
+      deliveryMethod: certFormat,
     });
   } catch (err) {
     console.error("[submitAttendance] cert PDF render failed", err);

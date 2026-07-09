@@ -2,7 +2,7 @@ import Link from "next/link";
 import { PageHeader } from "@/components/portal-shell";
 import { requireStaff } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
-import { DELIVERY_FORMATS } from "@/lib/forms/application/schemas";
+import { COURSE_FORMATS } from "@/lib/forms/application/schemas";
 import type { Prisma } from "@prisma/client";
 
 /*
@@ -24,7 +24,7 @@ export default async function ReviewerQueuePage({
 
   const query = (q ?? "").trim();
   const formatFilter =
-    format && (DELIVERY_FORMATS as readonly string[]).includes(format)
+    format && (COURSE_FORMATS as readonly string[]).includes(format)
       ? format
       : "";
   const sortNewest = sort === "newest";
@@ -79,7 +79,7 @@ export default async function ReviewerQueuePage({
         />
         <select name="format" defaultValue={formatFilter} className={fieldClass}>
           <option value="">All formats</option>
-          {DELIVERY_FORMATS.map((f) => (
+          {COURSE_FORMATS.map((f) => (
             <option key={f} value={f}>
               {f}
             </option>

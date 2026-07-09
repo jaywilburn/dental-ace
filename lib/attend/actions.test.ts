@@ -52,6 +52,20 @@ const PASSING_ANSWERS = [
   { type: "MC", answer: 0 },
 ];
 
+// All wrong — scores 0/5 and drives the fail branch.
+const FAILING_ANSWERS = [
+  { type: "TF", answer: "False" },
+  { type: "TF", answer: "False" },
+  { type: "MC", answer: 1 },
+  { type: "MC", answer: 1 },
+  { type: "MC", answer: 1 },
+];
+
+// The attendee's chosen Course Format. Deliberately DIFFERENT from the course's
+// declared deliveryMethod ("Online (self-study)") so the assertions prove the
+// attendee's pick — not the course default — is what lands on the certificate.
+const CHOSEN_FORMAT = "On Demand Recording";
+
 // A completion date guaranteed within the last-10-years / not-future window.
 function recentDate(): string {
   return new Date(Date.now() - 30 * 864e5).toISOString().slice(0, 10);
@@ -68,6 +82,7 @@ function buildInput(overrides: Record<string, unknown> = {}) {
     licenseNumber: "TX-RDH-1",
     licenseType: "RDH",
     licenseStates: ["TX"],
+    courseFormat: CHOSEN_FORMAT,
     completionDate: recentDate(),
     affirmed: true,
     answers: PASSING_ANSWERS,
@@ -117,6 +132,25 @@ describe("submitAttendance — certificate email recipient + hardening", () => {
     expect(arg.attachments).toHaveLength(1);
     expect(arg.attachments[0].content).toEqual(Buffer.from("PDF-BYTES"));
     expect(arg.attachments[0].filename).toBe("ACE-1001-certificate.pdf");
+  });
+
+  it("renders the certificate PDF with the attendee's chosen course format", async () => {
+    await submitAttendance(buildInput());
+
+    // The attendee's pick, not the course's declared deliveryMethod, drives the
+    // "Course Format" line on the certificate.
+    expect(renderCertificatePdf).toHaveBeenCalledTimes(1);
+    expect(renderCertificatePdf.mock.calls[0][0].deliveryMethod).toBe(CHOSEN_FORMAT);
+  });
+
+  it("stamps the attendee's chosen course format on a failed attempt's cert row", async () => {
+    const result = await submitAttendance(buildInput({ answers: FAILING_ANSWERS }));
+
+    expect(result.status).toBe("failed");
+    expect(prismaMock.issuedCertificate.create).toHaveBeenCalledTimes(1);
+    expect(prismaMock.issuedCertificate.create.mock.calls[0][0].data.deliveryMethod).toBe(
+      CHOSEN_FORMAT,
+    );
   });
 
   it("still sends the email (no attachment) when the PDF render fails", async () => {

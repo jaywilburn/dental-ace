@@ -2,6 +2,7 @@ import "server-only";
 import PDFDocument from "pdfkit";
 import { drawAadbSeal } from "./seal";
 import { renderScriptSignaturePng } from "./signature-image";
+import { courseFormatLabel } from "./course-format-label";
 
 /*
   PDFKit-rendered approval letter. Generates a single-page US Letter with
@@ -19,6 +20,9 @@ export type ApprovalLetterInput = {
   courseTitle: string;
   courseIdNumber: string;
   ceHours: number;
+  // Provider-declared course format; printed as the "Course Format" line in the
+  // APPROVED COURSE block (mapped through courseFormatLabel). Omitted when null.
+  deliveryMethod?: string | null;
   approvedAt: Date;
   expiresAt: Date;
   presidentName: string;
@@ -114,9 +118,12 @@ export async function renderApprovalLetterPdf(
       // Course detail box.
       // PDFKit's .rect().fill() does NOT advance doc.y, so capture the rect's
       // top BEFORE drawing it and place subsequent text relative to that anchor.
+      // The box grows by one line-height when a Course Format line is present so
+      // the "Valid from" line can never spill past the fill.
+      const formatLabel = courseFormatLabel(input.deliveryMethod);
       doc.moveDown(1);
       const boxTop = doc.y;
-      const boxHeight = 96;
+      const boxHeight = formatLabel ? 114 : 96;
       doc.rect(56, boxTop, doc.page.width - 112, boxHeight).fill("#F4F7FB");
       doc
         .fillColor(NAVY)
@@ -132,10 +139,13 @@ export async function renderApprovalLetterPdf(
         .fontSize(10)
         .fillColor(TEXT_MUTED)
         .text(`Course ID:  ${input.courseIdNumber}`, 72, boxTop + 56)
-        .text(`CE Hours:   ${input.ceHours.toFixed(1)} hours`)
-        .text(
-          `Valid from ${formatDate(input.approvedAt)} through ${formatDate(input.expiresAt)}`,
-        );
+        .text(`CE Hours:   ${input.ceHours.toFixed(1)} hours`);
+      if (formatLabel) {
+        doc.text(`Course Format:  ${formatLabel}`);
+      }
+      doc.text(
+        `Valid from ${formatDate(input.approvedAt)} through ${formatDate(input.expiresAt)}`,
+      );
       // Advance the cursor past the box so subsequent moveDown() lands below it.
       doc.y = boxTop + boxHeight + 12;
 

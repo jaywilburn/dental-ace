@@ -126,6 +126,7 @@ export async function approveEvent(formData: FormData) {
       pdfStoragePath: string;
       courseTitle: string;
       ceHours: number;
+      deliveryFormat: string;
     }> = [];
 
     for (const s of sessions) {
@@ -158,6 +159,7 @@ export async function approveEvent(formData: FormData) {
         pdfStoragePath: r.pdfStoragePath,
         courseTitle: s.data.courseTitle,
         ceHours: s.data.ceCreditHours,
+        deliveryFormat: s.data.deliveryFormat,
       });
     }
 
@@ -193,6 +195,7 @@ export async function approveEvent(formData: FormData) {
       companyName: event.company.name,
       courseTitle: s.courseTitle,
       ceHours: s.ceHours,
+      deliveryMethod: s.deliveryFormat,
       approvedAt,
       expiresAt,
       withQr: false,
@@ -212,6 +215,9 @@ export async function approveEvent(formData: FormData) {
         courseTitle: event.name,
         courseIdNumber: eventIdNumber,
         ceHours: totalHours,
+        // Events are delivered live; the per-session letters carry each
+        // session's own declared format.
+        deliveryMethod: "LIVE In Person",
         approvedAt,
         expiresAt,
         ...signatory,
