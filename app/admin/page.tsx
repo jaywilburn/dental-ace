@@ -59,8 +59,9 @@ export default async function AdminDashboard() {
         <p className="text-[13px] text-text-mid">
           Manage providers under{" "}
           <Link href="/admin/companies" className="text-ace underline">Companies</Link>, all accounts under{" "}
-          <Link href="/admin/users" className="text-ace underline">Users</Link>, and review the{" "}
-          <Link href="/admin/audit" className="text-ace underline">Audit Log</Link>.
+          <Link href="/admin/users" className="text-ace underline">Users</Link>, review the{" "}
+          <Link href="/admin/audit" className="text-ace underline">Audit Log</Link>, and see marketing{" "}
+          <Link href="/admin/leads" className="text-ace underline">Leads</Link>.
         </p>
       </div>
     </>
