@@ -763,3 +763,31 @@ model NoticeSent {
   @@index([deficiencyId, sentAt])
   @@map("notices_sent")
 }
+
+// ── Marketing (lead capture) ────────────────────────────────────────────────
+//
+// Contact/early-access leads from the pre-launch marketing pages (VerifyIQ and
+// Verify). Not a product table: it just captures interest submitted on the
+// already-shipped landing forms, replacing the earlier mailto: placeholder.
+// Writes run server-side via Prisma (table owner, bypasses RLS); RLS
+// (sql-migrations/0016) is the floor that keeps anon/authenticated clients from
+// reading leads. Admin-viewable at /admin/leads.
+
+enum MarketingLeadSource {
+  VERIFYIQ
+  VERIFY
+}
+
+model MarketingLead {
+  id           String              @id @default(uuid()) @db.Uuid
+  source       MarketingLeadSource
+  contactName  String              @map("contact_name")
+  title        String?
+  organization String
+  email        String
+  message      String?
+  createdAt    DateTime            @default(now()) @map("created_at")
+
+  @@index([createdAt])
+  @@map("marketing_leads")
+}

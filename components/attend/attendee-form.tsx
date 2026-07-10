@@ -2,7 +2,10 @@
 
 import { useState } from "react";
 import { submitAttendance, type AttendResult } from "@/lib/attend/actions";
+import { COURSE_FORMATS } from "@/lib/forms/application/schemas";
 import { JurisdictionOptions } from "@/components/jurisdiction-options";
+
+type CourseFormat = (typeof COURSE_FORMATS)[number];
 
 /*
   4-step mobile attendee form: identity → affirmation → quiz → review/submit.
@@ -15,10 +18,21 @@ export type PublicQuizQuestion =
 
 type Answer = { type: "TF"; answer: "True" | "False" } | { type: "MC"; answer: number };
 
-export function AttendeeForm({ token, quiz }: { token: string; quiz: PublicQuizQuestion[] }) {
+export function AttendeeForm({
+  token,
+  quiz,
+  courseFormatDefault,
+}: {
+  token: string;
+  quiz: PublicQuizQuestion[];
+  courseFormatDefault: CourseFormat;
+}) {
   const [step, setStep] = useState(0);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  // How the attendee took the course, pre-filled from the course's declared
+  // format. Editable to any of the four canonical options; drives the cert.
+  const [courseFormat, setCourseFormat] = useState<CourseFormat>(courseFormatDefault);
   // Course completion date ("what day did you take the course?"), defaulted to
   // today. Lazy initializers (no setState-in-effect); both compute the same day
   // on server render and client hydration.
@@ -75,6 +89,7 @@ export function AttendeeForm({ token, quiz }: { token: string; quiz: PublicQuizQ
         licenseNumber: licenseNumber || undefined,
         licenseType: licenseType || undefined,
         licenseStates: cleanStates,
+        courseFormat,
         completionDate: completedOn,
         affirmed,
         answers: answers.filter(Boolean) as Answer[],
@@ -106,6 +121,20 @@ export function AttendeeForm({ token, quiz }: { token: string; quiz: PublicQuizQ
               onChange={(e) => setCompletedOn(e.target.value)}
               className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
             />
+          </label>
+          <label className="block text-sm">
+            <span className="text-slate-700">Course format</span>
+            <select
+              value={courseFormat}
+              onChange={(e) => setCourseFormat(e.target.value as CourseFormat)}
+              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+            >
+              {COURSE_FORMATS.map((opt) => (
+                <option key={opt} value={opt}>
+                  {opt}
+                </option>
+              ))}
+            </select>
           </label>
           <Field label="License number" value={licenseNumber} onChange={setLicenseNumber} />
           <label className="block text-sm">
@@ -240,6 +269,7 @@ export function AttendeeForm({ token, quiz }: { token: string; quiz: PublicQuizQ
             <div><strong>{name}</strong></div>
             <div>{email}</div>
             <div>{licenseType} {licenseNumber} · {cleanStates.join(", ")}</div>
+            <div>{courseFormat}</div>
             <div>Completed {completedOn}</div>
           </div>
           <NavButtons

@@ -8,6 +8,7 @@ const valid = {
   licenseNumber: "TX-RDH-1",
   licenseType: "RDH",
   licenseStates: ["TX"],
+  courseFormat: "LIVE In Person",
   completionDate: "2026-01-15",
   affirmed: true,
   answers: [
@@ -22,6 +23,31 @@ const valid = {
 describe("attendeeSubmissionSchema", () => {
   it("accepts a valid submission", () => {
     expect(attendeeSubmissionSchema.safeParse(valid).success).toBe(true);
+  });
+
+  it("accepts each of the four canonical course formats", () => {
+    for (const courseFormat of [
+      "LIVE In Person",
+      "LIVE Online",
+      "On Demand Recording",
+      "Self Study/Printed",
+    ]) {
+      expect(
+        attendeeSubmissionSchema.safeParse({ ...valid, courseFormat }).success,
+      ).toBe(true);
+    }
+  });
+
+  it("rejects an unknown course format", () => {
+    expect(
+      attendeeSubmissionSchema.safeParse({ ...valid, courseFormat: "Live/Online" }).success,
+    ).toBe(false);
+  });
+
+  it("rejects a missing course format", () => {
+    const { courseFormat: _omit, ...withoutFormat } = valid;
+    void _omit;
+    expect(attendeeSubmissionSchema.safeParse(withoutFormat).success).toBe(false);
   });
 
   it("rejects when attendance is not affirmed", () => {

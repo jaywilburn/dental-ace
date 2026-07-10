@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { loadEventByToken, buildPublicForm } from "@/lib/attend/event-quiz";
+import { COURSE_FORMATS } from "@/lib/forms/application/schemas";
 import { EventAttendeeForm } from "@/components/attend/event-attendee-form";
 
 /*
@@ -66,7 +67,14 @@ export default async function AttendEventPage({
           ? `${totalHours.toFixed(1)} CE hours`
           : "Select the sessions you attended to claim your certificate"}
       </p>
-      <EventAttendeeForm token={token} eventName={event.name} form={form} />
+      <EventAttendeeForm
+        token={token}
+        eventName={event.name}
+        form={form}
+        // Events are delivered live; the attendee can still change this to the
+        // format they actually attended in.
+        courseFormatDefault={COURSE_FORMATS[0]}
+      />
     </main>
   );
 }

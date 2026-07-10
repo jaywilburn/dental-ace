@@ -18,6 +18,8 @@ export type IssueEventCertInput = {
   licenseNumber?: string | null;
   licenseType?: string | null;
   licenseStates: string[];
+  /** Attendee-chosen course format; stored as the cert's deliveryMethod. */
+  deliveryMethod?: string | null;
   quizResponses: unknown;
   score: number;
   ceHours: number;
@@ -56,7 +58,7 @@ export async function issueEventCertificateTx(
       licenseNumber: input.licenseNumber ?? null,
       licenseType: input.licenseType ?? null,
       licenseStates: input.licenseStates,
-      deliveryMethod: "Live Event",
+      deliveryMethod: input.deliveryMethod ?? "LIVE In Person",
       quizResponses: input.quizResponses as Prisma.InputJsonValue,
       score: input.score,
       passed: true,

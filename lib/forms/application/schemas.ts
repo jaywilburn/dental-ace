@@ -19,12 +19,35 @@ export const DELIVERY_FORMATS = [
 ] as const;
 
 /*
-  Formats that count as a live event for the combined-certificate questions
-  and Event Setup eligibility. "Live/Virtual" and "Live Event" are retired
-  values from applications saved before the 2026-06 format changes; existing
-  data is never migrated, so the predicate must keep accepting them.
+  The four canonical "Course Format" options. Single source of truth for both
+  the provider-facing Course Application field (drives the Letter of
+  Accreditation + the attendee default) and the attendee-facing certificate
+  field. Verbatim strings — casing/spacing are load-bearing (they are persisted
+  as-is on IssuedCertificate.deliveryMethod and printed on the PDF via
+  courseFormatLabel). DELIVERY_FORMATS above is a DIFFERENT list still used by
+  primaryDistributionFormat + the reviewer worksheet; do not conflate them.
 */
-export const LIVE_FORMATS = ["Live/In Person", "Live/Online"] as const;
+export const COURSE_FORMATS = [
+  "LIVE In Person",
+  "LIVE Online",
+  "On Demand Recording",
+  "Self Study/Printed",
+] as const;
+
+/*
+  Formats that count as a live event for the combined-certificate questions
+  and Event Setup eligibility. Includes the new canonical live values
+  ("LIVE In Person"/"LIVE Online") plus the pre-2026-06 "Live/In Person" /
+  "Live/Online" forms. "Live/Virtual" and "Live Event" are further retired
+  values; existing data is never migrated, so the predicate must keep accepting
+  every one of them.
+*/
+export const LIVE_FORMATS = [
+  "LIVE In Person",
+  "LIVE Online",
+  "Live/In Person",
+  "Live/Online",
+] as const;
 
 export function isLiveFormat(format: string | undefined | null): boolean {
   if (!format) return false;
@@ -72,7 +95,10 @@ export const step1Schema = z.object({
   courseTitle: z.string().min(3, "Course title is required").max(200),
   ceCreditHours: z.number().min(0.5).max(40),
   subjectMatter: z.enum(CATEGORIES),
-  deliveryFormat: z.enum(DELIVERY_FORMATS),
+  // Provider-declared course format: one of the four canonical COURSE_FORMATS.
+  // Persisted to AccreditedCourse.application.deliveryMethod on submit and used
+  // as the attendee's pre-filled default on the /attend form.
+  deliveryFormat: z.enum(COURSE_FORMATS),
   primaryDistributionFormat: z.enum(DELIVERY_FORMATS),
   shortDescription: z
     .string()

@@ -2,7 +2,10 @@
 
 import { useState } from "react";
 import { submitEventAttendance, type EventAttendResult } from "@/lib/attend/event-actions";
+import { COURSE_FORMATS } from "@/lib/forms/application/schemas";
 import { JurisdictionOptions } from "@/components/jurisdiction-options";
+
+type CourseFormat = (typeof COURSE_FORMATS)[number];
 
 /*
   Event attendee form. Full types (Opt 1/2) go identity -> affirm -> quiz; the
@@ -27,15 +30,20 @@ type Answer = { type: "TF"; answer: "True" | "False" } | { type: "MC"; answer: n
 export function EventAttendeeForm({
   token,
   form,
+  courseFormatDefault,
 }: {
   token: string;
   eventName: string;
   form: EventPublicForm;
+  courseFormatDefault: CourseFormat;
 }) {
   const selective = form.mode === "selective";
   const [step, setStep] = useState(0);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  // How the attendee took the event, pre-filled to the event's live format and
+  // editable to any of the four canonical options; drives the certificate.
+  const [courseFormat, setCourseFormat] = useState<CourseFormat>(courseFormatDefault);
   const [today] = useState(todayISO);
   const [completedOn, setCompletedOn] = useState<string>(today);
   const [licenseNumber, setLicenseNumber] = useState("");
@@ -81,6 +89,7 @@ export function EventAttendeeForm({
         licenseNumber: licenseNumber || undefined,
         licenseType: licenseType || undefined,
         licenseStates: cleanStates,
+        courseFormat,
         completionDate: completedOn,
         selectedSessionIds: selective ? ordered.map((a) => a.key) : [],
         affirmed,
@@ -109,6 +118,20 @@ export function EventAttendeeForm({
               onChange={(e) => setCompletedOn(e.target.value)}
               className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
             />
+          </label>
+          <label className="block text-sm">
+            <span className="text-slate-700">Course format</span>
+            <select
+              value={courseFormat}
+              onChange={(e) => setCourseFormat(e.target.value as CourseFormat)}
+              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+            >
+              {COURSE_FORMATS.map((opt) => (
+                <option key={opt} value={opt}>
+                  {opt}
+                </option>
+              ))}
+            </select>
           </label>
           <Field label="License number" value={licenseNumber} onChange={setLicenseNumber} />
           <label className="block text-sm">
@@ -250,6 +273,7 @@ export function EventAttendeeForm({
             <div><strong>{name}</strong></div>
             <div>{email}</div>
             <div>{licenseType} {licenseNumber} · {cleanStates.join(", ")}</div>
+            <div>{courseFormat}</div>
             <div>Completed {completedOn}</div>
             {selective ? <div>{active.length} session{active.length === 1 ? "" : "s"} attended</div> : null}
           </div>

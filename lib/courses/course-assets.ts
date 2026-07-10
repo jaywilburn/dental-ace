@@ -25,12 +25,18 @@ import { getLetterSignatory } from "@/lib/admin/letter-settings";
 */
 
 export type AssetIo = {
-  sign: (path: string) => Promise<string>;
+  /**
+   * Sign a stored object. When `download` is set, the URL forces a browser
+   * download (Content-Disposition: attachment) with that filename; otherwise
+   * the URL renders the object inline (used for <img> thumbnails).
+   */
+  sign: (path: string, download?: string) => Promise<string>;
   upload: (args: { path: string; body: Buffer; contentType: string }) => Promise<unknown>;
 };
 
 const defaultIo: AssetIo = {
-  sign: (path) => createSignedUrl("uploads", path),
+  sign: (path, download) =>
+    createSignedUrl("uploads", path, 300, download ? { download } : undefined),
   upload: ({ path, body, contentType }) =>
     uploadToStorage({ kind: "uploads", path, body, contentType }),
 };
@@ -60,6 +66,38 @@ export async function signOrRegenerateAssetUrl(
   }
 }
 
+/**
+ * Sign a stored asset once as an inline "view" URL (for an <img> thumbnail) and
+ * derive a download-forcing URL (Content-Disposition: attachment named
+ * `downloadName`) from it without a second sign round-trip. The self-heal
+ * regeneration runs only while signing the view URL. Returns nulls when the
+ * object could not be ensured (path never recorded / regeneration failed);
+ * otherwise the download URL is always present.
+ *
+ * The download URL is derived rather than signed a second time because the
+ * Supabase storage client applies the `download` option purely client-side:
+ * `createSignedUrl` POSTs only `{ expiresIn }` (plus `transform`) to
+ * `/object/sign` and then appends `&download=<filename>` to the returned signed
+ * URL string — the signature never covers the download param. Since the view
+ * and download URLs share the same path, expiry, and (absent) transform, the
+ * download URL is exactly the already-signed view URL with the download query
+ * param appended. This saves one Supabase Storage round-trip per QR on every
+ * /company/courses and /company/events render.
+ */
+export async function signViewAndDownloadUrls(
+  path: string,
+  downloadName: string,
+  render: () => Promise<{ body: Buffer; contentType: string }>,
+  io: AssetIo = defaultIo,
+): Promise<{ viewUrl: string | null; downloadUrl: string | null }> {
+  const viewUrl = await signOrRegenerateAssetUrl(path, render, io);
+  if (!viewUrl) return { viewUrl: null, downloadUrl: null };
+  // Matches the storage client's own encoding (URLSearchParams form-encoding,
+  // which encodeURI leaves untouched for the resulting query string).
+  const downloadParam = new URLSearchParams({ download: downloadName }).toString();
+  return { viewUrl, downloadUrl: `${viewUrl}&${downloadParam}` };
+}
+
 export type CourseAssetInput = {
   attendeeLinkToken: string;
   qrCodeUrl: string | null;
@@ -73,18 +111,25 @@ export type CourseAssetInput = {
 };
 
 /**
- * Signed download URLs for a course's QR + approval letter, regenerating
- * missing objects on demand. A null URL means the asset path was never
- * recorded (pre-feature course) or regeneration failed.
+ * Signed URLs for a course's QR + approval letter, regenerating missing objects
+ * on demand. The QR yields both an inline `qrViewUrl` (for an <img> thumbnail)
+ * and a `qrDownloadUrl` that saves as `${courseIdNumber}-attendee-qr.png`. A
+ * null URL means the asset path was never recorded (pre-feature course) or
+ * regeneration failed.
  */
 export async function courseAssetUrls(
   course: CourseAssetInput,
   io: AssetIo = defaultIo,
-): Promise<{ qrDownloadUrl: string | null; letterDownloadUrl: string | null }> {
-  const [qrDownloadUrl, letterDownloadUrl] = await Promise.all([
+): Promise<{
+  qrViewUrl: string | null;
+  qrDownloadUrl: string | null;
+  letterDownloadUrl: string | null;
+}> {
+  const [qr, letterDownloadUrl] = await Promise.all([
     course.qrCodeUrl
-      ? signOrRegenerateAssetUrl(
+      ? signViewAndDownloadUrls(
           course.qrCodeUrl,
+          `${course.courseIdNumber}-attendee-qr.png`,
           // attendeeUrl is built lazily so appBaseUrl() runs only on the rare
           // regeneration miss, not once per course on every page render.
           async () => ({
@@ -95,7 +140,7 @@ export async function courseAssetUrls(
           }),
           io,
         )
-      : null,
+      : Promise.resolve({ viewUrl: null, downloadUrl: null }),
     course.approvalLetterUrl
       ? signOrRegenerateAssetUrl(
           course.approvalLetterUrl,
@@ -116,5 +161,9 @@ export async function courseAssetUrls(
       : null,
   ]);
 
-  return { qrDownloadUrl, letterDownloadUrl };
+  return {
+    qrViewUrl: qr.viewUrl,
+    qrDownloadUrl: qr.downloadUrl,
+    letterDownloadUrl,
+  };
 }

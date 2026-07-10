@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  COURSE_FORMATS,
   DELIVERY_FORMATS,
   HIGHEST_DEGREES,
   isLiveFormat,
@@ -21,11 +22,28 @@ describe("delivery formats", () => {
     ]);
   });
 
+  it("exposes exactly the four canonical Course Format options", () => {
+    expect(COURSE_FORMATS).toEqual([
+      "LIVE In Person",
+      "LIVE Online",
+      "On Demand Recording",
+      "Self Study/Printed",
+    ]);
+  });
+
   it("treats new and legacy live values as live", () => {
+    // New canonical live values.
+    expect(isLiveFormat("LIVE In Person")).toBe(true);
+    expect(isLiveFormat("LIVE Online")).toBe(true);
+    // Pre-2026-06 forms.
     expect(isLiveFormat("Live/In Person")).toBe(true);
     expect(isLiveFormat("Live/Online")).toBe(true);
-    expect(isLiveFormat("Live/Virtual")).toBe(true); // legacy
-    expect(isLiveFormat("Live Event")).toBe(true); // legacy
+    // Retired legacy values.
+    expect(isLiveFormat("Live/Virtual")).toBe(true);
+    expect(isLiveFormat("Live Event")).toBe(true);
+    // Non-live canonical + legacy values.
+    expect(isLiveFormat("On Demand Recording")).toBe(false);
+    expect(isLiveFormat("Self Study/Printed")).toBe(false);
     expect(isLiveFormat("On Demand Video")).toBe(false);
     expect(isLiveFormat("Printed Course")).toBe(false);
   });
@@ -61,7 +79,9 @@ describe("step1Schema additions", () => {
     courseTitle: "Infection Control",
     ceCreditHours: 1.5,
     subjectMatter: "Scientific",
-    deliveryFormat: "Live/Online",
+    // deliveryFormat is now one of the four canonical COURSE_FORMATS;
+    // primaryDistributionFormat still uses the granular DELIVERY_FORMATS.
+    deliveryFormat: "LIVE Online",
     publicProtectionStatement: "x".repeat(20),
     courseObjectives: "x".repeat(20),
     courseOutline: "1. Introduction\n2. Protocols\n3. Q&A",
@@ -76,6 +96,17 @@ describe("step1Schema additions", () => {
         primaryDistributionFormat: "Live/Online",
       }).success,
     ).toBe(true);
+  });
+
+  it("rejects a deliveryFormat outside the four canonical options", () => {
+    expect(
+      step1Schema.safeParse({
+        ...base,
+        deliveryFormat: "Live/Online", // legacy DELIVERY_FORMATS value
+        shortDescription: "y".repeat(20),
+        primaryDistributionFormat: "Live/Online",
+      }).success,
+    ).toBe(false);
   });
 
   it("requires the course outline as text (no longer an upload)", () => {

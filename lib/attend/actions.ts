@@ -91,6 +91,11 @@ export async function submitAttendance(input: unknown): Promise<AttendResult> {
   if (!quizParsed.success) return { status: "course_inactive" };
   const questions = quizParsed.data;
 
+  // The attendee's chosen Course Format becomes the certificate's deliveryMethod
+  // (drives the cert's "Course Format" line + ProTrack sync). Falls back to the
+  // course's declared format if somehow absent (the schema requires it).
+  const certFormat = sub.courseFormat ?? course.application.deliveryMethod;
+
   // Prior attempts for (course, lowercased email).
   const prior = await prisma.issuedCertificate.findMany({
     where: { courseId: course.id, attendeeEmail: { equals: email, mode: "insensitive" } },
@@ -116,7 +121,7 @@ export async function submitAttendance(input: unknown): Promise<AttendResult> {
         licenseNumber: sub.licenseNumber ?? null,
         licenseType: sub.licenseType ?? null,
         licenseStates: sub.licenseStates,
-        deliveryMethod: course.application.deliveryMethod,
+        deliveryMethod: certFormat,
         courseType: course.application.courseType,
         quizResponses: sub.answers,
         score: scored.score,
@@ -160,7 +165,7 @@ export async function submitAttendance(input: unknown): Promise<AttendResult> {
         licenseNumber: sub.licenseNumber ?? null,
         licenseType: sub.licenseType ?? null,
         licenseStates: sub.licenseStates,
-        deliveryMethod: course.application.deliveryMethod,
+        deliveryMethod: certFormat,
         courseType: course.application.courseType,
         quizResponses: sub.answers,
         score: scored.score,
@@ -174,51 +179,76 @@ export async function submitAttendance(input: unknown): Promise<AttendResult> {
     throw err;
   }
 
-  // Post-commit: render PDF, upload, persist URL, email. Failures are logged,
-  // not fatal — the cert exists and is downloadable from the company log.
+  // Post-commit delivery is staged, best-effort, and never throws: the cert
+  // already exists and is downloadable from the company log. Each stage is
+  // isolated so a PDF-render / storage / persist failure can no longer silently
+  // suppress the certificate email — the attendee still gets the verify +
+  // ProTrack claim links (just without the attachment).
   const pdfPath = `${certificateId}.pdf`;
+
+  // 1. Render the certificate PDF. On failure keep pdf null and press on.
+  let pdf: Buffer | null = null;
   try {
-    const pdf = await renderCertificatePdf({
+    pdf = await renderCertificatePdf({
       attendeeName: sub.attendeeName,
       courseTitle: course.application.courseTitle ?? "Accredited Course",
       courseIdNumber: course.courseIdNumber,
       certificateId,
       ceHours: Number(course.application.ceHours ?? 0),
       completedAt,
-      deliveryMethod: course.application.deliveryMethod,
+      deliveryMethod: certFormat,
     });
-    await uploadToStorage({ kind: "certs", path: pdfPath, body: pdf, contentType: "application/pdf" });
-    await prisma.issuedCertificate.update({
-      where: { id: certificateId },
-      data: { certPdfUrl: pdfPath },
-    });
+  } catch (err) {
+    console.error("[submitAttendance] cert PDF render failed", err);
+  }
 
-    const appBase = appBaseUrl();
-    const emailProps = {
-      attendeeName: sub.attendeeName,
-      courseTitle: course.application.courseTitle ?? "Accredited Course",
-      courseIdNumber: course.courseIdNumber,
-      certificateId,
-      ceHours: Number(course.application.ceHours ?? 0),
-      completedAt: completedAt.toLocaleDateString("en-US", {
-        month: "long",
-        day: "numeric",
-        year: "numeric",
-      }),
-      verifyUrl: `${appBase}/attend/${sub.token}`,
-      // Signed claim link (mailed only to attendeeEmail, so clicking it proves
-      // inbox control). Adds this cert to the matching ProTrack account, or
-      // routes to sign-up if none exists yet. See app/api/protrack/claim-certificate.
-      claimUrl: `${appBase}/api/protrack/claim-certificate?token=${signCertClaimToken(certificateId)}`,
-    };
+  // 2. Upload + persist the storage URL. Must NOT block the email — we still
+  //    hold the pdf bytes for the attachment and the links.
+  if (pdf) {
+    try {
+      await uploadToStorage({ kind: "certs", path: pdfPath, body: pdf, contentType: "application/pdf" });
+      await prisma.issuedCertificate.update({
+        where: { id: certificateId },
+        data: { certPdfUrl: pdfPath },
+      });
+    } catch (err) {
+      console.error("[submitAttendance] cert PDF storage/persist failed", err);
+    }
+  }
+
+  // 3. Send the certificate email in its own try so a send failure is
+  //    individually greppable. Email props are independent of storage.
+  const appBase = appBaseUrl();
+  const emailProps = {
+    attendeeName: sub.attendeeName,
+    courseTitle: course.application.courseTitle ?? "Accredited Course",
+    courseIdNumber: course.courseIdNumber,
+    certificateId,
+    ceHours: Number(course.application.ceHours ?? 0),
+    completedAt: completedAt.toLocaleDateString("en-US", {
+      month: "long",
+      day: "numeric",
+      year: "numeric",
+    }),
+    verifyUrl: `${appBase}/attend/${sub.token}`,
+    // Signed claim link (mailed only to attendeeEmail, so clicking it proves
+    // inbox control). Adds this cert to the matching ProTrack account, or
+    // routes to sign-up if none exists yet. See app/api/protrack/claim-certificate.
+    claimUrl: `${appBase}/api/protrack/claim-certificate?token=${signCertClaimToken(certificateId)}`,
+  };
+  try {
     await sendEmail({
+      // RAW entered address — the lowercased `email` copy is for DB
+      // storage/dedupe only and must never become the recipient.
       to: sub.attendeeEmail,
       subject: CertificateIssuedEmail.subject(emailProps),
       react: CertificateIssuedEmail(emailProps),
-      attachments: [{ filename: `${course.courseIdNumber}-certificate.pdf`, content: pdf }],
+      attachments: pdf
+        ? [{ filename: `${course.courseIdNumber}-certificate.pdf`, content: pdf }]
+        : undefined,
     });
   } catch (err) {
-    console.error("[submitAttendance] post-issue PDF/email failed", err);
+    console.error(`[submitAttendance] cert email send FAILED to ${sub.attendeeEmail}`, err);
   }
 
   return { status: "passed", certificateId };

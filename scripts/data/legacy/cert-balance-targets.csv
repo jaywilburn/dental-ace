@@ -1,0 +1,17 @@
+# Per-company target cert_balance (the "owed / available to send" figure from the
+# migration spreadsheet). Matched on legacy_id. target_cert_balance is ABSOLUTE:
+# the script grants (or, with --allow-decrease, reduces) to reach exactly this
+# number, so re-running is a no-op once a company is correct.
+#
+# Fill target_cert_balance from the spreadsheet, then:
+#   pnpm reconcile:certs            # dry run — review the diff
+#   pnpm reconcile:certs --apply    # commit the grants
+#
+# Rows already reconciled (Curve Dental 570, Dana Watson 31) are listed so they
+# show as delta 0 (a built-in correctness check). Leave a row out to skip it.
+# Replace each <fill> with the number from the spreadsheet; delete rows you are
+# not reconciling this pass.
+legacy_id,name,target_cert_balance
+1,"Pearl, Inc.",<fill>
+2,"Curve Dental",570
+3,"Dana Watson",31

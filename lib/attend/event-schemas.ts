@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { attendeeAnswerSchema } from "@/lib/attend/schemas";
+import { COURSE_FORMATS } from "@/lib/forms/application/schemas";
 
 /*
   Event attendee submission boundary. Like attendeeSubmissionSchema but the quiz
@@ -14,6 +15,10 @@ export const eventAttendeeSubmissionSchema = z.object({
   licenseNumber: z.string().max(100).optional(),
   licenseType: z.string().max(100).optional(),
   licenseStates: z.array(z.string().length(2)).min(1).max(10),
+  // How the attendee took the event. Pre-filled to the event's live format and
+  // editable to any of the four canonical options; becomes the certificate's
+  // deliveryMethod.
+  courseFormat: z.enum(COURSE_FORMATS),
   completionDate: z
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/, "Enter the date you completed the event")

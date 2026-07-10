@@ -190,7 +190,7 @@ export default async function MyCoursesPage({
                     {course.certsIssuedCount}
                   </td>
                   <td className="px-4 py-2">
-                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 whitespace-nowrap">
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-2 whitespace-nowrap">
                       <a
                         href={course.attendeeUrl}
                         target="_blank"
@@ -199,15 +199,23 @@ export default async function MyCoursesPage({
                       >
                         Attendee Link
                       </a>
-                      {course.qrDownloadUrl ? (
-                        <a
-                          href={course.qrDownloadUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-ace underline"
-                        >
-                          QR Code
-                        </a>
+                      {course.qrViewUrl && course.qrDownloadUrl ? (
+                        <span className="inline-flex flex-col items-center gap-1">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={course.qrViewUrl}
+                            alt={`Attendee QR code for ${course.application.courseTitle ?? course.courseIdNumber}`}
+                            width={112}
+                            height={112}
+                            className="h-28 w-28 rounded-md border border-border bg-white p-1.5"
+                          />
+                          <a
+                            href={course.qrDownloadUrl}
+                            className="text-ace underline"
+                          >
+                            Download QR
+                          </a>
+                        </span>
                       ) : (
                         <span className="text-text-muted">QR unavailable</span>
                       )}

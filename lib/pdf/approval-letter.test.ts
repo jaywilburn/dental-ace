@@ -50,6 +50,26 @@ describe("renderApprovalLetterPdf", () => {
     expect(countPdfPages(buf)).toBe(1);
   });
 
+  it("renders a Course Format line when a delivery method is provided", async () => {
+    // Same input, once without and once with a course format: the format line
+    // adds text, so the two PDFs must differ. Both stay on a single page.
+    const without = await renderApprovalLetterPdf(baseInput);
+    const withFormat = await renderApprovalLetterPdf({
+      ...baseInput,
+      deliveryMethod: "LIVE Online",
+    });
+    expect(without.equals(withFormat)).toBe(false);
+    expect(countPdfPages(withFormat)).toBe(1);
+  });
+
+  it("stays on a single page with a long title and a Course Format line", async () => {
+    const buf = await renderApprovalLetterPdf({
+      ...baseInput,
+      deliveryMethod: "Self Study/Printed",
+    });
+    expect(countPdfPages(buf)).toBe(1);
+  });
+
   it("reflects the president name in the output", async () => {
     const a = await renderApprovalLetterPdf(baseInput);
     const b = await renderApprovalLetterPdf({

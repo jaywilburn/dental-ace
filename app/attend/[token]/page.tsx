@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
-import { quizQuestionSchema } from "@/lib/forms/application/schemas";
+import { COURSE_FORMATS, quizQuestionSchema } from "@/lib/forms/application/schemas";
+import { courseFormatLabel } from "@/lib/pdf/course-format-label";
 import { AttendeeForm } from "@/components/attend/attendee-form";
 
 /*
@@ -51,7 +52,7 @@ export default async function AttendPage({
       expiresAt: true,
       quizQuestions: true,
       company: { select: { certBalance: true } },
-      application: { select: { courseTitle: true, ceHours: true } },
+      application: { select: { courseTitle: true, ceHours: true, deliveryMethod: true } },
     },
   });
 
@@ -82,6 +83,15 @@ export default async function AttendPage({
       : { type: "MC" as const, question: q.question, options: q.options },
   );
 
+  // Pre-fill the attendee's Course Format from the course's declared format,
+  // normalized to one of the four canonical options (legacy stored values fold
+  // onto a canonical label; anything unrecognized defaults to the first option).
+  const courseLabel = courseFormatLabel(course.application.deliveryMethod);
+  const courseFormatDefault =
+    courseLabel && (COURSE_FORMATS as readonly string[]).includes(courseLabel)
+      ? (courseLabel as (typeof COURSE_FORMATS)[number])
+      : COURSE_FORMATS[0];
+
   return (
     <main className="mx-auto max-w-md px-4 py-8">
       <h1 className="text-xl font-semibold text-slate-900">
@@ -90,7 +100,11 @@ export default async function AttendPage({
       <p className="mt-1 text-sm text-slate-600">
         {Number(course.application.ceHours ?? 0).toFixed(1)} CE hours
       </p>
-      <AttendeeForm token={token} quiz={publicQuiz} />
+      <AttendeeForm
+        token={token}
+        quiz={publicQuiz}
+        courseFormatDefault={courseFormatDefault}
+      />
     </main>
   );
 }
