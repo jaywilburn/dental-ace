@@ -1,18 +1,23 @@
 /*
   Send the one-time "set your password" activation email to every legacy-provisioned
-  ProTrack account (scripts/provision-legacy-accounts.ts marks them with
-  legacyProvisionedAt). Records-first copy (emails/legacy-activation.tsx) with a
-  30-day set-password link.
+  CE-provider (company) account (scripts/provision-legacy-providers.ts marks them with
+  legacyProvisionedAt and links them to a Company). Provider copy
+  (emails/legacy-provider-activation.tsx) with a 30-day set-password link.
+
+  This is the company-side sibling of scripts/send-legacy-invites.ts (which is fenced
+  to companyId == null so it can never pick up these provider accounts). This script
+  targets companyId != null, so the two cohorts never overlap even though they share
+  the same legacyProvisionedAt / activationEmailSentAt markers.
 
   Reuses the exact token the /api/auth/set-password route verifies via the
   non-server-only core (lib/auth/set-password-token-core.ts). Builds its own Prisma
-  + Resend clients because lib/email/send.ts is server-only (can't be imported into
-  a tsx script) — and deliberately does NOT apply EMAIL_TEST_BCC, so the client is
-  not BCC'd on 3,000+ sends.
+  + Resend clients because lib/email/send.ts is server-only (can't be imported into a
+  tsx script) — and deliberately does NOT apply EMAIL_TEST_BCC, so the client is not
+  BCC'd on the batch.
 
-  Resumable/idempotent: sets activationEmailSentAt after each success, and only
-  targets accounts where it is still null. Cohort excludes anyone who already signed
-  in (lastLogin) or was suspended (disabledAt), and skips malformed emails.
+  Resumable/idempotent: sets activationEmailSentAt after each success, and only targets
+  accounts where it is still null. Cohort excludes anyone who already signed in
+  (lastLogin) or was suspended (disabledAt), and skips malformed emails.
 
   Flags:
     --dry-run     render + log each recipient, send nothing (works without RESEND_API_KEY)
@@ -20,7 +25,7 @@
     --rate=N      sends per second (default 2; Resend's default limit)
     --force       proceed even if EMAIL_TEST_BCC is set (NOT recommended)
 
-  Usage: pnpm invite:legacy [--dry-run] [--limit=N] [--rate=N] [--force]
+  Usage: pnpm invite:legacy-providers [--dry-run] [--limit=N] [--rate=N] [--force]
 */
 import { config } from "dotenv";
 import { PrismaPg } from "@prisma/adapter-pg";
@@ -28,7 +33,7 @@ import { PrismaClient } from "@prisma/client";
 import { render } from "@react-email/components";
 import { Resend } from "resend";
 import { signSetPasswordToken } from "../lib/auth/set-password-token-core";
-import LegacyActivationEmail from "../emails/legacy-activation";
+import LegacyProviderActivationEmail from "../emails/legacy-provider-activation";
 
 config({ path: ".env.local" });
 
@@ -48,8 +53,8 @@ function resolveBaseUrl(): string {
   return "http://localhost:3000";
 }
 
-// Basic deliverability gate: skip obviously-malformed addresses so a bad row
-// never counts against Resend/domain reputation.
+// Basic deliverability gate: skip obviously-malformed addresses so a bad row never
+// counts against Resend/domain reputation.
 function looksValid(email: string): boolean {
   return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email);
 }
@@ -95,16 +100,13 @@ async function main() {
 
   const cohort = await prisma.user.findMany({
     where: {
-      // ProTrack (individual) accounts only. Provider accounts share the same
-      // legacyProvisionedAt / activationEmailSentAt markers but carry a companyId,
-      // and are invited by scripts/send-legacy-provider-invites.ts instead.
-      companyId: null,
+      companyId: { not: null },
       legacyProvisionedAt: { not: null },
       activationEmailSentAt: null,
       lastLogin: null,
       disabledAt: null,
     },
-    select: { id: true, email: true, firstName: true },
+    select: { id: true, email: true, firstName: true, company: { select: { name: true } } },
     orderBy: { createdAt: "asc" },
   });
 
@@ -113,7 +115,7 @@ async function main() {
 
   console.log(`Base URL: ${baseUrl}`);
   console.log(
-    `Cohort: ${cohort.length} not-yet-invited (${skipped} skipped as malformed). ` +
+    `Cohort: ${cohort.length} provider accounts not-yet-invited (${skipped} skipped as malformed). ` +
       `Mode: ${dryRun ? "DRY RUN (no send)" : "SENDING"}. Rate: ${rate}/s.`,
   );
 
@@ -129,12 +131,13 @@ async function main() {
     const nowSeconds = Math.floor(Date.now() / 1000);
     const token = signSetPasswordToken(u.id, nowSeconds, THIRTY_DAYS_SECONDS);
     const setPasswordUrl = `${baseUrl}/set-password?token=${encodeURIComponent(token)}`;
-    const element = LegacyActivationEmail({
+    const element = LegacyProviderActivationEmail({
       firstName: u.firstName ?? "there",
+      companyName: u.company?.name ?? "your organization",
       setPasswordUrl,
       expiryDays: EXPIRY_DAYS,
     });
-    const subject = LegacyActivationEmail.subject();
+    const subject = LegacyProviderActivationEmail.subject();
 
     if (dryRun) {
       const html = await render(element);
@@ -151,7 +154,7 @@ async function main() {
       sent += 1;
     } catch (err) {
       failed += 1;
-      console.error(`[invite] failed for ${u.email}`, err);
+      console.error(`[invite] failed for provider ${u.email}`, err);
     }
 
     if (processed % 100 === 0) {
