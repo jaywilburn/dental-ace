@@ -4,6 +4,7 @@ import { useState } from "react";
 import { submitAttendance, type AttendResult } from "@/lib/attend/actions";
 import { COURSE_FORMATS } from "@/lib/forms/application/schemas";
 import { JurisdictionOptions } from "@/components/jurisdiction-options";
+import { ErrorSummary, FieldError, toDisplayErrors } from "@/components/attend/form-errors";
 
 type CourseFormat = (typeof COURSE_FORMATS)[number];
 
@@ -17,6 +18,20 @@ export type PublicQuizQuestion =
   | { type: "MC"; question: string; options: string[] };
 
 type Answer = { type: "TF"; answer: "True" | "False" } | { type: "MC"; answer: number };
+
+// Which step each server-validated field lives on, so an invalid submission
+// can jump back to the first step the attendee needs to fix.
+const FIELD_STEP: Record<string, number> = {
+  attendeeName: 0,
+  attendeeEmail: 0,
+  completionDate: 0,
+  courseFormat: 0,
+  licenseNumber: 0,
+  licenseType: 0,
+  licenseStates: 0,
+  affirmed: 1,
+  answers: 2,
+};
 
 export function AttendeeForm({
   token,
@@ -50,6 +65,18 @@ export function AttendeeForm({
   const [answers, setAnswers] = useState<(Answer | null)[]>(quiz.map(() => null));
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<AttendResult | null>(null);
+  // Server-side validation errors keyed by field. Non-empty only after an
+  // "invalid" submit; the form stays mounted so the attendee can fix and retry.
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
+
+  function clearFieldError(key: string) {
+    setFieldErrors((prev) => {
+      if (!(key in prev)) return prev;
+      const { [key]: _drop, ...rest } = prev;
+      void _drop;
+      return rest;
+    });
+  }
 
   function setAnswer(i: number, a: Answer) {
     setAnswers((prev) => prev.map((x, idx) => (idx === i ? a : x)));
@@ -81,6 +108,7 @@ export function AttendeeForm({
 
   async function onSubmit() {
     setSubmitting(true);
+    setFieldErrors({});
     try {
       const res = await submitAttendance({
         token,
@@ -94,6 +122,17 @@ export function AttendeeForm({
         affirmed,
         answers: answers.filter(Boolean) as Answer[],
       });
+      if (res.status === "invalid") {
+        // Keep the form mounted with everything the attendee entered and jump
+        // to the first step that has a failing field (token/unknown-only
+        // errors stay on review; the summary shows a generic retry message).
+        setFieldErrors(res.fieldErrors);
+        const failingSteps = Object.keys(res.fieldErrors)
+          .map((k) => FIELD_STEP[k])
+          .filter((s): s is number => s !== undefined);
+        if (failingSteps.length) setStep(Math.min(...failingSteps));
+        return;
+      }
       setResult(res);
     } finally {
       setSubmitting(false);
@@ -108,19 +147,42 @@ export function AttendeeForm({
 
   return (
     <div className="mt-6 space-y-4">
+      <ErrorSummary fieldErrors={toDisplayErrors(fieldErrors)} />
       {step === 0 && (
         <section className="space-y-3">
-          <Field label="Full name" value={name} onChange={setName} />
-          <Field label="Email" value={email} onChange={setEmail} type="email" />
+          <Field
+            label="Full name"
+            value={name}
+            onChange={(v) => {
+              setName(v);
+              clearFieldError("attendeeName");
+            }}
+            error={fieldErrors.attendeeName}
+          />
+          <Field
+            label="Email"
+            value={email}
+            onChange={(v) => {
+              setEmail(v);
+              clearFieldError("attendeeEmail");
+            }}
+            type="email"
+            error={fieldErrors.attendeeEmail}
+          />
           <label className="block text-sm">
             <span className="text-slate-700">Date you completed the course</span>
             <input
               type="date"
               value={completedOn}
               max={today || undefined}
-              onChange={(e) => setCompletedOn(e.target.value)}
-              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+              onChange={(e) => {
+                setCompletedOn(e.target.value);
+                clearFieldError("completionDate");
+              }}
+              aria-invalid={fieldErrors.completionDate ? true : undefined}
+              className={`mt-1 w-full rounded-md border px-3 py-2 text-sm ${fieldErrors.completionDate ? "border-red-400" : "border-slate-300"}`}
             />
+            <FieldError messages={fieldErrors.completionDate} />
           </label>
           <label className="block text-sm">
             <span className="text-slate-700">Course format</span>
@@ -155,12 +217,17 @@ export function AttendeeForm({
             <span className="block text-sm text-slate-700">State of licensure</span>
             <select
               value={licenseStates[0] ?? ""}
-              onChange={(e) => setStateAt(0, e.target.value)}
-              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+              onChange={(e) => {
+                setStateAt(0, e.target.value);
+                clearFieldError("licenseStates");
+              }}
+              aria-invalid={fieldErrors.licenseStates ? true : undefined}
+              className={`w-full rounded-md border px-3 py-2 text-sm ${fieldErrors.licenseStates ? "border-red-400" : "border-slate-300"}`}
             >
               <option value="">Select your state…</option>
               <JurisdictionOptions />
             </select>
+            <FieldError messages={fieldErrors.licenseStates} />
           </div>
           <div className="space-y-1">
             <span className="block text-sm text-slate-700">
@@ -227,9 +294,18 @@ export function AttendeeForm({
       {step === 1 && (
         <section className="space-y-3">
           <label className="flex items-start gap-2 text-sm text-slate-700">
-            <input type="checkbox" checked={affirmed} onChange={(e) => setAffirmed(e.target.checked)} className="mt-1" />
+            <input
+              type="checkbox"
+              checked={affirmed}
+              onChange={(e) => {
+                setAffirmed(e.target.checked);
+                clearFieldError("affirmed");
+              }}
+              className="mt-1"
+            />
             <span>I affirm that I attended and completed this course in full.</span>
           </label>
+          <FieldError messages={fieldErrors.affirmed} />
           <NavButtons onBack={() => setStep(0)} onNext={() => setStep(2)} nextDisabled={!affirmed} />
         </section>
       )}
@@ -258,6 +334,7 @@ export function AttendeeForm({
                   ))}
             </fieldset>
           ))}
+          <FieldError messages={fieldErrors.answers} />
           <NavButtons onBack={() => setStep(1)} onNext={() => setStep(3)} nextDisabled={!allAnswered} />
         </section>
       )}
@@ -330,7 +407,19 @@ function answerText(question: PublicQuizQuestion | undefined, correctIndex: numb
   return question?.type === "MC" ? (question.options[correctIndex] ?? "") : "";
 }
 
-function Field({ label, value, onChange, type = "text" }: { label: string; value: string; onChange: (v: string) => void; type?: string }) {
+function Field({
+  label,
+  value,
+  onChange,
+  type = "text",
+  error,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  type?: string;
+  error?: string[];
+}) {
   return (
     <label className="block text-sm">
       <span className="text-slate-700">{label}</span>
@@ -338,8 +427,10 @@ function Field({ label, value, onChange, type = "text" }: { label: string; value
         type={type}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+        aria-invalid={error ? true : undefined}
+        className={`mt-1 w-full rounded-md border px-3 py-2 text-sm ${error ? "border-red-400" : "border-slate-300"}`}
       />
+      <FieldError messages={error} />
     </label>
   );
 }

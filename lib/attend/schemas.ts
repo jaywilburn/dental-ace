@@ -17,40 +17,74 @@ export const attendeeAnswerSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("MC"), answer: z.number().int().min(0).max(3) }),
 ]);
 
+/** Calendar-day validity for the attendee-entered completion date, anchored at
+ *  noon UTC so it is immune to server timezone AND to attendees whose local
+ *  "today" is one day ahead of UTC (their date input defaults to local today).
+ *  Accepts UTC dates from (today - 10 years - 1 day) through (today + 1 day). */
+export function isRecentCompletionDate(s: string): boolean {
+  const d = new Date(`${s}T12:00:00Z`);
+  if (Number.isNaN(d.getTime())) return false;
+  // V8 rolls impossible dates over (Feb 30 -> Mar 2) instead of returning NaN;
+  // a round-trip mismatch means the entered date does not exist.
+  if (d.toISOString().slice(0, 10) !== s) return false;
+  const now = new Date();
+  const earliest = Date.UTC(
+    now.getUTCFullYear() - 10,
+    now.getUTCMonth(),
+    now.getUTCDate() - 1,
+    12,
+  );
+  const latest = Date.UTC(
+    now.getUTCFullYear(),
+    now.getUTCMonth(),
+    now.getUTCDate() + 1,
+    12,
+  );
+  return d.getTime() >= earliest && d.getTime() <= latest;
+}
+
+/** Zod v4 flatten, filtered to a plain Record (flattenError's fieldErrors is a
+ *  partial record; strict TS will not assign it directly). Messages are static
+ *  schema strings only, never the submitted values, so they are safe to return
+ *  to the client and to log. */
+export function flattenFieldErrors(error: z.ZodError): Record<string, string[]> {
+  const flat = z.flattenError(error).fieldErrors as Record<string, string[] | undefined>;
+  const out: Record<string, string[]> = {};
+  for (const [key, msgs] of Object.entries(flat)) {
+    if (msgs && msgs.length > 0) out[key] = msgs;
+  }
+  return out;
+}
+
 export const attendeeSubmissionSchema = z.object({
   token: z.guid(),
-  attendeeName: z.string().min(2).max(200),
-  attendeeEmail: z.string().email().max(200),
-  licenseNumber: z.string().max(100).optional(),
-  licenseType: z.string().max(100).optional(),
-  licenseStates: z.array(z.string().length(2)).min(1).max(10),
+  attendeeName: z.string().trim().min(2, "Please enter your full name").max(200, "Name is too long"),
+  attendeeEmail: z.string().trim().email("Enter a valid email address").max(200, "Email is too long"),
+  licenseNumber: z.string().trim().max(100, "License number is too long").optional(),
+  licenseType: z.string().trim().max(100, "License type is too long").optional(),
+  licenseStates: z
+    .array(z.string().length(2, "Use two letter state codes"))
+    .min(1, "Select your state of licensure")
+    .max(10, "Too many states selected"),
   // How the attendee took the course. Pre-filled from the course's declared
   // format on the /attend form, but the attendee may change it to any of the
   // four canonical options; the chosen value becomes the certificate's
   // deliveryMethod (drives the "Course Format" line + ProTrack sync).
-  courseFormat: z.enum(COURSE_FORMATS),
+  // Optional for version-skew resilience: a stale client bundle from before a
+  // deploy may omit it; the action falls back to the course's declared format.
+  courseFormat: z.enum(COURSE_FORMATS, "Choose how you took the course").optional(),
   // Course completion date the attendee enters ("what day did you take the
-  // course?"). yyyy-mm-dd from <input type="date">; must be a real date in the
-  // last 10 years and not in the future.
+  // course?"). yyyy-mm-dd from <input type="date">; must be a real calendar
+  // date in the last 10 years and not in the future (with a one-day grace on
+  // both ends for attendee timezones, see isRecentCompletionDate).
   completionDate: z
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/, "Enter the date you took the course")
-    .refine(
-      (s) => {
-        const d = new Date(`${s}T12:00:00`);
-        if (Number.isNaN(d.getTime())) return false;
-        const now = new Date();
-        const earliest = new Date(
-          now.getFullYear() - 10,
-          now.getMonth(),
-          now.getDate(),
-        );
-        return d <= now && d >= earliest;
-      },
-      { message: "Date must be within the last 10 years and not in the future" },
-    ),
-  affirmed: z.literal(true),
-  answers: z.array(attendeeAnswerSchema).length(5),
+    .refine(isRecentCompletionDate, {
+      message: "Enter a date within the last 10 years that is not in the future",
+    }),
+  affirmed: z.literal(true, "Please confirm that you attended the course"),
+  answers: z.array(attendeeAnswerSchema).length(5, "Please answer all five questions"),
 });
 
 export type AttendeeSubmission = z.infer<typeof attendeeSubmissionSchema>;

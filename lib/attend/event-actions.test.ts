@@ -152,4 +152,44 @@ describe("submitEventAttendance — certificate email recipient + hardening", ()
     expect(uploadToStorage).not.toHaveBeenCalled();
     expect(prismaMock.issuedCertificate.update).not.toHaveBeenCalled();
   });
+
+  it("returns per-field errors on invalid input without loading the event", async () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const result = await submitEventAttendance(buildInput({ attendeeEmail: "nope" }));
+
+      expect(result.status).toBe("invalid");
+      if (result.status !== "invalid") return;
+      expect(result.fieldErrors.attendeeEmail?.length).toBeGreaterThan(0);
+      expect(loadEventByToken).not.toHaveBeenCalled();
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("falls back to LIVE In Person when courseFormat is absent (stale client)", async () => {
+    // Unique token: the unmocked in-memory rate limiter allows 5 per token.
+    const result = await submitEventAttendance(
+      buildInput({ courseFormat: undefined, token: "55555555-5555-5555-5555-555555555555" }),
+    );
+
+    expect(result).toEqual({ status: "passed", certificateId: "cert-evt-123" });
+    expect(renderEventCertificatePdf.mock.calls[0][0].deliveryMethod).toBe("LIVE In Person");
+  });
+
+  it("returns an answers field error when answers do not match the assembled quiz", async () => {
+    // Two assembled questions vs one submitted answer -> assembly mismatch.
+    assembleForSubmit.mockReturnValue({
+      ...ASSEMBLED,
+      questions: [...ASSEMBLED.questions, ...ASSEMBLED.questions],
+    });
+
+    const result = await submitEventAttendance(
+      buildInput({ token: "66666666-6666-6666-6666-666666666666" }),
+    );
+
+    expect(result.status).toBe("invalid");
+    if (result.status !== "invalid") return;
+    expect(result.fieldErrors.answers?.length).toBeGreaterThan(0);
+  });
 });

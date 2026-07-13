@@ -1,5 +1,20 @@
 import { describe, it, expect } from "vitest";
-import { attendeeSubmissionSchema } from "@/lib/attend/schemas";
+import {
+  attendeeSubmissionSchema,
+  flattenFieldErrors,
+  isRecentCompletionDate,
+} from "@/lib/attend/schemas";
+
+const DAY = 864e5;
+// yyyy-mm-dd for the UTC calendar date msFromNow from now.
+const isoUTC = (msFromNow: number) => new Date(Date.now() + msFromNow).toISOString().slice(0, 10);
+// yyyy-mm-dd for the same UTC month/day `years` back.
+const isoYearsAgoUTC = (years: number) => {
+  const n = new Date();
+  return new Date(Date.UTC(n.getUTCFullYear() - years, n.getUTCMonth(), n.getUTCDate(), 12))
+    .toISOString()
+    .slice(0, 10);
+};
 
 const valid = {
   token: "11111111-1111-1111-1111-111111111111",
@@ -9,7 +24,7 @@ const valid = {
   licenseType: "RDH",
   licenseStates: ["TX"],
   courseFormat: "LIVE In Person",
-  completionDate: "2026-01-15",
+  completionDate: isoUTC(-30 * DAY),
   affirmed: true,
   answers: [
     { type: "TF", answer: "True" },
@@ -44,10 +59,29 @@ describe("attendeeSubmissionSchema", () => {
     ).toBe(false);
   });
 
-  it("rejects a missing course format", () => {
+  it("accepts a missing course format (stale client bundle; action falls back)", () => {
     const { courseFormat: _omit, ...withoutFormat } = valid;
     void _omit;
-    expect(attendeeSubmissionSchema.safeParse(withoutFormat).success).toBe(false);
+    const parsed = attendeeSubmissionSchema.safeParse(withoutFormat);
+    expect(parsed.success).toBe(true);
+    if (parsed.success) expect(parsed.data.courseFormat).toBeUndefined();
+  });
+
+  it("trims surrounding whitespace from name and email", () => {
+    const parsed = attendeeSubmissionSchema.safeParse({
+      ...valid,
+      attendeeName: " Jane Hygienist ",
+      attendeeEmail: " jane@example.com ",
+    });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.attendeeName).toBe("Jane Hygienist");
+      expect(parsed.data.attendeeEmail).toBe("jane@example.com");
+    }
+  });
+
+  it("rejects a whitespace-only name", () => {
+    expect(attendeeSubmissionSchema.safeParse({ ...valid, attendeeName: "   " }).success).toBe(false);
   });
 
   it("rejects when attendance is not affirmed", () => {
@@ -58,6 +92,38 @@ describe("attendeeSubmissionSchema", () => {
     expect(
       attendeeSubmissionSchema.safeParse({ ...valid, completionDate: "2099-01-01" }).success,
     ).toBe(false);
+  });
+
+  it("accepts today's date in UTC and in the client's local timezone", () => {
+    // Replicates the form's todayISO() (local calendar date), which can be one
+    // day off from the UTC date depending on the attendee's timezone.
+    const t = new Date();
+    const localToday = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")}`;
+    for (const completionDate of [isoUTC(0), localToday]) {
+      expect(attendeeSubmissionSchema.safeParse({ ...valid, completionDate }).success).toBe(true);
+    }
+  });
+
+  it("accepts tomorrow's UTC date (attendee ahead of UTC) but not two days ahead", () => {
+    expect(
+      attendeeSubmissionSchema.safeParse({ ...valid, completionDate: isoUTC(DAY) }).success,
+    ).toBe(true);
+    expect(
+      attendeeSubmissionSchema.safeParse({ ...valid, completionDate: isoUTC(2 * DAY) }).success,
+    ).toBe(false);
+  });
+
+  it("accepts a date exactly 10 years ago but rejects 11 years ago", () => {
+    expect(
+      attendeeSubmissionSchema.safeParse({ ...valid, completionDate: isoYearsAgoUTC(10) }).success,
+    ).toBe(true);
+    expect(
+      attendeeSubmissionSchema.safeParse({ ...valid, completionDate: isoYearsAgoUTC(11) }).success,
+    ).toBe(false);
+  });
+
+  it("rejects an impossible calendar date", () => {
+    expect(isRecentCompletionDate("2026-02-30")).toBe(false);
   });
 
   it("rejects a malformed completion date", () => {
@@ -80,5 +146,21 @@ describe("attendeeSubmissionSchema", () => {
 
   it("rejects a non-email", () => {
     expect(attendeeSubmissionSchema.safeParse({ ...valid, attendeeEmail: "nope" }).success).toBe(false);
+  });
+});
+
+describe("flattenFieldErrors", () => {
+  it("keys errors by field with static messages and never echoes the input", () => {
+    const parsed = attendeeSubmissionSchema.safeParse({
+      ...valid,
+      attendeeEmail: "not-an-email-value",
+      completionDate: "2099-01-01",
+    });
+    expect(parsed.success).toBe(false);
+    if (parsed.success) return;
+    const fieldErrors = flattenFieldErrors(parsed.error);
+    expect(fieldErrors.attendeeEmail?.length).toBeGreaterThan(0);
+    expect(fieldErrors.completionDate?.length).toBeGreaterThan(0);
+    expect(JSON.stringify(fieldErrors)).not.toContain("not-an-email-value");
   });
 });
