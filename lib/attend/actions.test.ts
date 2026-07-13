@@ -171,4 +171,47 @@ describe("submitAttendance — certificate email recipient + hardening", () => {
     expect(uploadToStorage).not.toHaveBeenCalled();
     expect(prismaMock.issuedCertificate.update).not.toHaveBeenCalled();
   });
+
+  it("returns per-field errors on invalid input without touching the DB or echoing values", async () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const result = await submitAttendance(buildInput({ attendeeEmail: "not-an-email-value" }));
+
+      expect(result.status).toBe("invalid");
+      if (result.status !== "invalid") return;
+      expect(result.fieldErrors.attendeeEmail?.length).toBeGreaterThan(0);
+      // Static schema messages only — never the submitted value.
+      expect(JSON.stringify(result.fieldErrors)).not.toContain("not-an-email-value");
+      // Validation fails before any DB read or write.
+      expect(prismaMock.accreditedCourse.findUnique).not.toHaveBeenCalled();
+      expect(prismaMock.issuedCertificate.create).not.toHaveBeenCalled();
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("falls back to the course's declared format when courseFormat is absent (stale client)", async () => {
+    // Unique token: the unmocked in-memory rate limiter allows 5 per token.
+    const result = await submitAttendance(
+      buildInput({ courseFormat: undefined, token: "33333333-3333-3333-3333-333333333333" }),
+    );
+
+    expect(result).toEqual({ status: "passed", certificateId: "cert-123" });
+    // The mocked course declares "Online (self-study)" (non-canonical), which
+    // courseFormatLabel passes through trimmed.
+    expect(renderCertificatePdf.mock.calls[0][0].deliveryMethod).toBe("Online (self-study)");
+  });
+
+  it("stores completedAt at noon UTC of the entered date", async () => {
+    const input = buildInput({
+      answers: FAILING_ANSWERS,
+      token: "44444444-4444-4444-4444-444444444444",
+    });
+    await submitAttendance(input);
+
+    expect(prismaMock.issuedCertificate.create).toHaveBeenCalledTimes(1);
+    expect(prismaMock.issuedCertificate.create.mock.calls[0][0].data.completedAt).toEqual(
+      new Date(`${input.completionDate}T12:00:00Z`),
+    );
+  });
 });

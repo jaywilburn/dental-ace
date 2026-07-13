@@ -3,6 +3,7 @@
 import { headers } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { eventAttendeeSubmissionSchema } from "@/lib/attend/event-schemas";
+import { flattenFieldErrors } from "@/lib/attend/schemas";
 import { loadEventByToken, assembleForSubmit } from "@/lib/attend/event-quiz";
 import { scoreEventQuiz } from "@/lib/attend/event-scoring";
 import type { AttendeeAnswer } from "@/lib/attend/scoring";
@@ -38,16 +39,24 @@ export type EventAttendResult =
   | { status: "rate_limited"; retryAfterMs: number }
   | { status: "balance_exhausted" }
   | { status: "event_inactive" }
-  | { status: "invalid" };
+  | { status: "invalid"; fieldErrors: Record<string, string[]> };
 
 export async function submitEventAttendance(input: unknown): Promise<EventAttendResult> {
   const parsed = eventAttendeeSubmissionSchema.safeParse(input);
-  if (!parsed.success) return { status: "invalid" };
+  if (!parsed.success) {
+    const fieldErrors = flattenFieldErrors(parsed.error);
+    // Field names + static schema messages only, never submitted values.
+    console.error("[submitEventAttendance] invalid submission", JSON.stringify(fieldErrors));
+    return { status: "invalid", fieldErrors };
+  }
   const sub = parsed.data;
   const email = sub.attendeeEmail.toLowerCase();
-  const completedAt = new Date(`${sub.completionDate}T12:00:00`);
+  // Parsed at noon UTC so the calendar date is stable regardless of server
+  // timezone (matches the legacy-migration rows).
+  const completedAt = new Date(`${sub.completionDate}T12:00:00Z`);
   // The attendee's chosen Course Format becomes the event certificate's
-  // deliveryMethod (defaults to the event's live format if somehow absent).
+  // deliveryMethod. A stale pre-deploy client bundle may omit it; fall back to
+  // the event's live format.
   const certFormat = sub.courseFormat ?? "LIVE In Person";
 
   const h = await headers();
@@ -63,7 +72,12 @@ export async function submitEventAttendance(input: unknown): Promise<EventAttend
 
   const assembled = assembleForSubmit(event, sub.selectedSessionIds);
   if (!assembled || assembled.questions.length !== sub.answers.length) {
-    return { status: "invalid" };
+    return {
+      status: "invalid",
+      fieldErrors: {
+        answers: ["Your answers did not match the selected sessions. Please review your selections and answers."],
+      },
+    };
   }
 
   // Prior attempts for (event, email).
@@ -183,7 +197,7 @@ export async function submitEventAttendance(input: unknown): Promise<EventAttend
     courseIdNumber: event.eventIdNumber ?? "ACE-EVT",
     certificateId,
     ceHours: assembled.hours,
-    completedAt: completedAt.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }),
+    completedAt: completedAt.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric", timeZone: "UTC" }),
     verifyUrl: `${appBase}/attend/event/${sub.token}`,
     // Signed claim link (mailed only to attendeeEmail, so clicking it proves
     // inbox control). Replaces the old auto-push into any matching account,

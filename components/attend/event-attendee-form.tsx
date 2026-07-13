@@ -4,6 +4,7 @@ import { useState } from "react";
 import { submitEventAttendance, type EventAttendResult } from "@/lib/attend/event-actions";
 import { COURSE_FORMATS } from "@/lib/forms/application/schemas";
 import { JurisdictionOptions } from "@/components/jurisdiction-options";
+import { ErrorSummary, FieldError, toDisplayErrors } from "@/components/attend/form-errors";
 
 type CourseFormat = (typeof COURSE_FORMATS)[number];
 
@@ -26,6 +27,22 @@ export type EventPublicForm =
   | { mode: "selective"; items: Item[] };
 
 type Answer = { type: "TF"; answer: "True" | "False" } | { type: "MC"; answer: number };
+
+// Which stage each server-validated field lives on, so an invalid submission
+// can jump back to the first stage the attendee needs to fix. Resolved against
+// the mode-dependent steps array at submit time.
+const FIELD_STAGE: Record<string, string> = {
+  attendeeName: "identity",
+  attendeeEmail: "identity",
+  completionDate: "identity",
+  courseFormat: "identity",
+  licenseNumber: "identity",
+  licenseType: "identity",
+  licenseStates: "identity",
+  affirmed: "affirm",
+  selectedSessionIds: "select",
+  answers: "quiz",
+};
 
 export function EventAttendeeForm({
   token,
@@ -57,6 +74,18 @@ export function EventAttendeeForm({
   const [answers, setAnswers] = useState<Record<string, Answer>>({});
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<EventAttendResult | null>(null);
+  // Server-side validation errors keyed by field. Non-empty only after an
+  // "invalid" submit; the form stays mounted so the attendee can fix and retry.
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
+
+  function clearFieldError(key: string) {
+    setFieldErrors((prev) => {
+      if (!(key in prev)) return prev;
+      const { [key]: _drop, ...rest } = prev;
+      void _drop;
+      return rest;
+    });
+  }
 
   const cleanStates = Array.from(
     new Set(licenseStates.map((s) => s.trim().toUpperCase()).filter(Boolean)),
@@ -80,6 +109,7 @@ export function EventAttendeeForm({
 
   async function onSubmit() {
     setSubmitting(true);
+    setFieldErrors({});
     try {
       const ordered = active; // already in item order
       const res = await submitEventAttendance({
@@ -95,6 +125,19 @@ export function EventAttendeeForm({
         affirmed,
         answers: ordered.map((a) => answers[a.key]),
       });
+      if (res.status === "invalid") {
+        // Keep the form mounted with everything the attendee entered and jump
+        // to the first stage that has a failing field (token/unknown-only
+        // errors stay on review; the summary shows a generic retry message).
+        setFieldErrors(res.fieldErrors);
+        const failingSteps = Object.keys(res.fieldErrors)
+          // indexOf is -1 for unknown fields and for stages the current mode
+          // does not have (e.g. "select" in full mode); both filter out.
+          .map((k) => (steps as readonly string[]).indexOf(FIELD_STAGE[k] ?? ""))
+          .filter((i) => i >= 0);
+        if (failingSteps.length) setStep(Math.min(...failingSteps));
+        return;
+      }
       setResult(res);
     } finally {
       setSubmitting(false);
@@ -105,19 +148,42 @@ export function EventAttendeeForm({
 
   return (
     <div className="mt-6 space-y-4">
+      <ErrorSummary fieldErrors={toDisplayErrors(fieldErrors)} />
       {stage === "identity" && (
         <section className="space-y-3">
-          <Field label="Full name" value={name} onChange={setName} />
-          <Field label="Email" value={email} onChange={setEmail} type="email" />
+          <Field
+            label="Full name"
+            value={name}
+            onChange={(v) => {
+              setName(v);
+              clearFieldError("attendeeName");
+            }}
+            error={fieldErrors.attendeeName}
+          />
+          <Field
+            label="Email"
+            value={email}
+            onChange={(v) => {
+              setEmail(v);
+              clearFieldError("attendeeEmail");
+            }}
+            type="email"
+            error={fieldErrors.attendeeEmail}
+          />
           <label className="block text-sm">
             <span className="text-slate-700">Date you completed the event</span>
             <input
               type="date"
               value={completedOn}
               max={today || undefined}
-              onChange={(e) => setCompletedOn(e.target.value)}
-              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+              onChange={(e) => {
+                setCompletedOn(e.target.value);
+                clearFieldError("completionDate");
+              }}
+              aria-invalid={fieldErrors.completionDate ? true : undefined}
+              className={`mt-1 w-full rounded-md border px-3 py-2 text-sm ${fieldErrors.completionDate ? "border-red-400" : "border-slate-300"}`}
             />
+            <FieldError messages={fieldErrors.completionDate} />
           </label>
           <label className="block text-sm">
             <span className="text-slate-700">Course format</span>
@@ -148,12 +214,17 @@ export function EventAttendeeForm({
             <span className="block text-sm text-slate-700">State of licensure</span>
             <select
               value={licenseStates[0] ?? ""}
-              onChange={(e) => setLicenseStates((p) => p.map((s, idx) => (idx === 0 ? e.target.value : s)))}
-              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+              onChange={(e) => {
+                setLicenseStates((p) => p.map((s, idx) => (idx === 0 ? e.target.value : s)));
+                clearFieldError("licenseStates");
+              }}
+              aria-invalid={fieldErrors.licenseStates ? true : undefined}
+              className={`w-full rounded-md border px-3 py-2 text-sm ${fieldErrors.licenseStates ? "border-red-400" : "border-slate-300"}`}
             >
               <option value="">Select your state…</option>
               <JurisdictionOptions />
             </select>
+            <FieldError messages={fieldErrors.licenseStates} />
           </div>
           <div className="space-y-1">
             <span className="block text-sm text-slate-700">Are you licensed in more than one state?</span>
@@ -208,9 +279,18 @@ export function EventAttendeeForm({
       {stage === "affirm" && (
         <section className="space-y-3">
           <label className="flex items-start gap-2 text-sm text-slate-700">
-            <input type="checkbox" checked={affirmed} onChange={(e) => setAffirmed(e.target.checked)} className="mt-1" />
+            <input
+              type="checkbox"
+              checked={affirmed}
+              onChange={(e) => {
+                setAffirmed(e.target.checked);
+                clearFieldError("affirmed");
+              }}
+              className="mt-1"
+            />
             <span>I affirm that I attended and completed this event{selective ? "'s sessions I select below" : " in full"}.</span>
           </label>
+          <FieldError messages={fieldErrors.affirmed} />
           <NavButtons onBack={() => setStep(0)} onNext={() => setStep(2)} nextDisabled={!affirmed} />
         </section>
       )}
@@ -234,6 +314,7 @@ export function EventAttendeeForm({
               </span>
             </label>
           ))}
+          <FieldError messages={fieldErrors.selectedSessionIds} />
           <NavButtons onBack={() => setStep(1)} onNext={() => setStep(3)} nextDisabled={selectedIds.length === 0} />
         </section>
       )}
@@ -262,6 +343,7 @@ export function EventAttendeeForm({
                   ))}
             </fieldset>
           ))}
+          <FieldError messages={fieldErrors.answers} />
           <NavButtons onBack={() => setStep(selective ? 2 : 1)} onNext={() => setStep(selective ? 4 : 3)} nextDisabled={!allAnswered} />
         </section>
       )}
@@ -317,11 +399,30 @@ function todayISO(): string {
   return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")}`;
 }
 
-function Field({ label, value, onChange, type = "text" }: { label: string; value: string; onChange: (v: string) => void; type?: string }) {
+function Field({
+  label,
+  value,
+  onChange,
+  type = "text",
+  error,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  type?: string;
+  error?: string[];
+}) {
   return (
     <label className="block text-sm">
       <span className="text-slate-700">{label}</span>
-      <input type={type} value={value} onChange={(e) => onChange(e.target.value)} className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" />
+      <input
+        type={type}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        aria-invalid={error ? true : undefined}
+        className={`mt-1 w-full rounded-md border px-3 py-2 text-sm ${error ? "border-red-400" : "border-slate-300"}`}
+      />
+      <FieldError messages={error} />
     </label>
   );
 }

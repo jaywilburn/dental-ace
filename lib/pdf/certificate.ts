@@ -136,5 +136,7 @@ export async function renderCertificatePdf(
 }
 
 function formatDate(d: Date): string {
-  return d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+  // completedAt is stored at noon UTC; format in UTC so the calendar date on
+  // the certificate never shifts with the render host's timezone.
+  return d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric", timeZone: "UTC" });
 }

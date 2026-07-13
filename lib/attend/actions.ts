@@ -3,7 +3,9 @@
 import { headers } from "next/headers";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import { attendeeSubmissionSchema } from "@/lib/attend/schemas";
+import { attendeeSubmissionSchema, flattenFieldErrors } from "@/lib/attend/schemas";
+import { courseFormatLabel } from "@/lib/pdf/course-format-label";
+import { COURSE_FORMATS } from "@/lib/forms/application/schemas";
 import { scoreQuiz, type AttendeeAnswer } from "@/lib/attend/scoring";
 import { decideAttempt } from "@/lib/attend/lockout";
 import { issueCertificateTx, CertBalanceExhaustedError } from "@/lib/attend/issue";
@@ -43,7 +45,7 @@ export type AttendResult =
   | { status: "rate_limited"; retryAfterMs: number }
   | { status: "balance_exhausted" }
   | { status: "course_inactive" }
-  | { status: "invalid" };
+  | { status: "invalid"; fieldErrors: Record<string, string[]> };
 
 export type CorrectAnswer =
   | { type: "TF"; correctAnswer: "True" | "False" }
@@ -59,12 +61,18 @@ function correctAnswersFor(questions: QuizQuestion[]): CorrectAnswer[] {
 
 export async function submitAttendance(input: unknown): Promise<AttendResult> {
   const parsed = attendeeSubmissionSchema.safeParse(input);
-  if (!parsed.success) return { status: "invalid" };
+  if (!parsed.success) {
+    const fieldErrors = flattenFieldErrors(parsed.error);
+    // Field names + static schema messages only, never submitted values.
+    console.error("[submitAttendance] invalid submission", JSON.stringify(fieldErrors));
+    return { status: "invalid", fieldErrors };
+  }
   const sub = parsed.data;
   const email = sub.attendeeEmail.toLowerCase();
-  // Attendee-entered course completion date. Parsed at noon so the calendar
-  // date is stable regardless of server timezone. Drives the cert + ProTrack.
-  const completedAt = new Date(`${sub.completionDate}T12:00:00`);
+  // Attendee-entered course completion date. Parsed at noon UTC so the calendar
+  // date is stable regardless of server timezone (matches the legacy-migration
+  // rows). Drives the cert + ProTrack.
+  const completedAt = new Date(`${sub.completionDate}T12:00:00Z`);
 
   // Rate limit: 5 submissions / 10 min per IP+token.
   const h = await headers();
@@ -92,9 +100,10 @@ export async function submitAttendance(input: unknown): Promise<AttendResult> {
   const questions = quizParsed.data;
 
   // The attendee's chosen Course Format becomes the certificate's deliveryMethod
-  // (drives the cert's "Course Format" line + ProTrack sync). Falls back to the
-  // course's declared format if somehow absent (the schema requires it).
-  const certFormat = sub.courseFormat ?? course.application.deliveryMethod;
+  // (drives the cert's "Course Format" line + ProTrack sync). A stale pre-deploy
+  // client bundle may omit it; fall back to the course's declared format.
+  const certFormat =
+    sub.courseFormat ?? courseFormatLabel(course.application.deliveryMethod) ?? COURSE_FORMATS[0];
 
   // Prior attempts for (course, lowercased email).
   const prior = await prisma.issuedCertificate.findMany({
@@ -229,6 +238,7 @@ export async function submitAttendance(input: unknown): Promise<AttendResult> {
       month: "long",
       day: "numeric",
       year: "numeric",
+      timeZone: "UTC",
     }),
     verifyUrl: `${appBase}/attend/${sub.token}`,
     // Signed claim link (mailed only to attendeeEmail, so clicking it proves
