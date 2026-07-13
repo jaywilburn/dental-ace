@@ -17,7 +17,7 @@ export default async function SetPasswordPage({
   return (
     <main className="mx-auto max-w-sm px-4 py-16">
       <h1 className="text-lg font-semibold text-slate-900">Set your password</h1>
-      <p className="mt-2 text-sm text-slate-600">Choose a password for your DentalACE staff account.</p>
+      <p className="mt-2 text-sm text-slate-600">Choose a password for your DentalACE One account.</p>
       {error ? (
         <p className="mt-3 rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
       ) : null}

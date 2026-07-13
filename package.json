@@ -17,6 +17,8 @@
     "reconcile:certs": "tsx scripts/reconcile-cert-balances.ts",
     "provision:legacy": "tsx scripts/provision-legacy-accounts.ts",
     "invite:legacy": "tsx scripts/send-legacy-invites.ts",
+    "provision:legacy-providers": "tsx scripts/provision-legacy-providers.ts",
+    "invite:legacy-providers": "tsx scripts/send-legacy-provider-invites.ts",
     "build:worksheet": "tsx scripts/build-application-worksheet.ts",
     "test": "vitest run",
     "test:watch": "vitest"
