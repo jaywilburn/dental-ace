@@ -187,21 +187,44 @@ export function DetailGrid({ rows }: { rows: { label: string; value: string }[] 
         margin: "8px 0 18px 0",
       }}
     >
-      {rows.map((row) => (
-        <div
-          key={row.label}
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            fontSize: 13,
-            padding: "5px 0",
-            color: colors.textMid,
-          }}
-        >
-          <span style={{ color: colors.textMuted }}>{row.label}</span>
-          <span style={{ color: colors.navy, fontWeight: 600 }}>{row.value}</span>
-        </div>
-      ))}
+      {/* Table layout, not flexbox: email clients (Gmail, Outlook, Apple Mail)
+          drop display:flex / justify-content, which collapsed each label and
+          value together with no gap. A two-column table with right padding on
+          the label cell guarantees the separation in every client and aligns
+          the values into a column. */}
+      <table
+        cellPadding={0}
+        cellSpacing={0}
+        style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}
+      >
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.label}>
+              <td
+                style={{
+                  padding: "5px 16px 5px 0",
+                  color: colors.textMuted,
+                  verticalAlign: "top",
+                  whiteSpace: "nowrap",
+                  width: "1%",
+                }}
+              >
+                {row.label}
+              </td>
+              <td
+                style={{
+                  padding: "5px 0",
+                  color: colors.navy,
+                  fontWeight: 600,
+                  verticalAlign: "top",
+                }}
+              >
+                {row.value}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </Section>
   );
 }
