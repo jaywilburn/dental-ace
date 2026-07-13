@@ -3,6 +3,7 @@ import { PageHeader } from "@/components/portal-shell";
 import { requireStaff } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { grantAppCredits, adjustCertBalance } from "@/lib/admin/billing-overrides";
+import { renameCompany } from "@/lib/admin/company-rename";
 
 export default async function AdminCompanyDetailPage({
   params,
@@ -32,7 +33,7 @@ export default async function AdminCompanyDetailPage({
       <PageHeader title={company.name} subtitle="Company overrides (append-only)" />
       {ok ? (
         <div className="mb-4 rounded-md border border-emerald-400 bg-emerald-50 px-4 py-2.5 text-[13px] text-emerald-700">
-          Override applied.
+          {ok === "renamed" ? "Company name updated." : "Override applied."}
         </div>
       ) : null}
       {error ? (
@@ -85,6 +86,17 @@ export default async function AdminCompanyDetailPage({
           </div>
         </div>
       ) : null}
+
+      <form action={renameCompany} className="mt-5 rounded-lg border border-border bg-white p-4 space-y-3">
+        <input type="hidden" name="companyId" value={company.id} />
+        <p className="text-[12px] font-semibold text-navy">Rename company</p>
+        <input type="text" name="name" defaultValue={company.name} required minLength={2} maxLength={200}
+          className="w-full rounded-md border border-border px-3 py-2 text-[13px]" />
+        <p className="text-[11px] text-text-muted">
+          Updates the name everywhere it appears, including ProTrack records synced from this company&apos;s certificates. The change is recorded in the audit log.
+        </p>
+        <button type="submit" className="rounded-md bg-navy px-3 py-1.5 text-[12px] font-semibold text-white">Rename</button>
+      </form>
 
       <div className="mt-5 grid gap-4 sm:grid-cols-2">
         <form action={grantAppCredits} className="rounded-lg border border-border bg-white p-4 space-y-3">
