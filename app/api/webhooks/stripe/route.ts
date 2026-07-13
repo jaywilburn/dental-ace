@@ -137,7 +137,12 @@ export async function POST(request: NextRequest) {
         if (!sub.metadata?.userId && session.client_reference_id) {
           sub.metadata = { ...(sub.metadata ?? {}), userId: session.client_reference_id };
         }
-        await activateFromSubscription(sub);
+        const activated = await activateFromSubscription(sub);
+        if (!activated) {
+          console.error(
+            `[stripe-webhook] ${event.id}: subscription ${sub.id} has no userId metadata; Pro not activated`,
+          );
+        }
       } else if (session.mode === "payment") {
         const skuId = session.metadata?.skuId;
         const companyId = session.client_reference_id;
@@ -145,7 +150,7 @@ export async function POST(request: NextRequest) {
         // metadata, set by createCheckoutSession when real mode is wired.
         const quantity = Number(session.metadata?.quantity ?? "1") || 1;
         if (skuId && companyId) {
-          await handleCheckoutCompleted({
+          const outcome = await handleCheckoutCompleted({
             skuId,
             companyId,
             quantity,
@@ -155,14 +160,33 @@ export async function POST(request: NextRequest) {
                 ? session.payment_intent
                 : null,
           });
+          if (outcome.ok) {
+            console.log(
+              `[stripe-webhook] ${event.id} ${outcome.status}: ${skuId} x${quantity} -> company ${companyId}`,
+            );
+          } else {
+            console.error(
+              `[stripe-webhook] ${event.id} dropped (${outcome.status}): ${skuId} x${quantity} -> company ${companyId}`,
+            );
+          }
+        } else {
+          // Sessions created outside the app (Payment Link, Dashboard) carry
+          // no skuId/client_reference_id and can't be fulfilled automatically.
+          console.error(
+            `[stripe-webhook] ${event.id} unfulfillable: missing ${skuId ? "" : "metadata.skuId "}${companyId ? "" : "client_reference_id"} (session ${session.id})`,
+          );
         }
       }
       break;
     }
     case "customer.subscription.updated": {
-      await activateFromSubscription(
-        event.data.object as unknown as StripeSubLike,
-      );
+      const sub = event.data.object as unknown as StripeSubLike;
+      const activated = await activateFromSubscription(sub);
+      if (!activated) {
+        console.error(
+          `[stripe-webhook] ${event.id}: subscription ${sub.id} has no userId metadata; update not synced`,
+        );
+      }
       break;
     }
     case "customer.subscription.deleted": {

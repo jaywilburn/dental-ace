@@ -97,6 +97,7 @@ DentalACE One is **one platform**; features are gated by **per-user entitlements
 - **Idempotency** — every webhook handler dedupes on `event.id`, persisted as `billing_transactions.stripeEventId` (unique). `INSERT ... ON CONFLICT DO NOTHING` is the idempotency check; the balance increment only runs if the insert succeeded.
 - **Mock mode** — when `STRIPE_SECRET_KEY` is absent (or `STRIPE_MOCK_MODE=true`), `lib/billing/checkout-mode.ts` reports mock mode. The Buy pages route to `/dev/stripe-mock-checkout`, which POSTs to `/api/dev/mock-stripe-webhook`. Both routes call into the same `handleCheckoutCompleted` in `lib/billing/webhook-core.ts` that the real `/api/webhooks/stripe` will. When a real Stripe account lands, only env vars + the session-creation function change.
 - **Local testing (real mode)** — `stripe listen --forward-to localhost:3000/api/webhooks/stripe`.
+- **Live webhook destination must be `https://www.dentalace.org/api/webhooks/stripe`** (the canonical serving domain). The apex `dentalace.org` 308-redirects to `www`, and Stripe never follows redirects, so an apex-pointed endpoint fails every delivery while checkout still succeeds (shipped broken 2026-06-30, caught 2026-07-13). When changing the endpoint, **update the URL in place** — deleting/recreating rotates the signing secret and invalidates `STRIPE_WEBHOOK_SECRET` on Vercel.
 - **Stripe Connect** — AADB is the master account, CE Exchange is the connected recipient. Phase 1 split is a fixed 75/25 (CE Exchange / AADB) automated via transfers.
 
 ### Events (multi-session Live Event)
