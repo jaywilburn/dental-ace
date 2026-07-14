@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   classifyCertExclusion,
+  courseExpiresAtIso,
   formatToDelivery,
   normalizeLicenseStates,
   occupationToLicenseType,
@@ -159,5 +160,16 @@ describe("classifyCertExclusion", () => {
     expect(normal.reason).toBeNull();
     // a storypath.us row NOT in the curated id list is a real attendee -> kept
     expect(classifyCertExclusion({ id: 77777, attendeeName: "Real Attendee", attendeeEmail: "someone@storypath.us" }).excluded).toBe(false);
+  });
+});
+
+describe("courseExpiresAtIso", () => {
+  it("adds 3 years to the approval date", () => {
+    expect(courseExpiresAtIso("2024-01-01")).toBe("2027-01-01");
+    expect(courseExpiresAtIso("2023-09-19")).toBe("2026-09-19");
+    expect(courseExpiresAtIso(PACKAGE_DATE)).toBe("2029-06-12");
+  });
+  it("rolls a leap day forward to Mar 1 when the target year has no Feb 29", () => {
+    expect(courseExpiresAtIso("2024-02-29")).toBe("2027-03-01");
   });
 });

@@ -17,6 +17,26 @@ import { DELIVERY_FORMATS, CATEGORIES } from "../../lib/forms/application/schema
 // when a row has no usable submitted/completed date.
 export const PACKAGE_DATE = "2026-06-12";
 
+// Bad source dates corrected after import: course 78 ("2024 Dental Beauty
+// Boss") arrived with an approved_at of 1900-01-14; the title dates it to 2024
+// (assumption confirmed 2026-07-13). Keyed by course legacyId, value is the
+// corrected ISO approval date. Applied wherever approvedAt is derived so
+// extracts, loads, and backfills all converge on the same fix.
+export const LEGACY_APPROVED_AT_OVERRIDES: Record<number, string> = {
+  78: "2024-01-01",
+};
+
+/**
+ * Course validity window: approvedAt + 3 years, the same rule live approvals
+ * use (lib/reviewer/actions.ts). ISO YYYY-MM-DD in and out; the noon-UTC
+ * anchor matches the importer's isoDate() convention.
+ */
+export function courseExpiresAtIso(approvedAtIso: string): string {
+  const d = new Date(`${approvedAtIso}T12:00:00Z`);
+  d.setUTCFullYear(d.getUTCFullYear() + 3);
+  return d.toISOString().slice(0, 10);
+}
+
 // ---------------------------------------------------------------------------
 // Jurisdiction (state / province) full-name -> 2-char code
 // ---------------------------------------------------------------------------

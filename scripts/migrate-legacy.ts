@@ -34,7 +34,9 @@ import { PrismaClient, Prisma } from "@prisma/client";
 import { parseMigrationSql, type RawRow } from "./legacy/parse-source";
 import {
   classifyCertExclusion,
+  courseExpiresAtIso,
   formatToDelivery,
+  LEGACY_APPROVED_AT_OVERRIDES,
   normalizeLicenseStates,
   occupationToLicenseType,
   PACKAGE_DATE,
@@ -64,7 +66,7 @@ type OutCourse = {
   courseType: string | null;
   deliveryMethod: string | null;
   approvedAt: string; // ISO date (YYYY-MM-DD)
-  expiresAt: string; // == approvedAt: already expired, so the attend link is closed
+  expiresAt: string; // approvedAt + 3 years, the same validity window as live approvals
   certsIssuedCount: number;
 };
 
@@ -200,7 +202,7 @@ function extract(sourcePath: string): { bundle: Bundle; report: string } {
     const companyLegacyId = reqNum(row.company_id, "company_id", `course ${legacyId}`);
     const legacyCourseId = row.legacy_course_id ? row.legacy_course_id.trim() : null;
     const courseTitle = (row.course_name ?? "").trim() || `Legacy course ${legacyCourseId ?? legacyId}`;
-    const approvedAt = perCourseApproved.get(legacyId) ?? PACKAGE_DATE;
+    const approvedAt = LEGACY_APPROVED_AT_OVERRIDES[legacyId] ?? perCourseApproved.get(legacyId) ?? PACKAGE_DATE;
     return {
       legacyId,
       companyLegacyId,
@@ -211,7 +213,7 @@ function extract(sourcePath: string): { bundle: Bundle; report: string } {
       courseType: subjectToCourseType(row.subject_matter),
       deliveryMethod: formatToDelivery(row.course_format),
       approvedAt,
-      expiresAt: approvedAt, // already expired -> public attend link inactive (historical)
+      expiresAt: courseExpiresAtIso(approvedAt),
       certsIssuedCount: perCourseCount.get(legacyId) ?? 0,
     };
   });
@@ -346,8 +348,9 @@ async function runLoad(prisma: PrismaClient, bundle: Bundle): Promise<void> {
   }
 
   // 2) Courses: a stub CourseApplication (holds title/hours/type/delivery) + an
-  //    AccreditedCourse (dedup on legacyId). expiresAt == approvedAt keeps the
-  //    public attend link inactive (historical record only).
+  //    AccreditedCourse (dedup on legacyId). Dates are computed here (approvedAt
+  //    override + the "+ 3 years" validity rule) rather than trusted from
+  //    courses.json, so a re-run converges even over a stale committed JSON.
   const existingCourses = await prisma.accreditedCourse.findMany({
     where: { legacyId: { not: null } },
     select: { id: true, legacyId: true, applicationId: true },
@@ -357,8 +360,9 @@ async function runLoad(prisma: PrismaClient, bundle: Bundle): Promise<void> {
   for (const co of bundle.courses) {
     const cid = companyId.get(co.companyLegacyId);
     if (!cid) throw new Error(`Course ${co.legacyId} -> company ${co.companyLegacyId} not loaded`);
-    const approvedAt = isoDate(co.approvedAt);
-    const expiresAt = isoDate(co.expiresAt);
+    const approvedIso = LEGACY_APPROVED_AT_OVERRIDES[co.legacyId] ?? co.approvedAt;
+    const approvedAt = isoDate(approvedIso);
+    const expiresAt = isoDate(courseExpiresAtIso(approvedIso));
     const appData: Prisma.InputJsonValue = {
       legacy: true,
       legacyCourseId: co.legacyCourseId,
