@@ -8,13 +8,14 @@ import { prisma } from "@/lib/prisma";
 */
 export default async function ReviewerApprovedPage() {
   await requireStaff("REVIEWER");
+  // No row cap: this is the only staff-wide course list, and a silent cap
+  // hid the oldest (all-legacy) courses once the catalog passed 100 rows.
   const courses = await prisma.accreditedCourse.findMany({
     include: {
       company: { select: { name: true } },
       application: { select: { reviewedBy: { select: { email: true } } } },
     },
     orderBy: { approvedAt: "desc" },
-    take: 100,
   });
 
   return (
