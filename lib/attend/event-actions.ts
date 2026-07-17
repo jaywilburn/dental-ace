@@ -172,6 +172,7 @@ export async function submitEventAttendance(input: unknown): Promise<EventAttend
       // Matches the deliveryMethod written to the event cert row
       // (event-issue.ts / the FAIL path above): the attendee's chosen format.
       deliveryMethod: certFormat,
+      licenseNumber: sub.licenseNumber ?? null,
     });
   } catch (err) {
     console.error("[submitEventAttendance] cert PDF render failed", err);
