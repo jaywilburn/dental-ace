@@ -242,7 +242,9 @@ export default async function MyCoursesPage({
                         href={`/company/applications/${course.applicationId}`}
                         className="text-ace underline"
                       >
-                        Application
+                        {/* Migrated courses have no application on file; the
+                            detail page shows a course record instead. */}
+                        {course.legacyId != null ? "Details" : "Application"}
                       </Link>
                       {isSuperseded ? (
                         <span className="text-text-muted">Renewed</span>

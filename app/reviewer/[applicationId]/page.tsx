@@ -11,6 +11,10 @@ import {
   presenterRows,
 } from "@/lib/forms/application/detail-rows";
 import { resolveAttachmentLinks } from "@/lib/forms/application/attachments";
+import {
+  isLegacyApplicationData,
+  legacyCourseRows,
+} from "@/lib/forms/application/legacy";
 import { AttachmentsCard } from "@/components/application-form/attachments-card";
 import {
   DetailSection,
@@ -38,9 +42,57 @@ export default async function ReviewerApplicationPage({
 
   const app = await prisma.courseApplication.findUnique({
     where: { id: applicationId },
-    include: { company: { select: { name: true } } },
+    include: {
+      company: { select: { name: true } },
+      accreditedCourse: { select: { courseIdNumber: true } },
+    },
   });
   if (!app) notFound();
+
+  // Courses migrated from the previous ACE records system carry a stub
+  // application_data (no original application exists), so there is nothing to
+  // review. Show a neutral course-record view instead of a parse error.
+  if (isLegacyApplicationData(app.applicationData)) {
+    return (
+      <>
+        <PageHeader
+          title="Application Review"
+          subtitle={`${app.company.name} · Migrated course`}
+          action={
+            <Link
+              href="/reviewer"
+              className="rounded-md border border-border bg-white px-3 py-1.5 text-[11px] font-semibold text-navy hover:bg-surface"
+            >
+              ← Back to queue
+            </Link>
+          }
+        />
+        <div className="max-w-2xl space-y-5">
+          <div className="rounded-md border border-border bg-surface p-4">
+            <p className="text-[12px] font-semibold text-navy">Migrated course</p>
+            <p className="mt-1 text-[13px] leading-relaxed text-text-mid">
+              This course was migrated from the previous ACE records system. The
+              original application predates DentalACE One and is not on file, so
+              there is no application to review. The course record below shows
+              the imported data.
+            </p>
+          </div>
+          <DetailSection
+            title="Course Record"
+            rows={legacyCourseRows({
+              courseTitle: app.courseTitle,
+              ceHours: app.ceHours == null ? null : Number(app.ceHours),
+              courseType: app.courseType,
+              deliveryMethod: app.deliveryMethod,
+              status: app.status,
+              approvedAt: app.reviewedAt,
+              courseIdNumber: app.accreditedCourse?.courseIdNumber ?? null,
+            })}
+          />
+        </div>
+      </>
+    );
+  }
 
   const parsed = applicationDataReadSchema.safeParse(app.applicationData);
   if (!parsed.success) {

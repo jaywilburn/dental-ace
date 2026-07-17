@@ -12,6 +12,10 @@ import {
   presenterRows,
 } from "@/lib/forms/application/detail-rows";
 import { resolveAttachmentLinks } from "@/lib/forms/application/attachments";
+import {
+  isLegacyApplicationData,
+  legacyCourseRows,
+} from "@/lib/forms/application/legacy";
 import { AttachmentsCard } from "@/components/application-form/attachments-card";
 import {
   DetailSection,
@@ -69,6 +73,45 @@ export default async function CompanyApplicationDetailPage({
       ← Back to My Courses
     </Link>
   );
+
+  // Courses migrated from the previous ACE records system carry a stub
+  // application_data (no original application exists), so render a neutral
+  // course-record view instead of trying to parse a full submission.
+  if (isLegacyApplicationData(app.applicationData)) {
+    return (
+      <>
+        <PageHeader
+          title="Application Details"
+          subtitle={app.courseTitle ?? "Migrated course"}
+          action={backLink}
+        />
+        <div className="max-w-2xl space-y-5">
+          <div className="rounded-md border border-border bg-surface p-4">
+            <p className="text-[12px] font-semibold text-navy">Migrated course</p>
+            <p className="mt-1 text-[13px] leading-relaxed text-text-mid">
+              This course was migrated from the previous ACE records system. The
+              original application predates DentalACE One and is not on file, so
+              full application details are not available. The course record
+              below shows the imported data. If you have questions about this
+              course, contact info@dentalace.org.
+            </p>
+          </div>
+          <DetailSection
+            title="Course Record"
+            rows={legacyCourseRows({
+              courseTitle: app.courseTitle,
+              ceHours: app.ceHours == null ? null : Number(app.ceHours),
+              courseType: app.courseType,
+              deliveryMethod: app.deliveryMethod,
+              status: app.status,
+              approvedAt: app.reviewedAt,
+              courseIdNumber: app.accreditedCourse?.courseIdNumber ?? null,
+            })}
+          />
+        </div>
+      </>
+    );
+  }
 
   const parsed = applicationDataReadSchema.safeParse(app.applicationData);
   if (!parsed.success) {
