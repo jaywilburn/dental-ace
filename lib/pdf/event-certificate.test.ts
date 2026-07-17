@@ -1,12 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { renderCertificatePdf } from "@/lib/pdf/certificate";
+import { renderEventCertificatePdf } from "@/lib/pdf/event-certificate";
 
 const baseInput = {
   attendeeName: "Jane Hygienist",
-  courseTitle: "Infection Control Essentials",
-  courseIdNumber: "ACE-2026-00042",
-  certificateId: "11111111-1111-1111-1111-111111111111",
-  ceHours: 2,
+  eventName: "Texas Dental Summit 2026",
+  eventIdNumber: "ACE-EVT-2026-00007",
+  certificateId: "22222222-2222-2222-2222-222222222222",
+  ceHours: 6,
   completedAt: new Date("2026-06-02T12:00:00Z"),
 };
 
@@ -27,19 +27,17 @@ function normalizePdf(buf: Buffer): string {
     .replace(/\/ID \[<[0-9a-fA-F]+> <[0-9a-fA-F]+>\]/g, "/ID [<0> <0>]");
 }
 
-describe("renderCertificatePdf", () => {
+describe("renderEventCertificatePdf", () => {
   it("returns a non-empty PDF buffer", async () => {
-    const buf = await renderCertificatePdf(baseInput);
+    const buf = await renderEventCertificatePdf(baseInput);
     expect(Buffer.isBuffer(buf)).toBe(true);
     expect(buf.length).toBeGreaterThan(500);
     expect(buf.subarray(0, 4).toString("latin1")).toBe("%PDF");
   });
 
   it("renders a license number line when one is provided", async () => {
-    // Same input, once without and once with a license number: the license
-    // line adds text, so the two PDFs must differ. Stays on a single page.
-    const without = await renderCertificatePdf(baseInput);
-    const withLicense = await renderCertificatePdf({
+    const without = await renderEventCertificatePdf(baseInput);
+    const withLicense = await renderEventCertificatePdf({
       ...baseInput,
       licenseNumber: "TX-RDH-91043",
     });
@@ -48,20 +46,28 @@ describe("renderCertificatePdf", () => {
   });
 
   it("skips the license line for null, empty, and whitespace-only values", async () => {
-    const without = await renderCertificatePdf(baseInput);
-    const withNull = await renderCertificatePdf({ ...baseInput, licenseNumber: null });
-    const withEmpty = await renderCertificatePdf({ ...baseInput, licenseNumber: "" });
-    const withBlank = await renderCertificatePdf({ ...baseInput, licenseNumber: "   " });
+    const without = await renderEventCertificatePdf(baseInput);
+    const withNull = await renderEventCertificatePdf({ ...baseInput, licenseNumber: null });
+    const withEmpty = await renderEventCertificatePdf({ ...baseInput, licenseNumber: "" });
+    const withBlank = await renderEventCertificatePdf({ ...baseInput, licenseNumber: "   " });
     expect(normalizePdf(withNull)).toBe(normalizePdf(without));
     expect(normalizePdf(withEmpty)).toBe(normalizePdf(without));
     expect(normalizePdf(withBlank)).toBe(normalizePdf(without));
   });
 
-  it("stays on a single page with both a Course Format and a license number", async () => {
-    const buf = await renderCertificatePdf({
+  it("stays on a single page with format, license, and a long sessions list", async () => {
+    // The tightest stack the layout supports: Course Format + license number +
+    // a sessions line long enough to wrap. Everything must stay on one page.
+    const buf = await renderEventCertificatePdf({
       ...baseInput,
       deliveryMethod: "LIVE In Person",
       licenseNumber: "TX-RDH-91043",
+      sessions: [
+        "Advanced Infection Control and Sterilization Protocols",
+        "Radiography Safety for the Modern Dental Practice",
+        "Ethics and Jurisprudence for Texas Dental Professionals",
+        "Local Anesthesia Refresher for Hygienists",
+      ],
     });
     expect(countPdfPages(buf)).toBe(1);
   });

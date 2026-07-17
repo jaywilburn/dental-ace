@@ -19,6 +19,7 @@ export type EventCertificateInput = {
   completedAt: Date;
   sessions?: string[]; // attended session/course names (Opt 3/4)
   deliveryMethod?: string | null;
+  licenseNumber?: string | null;
 };
 
 export async function renderEventCertificatePdf(
@@ -96,6 +97,12 @@ export async function renderEventCertificatePdf(
           { align: "center" },
         );
 
+      // Optional rows below the CE hours line stack downward from y=326 so the
+      // format / license / sessions lines never overlap, whichever are present.
+      // The layout here is tighter than the course cert's, and everything must
+      // stay above the seal (cy=430, r=38, top edge y=392).
+      let rowY = 326;
+
       // Course Format line, matching the standard cert (lib/pdf/certificate.ts):
       // centered, TEXT_MID, Helvetica 12, sitting just below the CE hours line.
       const formatLabel = courseFormatLabel(input.deliveryMethod);
@@ -104,17 +111,30 @@ export async function renderEventCertificatePdf(
           .fillColor(TEXT_MID)
           .font("Helvetica")
           .fontSize(12)
-          .text(`Course Format: ${formatLabel}`, 0, 326, { align: "center" });
+          .text(`Course Format: ${formatLabel}`, 0, rowY, { align: "center" });
+        rowY += 22;
+      }
+
+      // License number, only when the attendee supplied one. Slightly tighter
+      // spacing (+20) than the format row so a wrapped sessions list below it
+      // still clears the seal's top edge.
+      const licenseNumber = input.licenseNumber?.trim();
+      if (licenseNumber) {
+        doc
+          .fillColor(TEXT_MID)
+          .font("Helvetica")
+          .fontSize(12)
+          .text(`License No. ${licenseNumber}`, 0, rowY, { align: "center" });
+        rowY += 20;
       }
 
       if (input.sessions && input.sessions.length > 0) {
-        // Drop below the format line when it is present so the two never overlap.
-        const sessionsY = formatLabel ? 350 : 328;
+        // Drop below the format/license lines when present so they never overlap.
         doc
           .fillColor(TEXT_MUTED)
           .font("Helvetica")
           .fontSize(9.5)
-          .text(`Sessions completed: ${input.sessions.join(" · ")}`, 80, sessionsY, {
+          .text(`Sessions completed: ${input.sessions.join(" · ")}`, 80, rowY + 2, {
             align: "center",
             width: W - 160,
           });

@@ -206,6 +206,7 @@ export async function submitAttendance(input: unknown): Promise<AttendResult> {
       ceHours: Number(course.application.ceHours ?? 0),
       completedAt,
       deliveryMethod: certFormat,
+      licenseNumber: sub.licenseNumber ?? null,
     });
   } catch (err) {
     console.error("[submitAttendance] cert PDF render failed", err);

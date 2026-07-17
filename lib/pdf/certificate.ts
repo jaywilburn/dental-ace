@@ -19,6 +19,7 @@ export type CertificateInput = {
   ceHours: number;
   completedAt: Date;
   deliveryMethod?: string | null;
+  licenseNumber?: string | null;
 };
 
 export async function renderCertificatePdf(
@@ -110,6 +111,20 @@ export async function renderCertificatePdf(
           .font("Helvetica")
           .fontSize(12)
           .text(`Course Format: ${formatLabel}`, 0, 344, { align: "center" });
+      }
+
+      // License number, only when the attendee supplied one. Sits below the
+      // Course Format line (or takes its slot when the format is absent);
+      // either way it stays clear of the seal (cy=440, r=40, top edge y=400).
+      const licenseNumber = input.licenseNumber?.trim();
+      if (licenseNumber) {
+        doc
+          .fillColor(TEXT_MID)
+          .font("Helvetica")
+          .fontSize(12)
+          .text(`License No. ${licenseNumber}`, 0, formatLabel ? 366 : 344, {
+            align: "center",
+          });
       }
 
       drawAadbSeal(doc, { cx: W / 2, cy: 440, r: 40 });
