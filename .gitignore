@@ -60,3 +60,7 @@ Thumbs.db
 
 # Source/reference materials (kept locally, not in the repo)
 /logic/
+
+# Pearl quiz export source CSVs (attendee PII, kept locally like the v3 source SQL)
+/scripts/data/legacy/pearl-DA253.csv
+/scripts/data/legacy/pearl-DA255.csv
