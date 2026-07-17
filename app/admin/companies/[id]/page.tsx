@@ -1,9 +1,11 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/portal-shell";
 import { requireStaff } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { grantAppCredits, adjustCertBalance } from "@/lib/admin/billing-overrides";
 import { renameCompany } from "@/lib/admin/company-rename";
+import { memberDisplayName, pointOfContactId } from "@/lib/admin/company-members";
 
 export default async function AdminCompanyDetailPage({
   params,
@@ -23,10 +25,16 @@ export default async function AdminCompanyDetailPage({
       certBalance: true, certAlertThreshold: true, totalCertsIssued: true,
       contactEmail: true, contactPhone: true, addressLine1: true,
       addressLine2: true, city: true, state: true, zip: true,
+      users: {
+        orderBy: { createdAt: "asc" },
+        select: { id: true, email: true, firstName: true, lastName: true, staffRole: true, createdAt: true },
+      },
       billingTransactions: { orderBy: { createdAt: "desc" }, take: 15 },
     },
   });
   if (!company) notFound();
+
+  const pocId = pointOfContactId(company.users);
 
   return (
     <>
@@ -86,6 +94,50 @@ export default async function AdminCompanyDetailPage({
           </div>
         </div>
       ) : null}
+
+      <div className="mt-5 overflow-hidden rounded-lg border border-border bg-white">
+        <p className="border-b border-border px-4 py-3 text-[12px] font-semibold text-navy">Members</p>
+        {company.users.length === 0 ? (
+          <p className="px-4 py-6 text-center text-[12px] text-text-muted">No linked accounts yet.</p>
+        ) : (
+          <table className="w-full text-[12px]">
+            <thead>
+              <tr className="border-b border-border bg-surface text-left text-[10px] uppercase tracking-wide text-text-muted">
+                <th className="px-4 py-2 font-semibold">Name</th>
+                <th className="px-4 py-2 font-semibold">Email</th>
+                <th className="px-4 py-2 font-semibold">Created</th>
+              </tr>
+            </thead>
+            <tbody>
+              {company.users.map((u) => (
+                <tr key={u.id} className="border-b border-border last:border-b-0">
+                  <td className="px-4 py-2 font-medium text-navy">
+                    <span className="flex flex-wrap items-center gap-1.5">
+                      <Link href={`/admin/users/${u.id}`} className="text-ace underline">
+                        {memberDisplayName(u)}
+                      </Link>
+                      {u.id === pocId ? (
+                        <span className="inline-flex items-center rounded-full bg-ace-bg px-2 py-0.5 text-[10px] font-semibold leading-none text-ace-dark">
+                          Point of contact
+                        </span>
+                      ) : null}
+                      {u.staffRole !== "NONE" ? (
+                        <span className="inline-flex items-center rounded-full bg-navy px-2 py-0.5 text-[10px] font-semibold leading-none text-white">
+                          {u.staffRole}
+                        </span>
+                      ) : null}
+                    </span>
+                  </td>
+                  <td className="px-4 py-2 text-text-mid">{u.email}</td>
+                  <td className="px-4 py-2 text-text-muted tabular-nums">
+                    {u.createdAt.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
 
       <form action={renameCompany} className="mt-5 rounded-lg border border-border bg-white p-4 space-y-3">
         <input type="hidden" name="companyId" value={company.id} />
