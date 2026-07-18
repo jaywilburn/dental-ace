@@ -1,0 +1,2 @@
+-- AlterEnum
+ALTER TYPE "AdminAuditAction" ADD VALUE 'COURSE_QUIZ_UPDATED';
