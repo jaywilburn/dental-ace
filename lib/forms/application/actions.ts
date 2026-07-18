@@ -30,6 +30,7 @@ import {
   sanitizeRichText,
   richTextPlainLength,
 } from "@/lib/forms/application/rich-text";
+import { quizFromFormData } from "@/lib/forms/application/quiz-form";
 import { mergeApplicationStep } from "@/lib/forms/application/merge-step";
 import { sendEmail } from "@/lib/email/send";
 import ApplicationSubmittedEmail from "@/emails/application-submitted";
@@ -211,28 +212,9 @@ export async function saveStep4(formData: FormData) {
   const applicationId = String(formData.get("applicationId") ?? "");
   if (!applicationId) throw new Error("Missing applicationId");
 
-  const quiz = [
-    {
-      type: "TF" as const,
-      question: String(formData.get("q1_question") ?? ""),
-      correctAnswer: (formData.get("q1_correct") === "True" ? "True" : "False") as
-        | "True"
-        | "False",
-    },
-    {
-      type: "TF" as const,
-      question: String(formData.get("q2_question") ?? ""),
-      correctAnswer: (formData.get("q2_correct") === "True" ? "True" : "False") as
-        | "True"
-        | "False",
-    },
-    ...[2, 3, 4].map((i) => ({
-      type: "MC" as const,
-      question: String(formData.get(`q${i + 1}_question`) ?? ""),
-      options: [0, 1, 2, 3].map((j) => String(formData.get(`q${i + 1}_option_${j}`) ?? "")),
-      correctIndex: Number(formData.get(`q${i + 1}_correct`) ?? 0),
-    })),
-  ];
+  // Field names are the <QuizFields> contract; the mapping is shared with the
+  // admin post-approval quiz editor (lib/admin/course-quiz.ts).
+  const quiz = quizFromFormData(formData);
 
   await mergeStep(applicationId, step4Schema, { quiz }, STEP_ROUTES[4]);
   redirect(STEP_ROUTES[5]);
