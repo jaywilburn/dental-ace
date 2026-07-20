@@ -43,7 +43,7 @@ export default async function StripeMockCheckoutPage({
   const stripeEventId = `evt_mock_${randomUUID()}`;
 
   return (
-    <main className="min-h-screen bg-navy text-white">
+    <main className="min-h-dvh bg-navy text-white">
       <div className="mx-auto max-w-md px-6 py-16">
         <div className="mb-6 flex flex-col items-center">
           <BrandMark size="md" />
