@@ -66,7 +66,7 @@ export function CtaBanner() {
             key={card.href}
             href={card.href}
             className={cn(
-              "min-w-[200px] rounded-xl border border-white/15 bg-white/[0.06] px-6 py-4 text-left transition-colors hover:border-white/25 hover:bg-white/10",
+              "min-w-[200px] max-w-full rounded-xl border border-white/15 bg-white/[0.06] px-6 py-4 text-left transition-colors hover:border-white/25 hover:bg-white/10",
               focusRing,
             )}
           >
