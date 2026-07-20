@@ -143,55 +143,57 @@ export default async function NoticesComposerPage({
                 Recipients ({deficiencies.length}) — all selected by default
               </span>
             </div>
-            <table className="w-full text-[12px]">
-              <thead className="border-b border-border bg-white text-left text-[10px] uppercase tracking-wide text-text-muted">
-                <tr>
-                  <th className="px-4 py-2 font-semibold">
-                    <span className="sr-only">Include</span>
-                  </th>
-                  <th className="px-4 py-2 font-semibold">License</th>
-                  <th className="px-4 py-2 font-semibold">Name</th>
-                  <th className="px-4 py-2 font-semibold">Email</th>
-                  <th className="px-4 py-2 font-semibold">Type</th>
-                  <th className="px-4 py-2 text-right font-semibold">
-                    Missing hrs
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {deficiencies.map((d) => {
-                  const name = d.userLicense.user.firstName
-                    ? `${d.userLicense.user.firstName} ${d.userLicense.user.lastName ?? ""}`.trim()
-                    : d.userLicense.user.email;
-                  return (
-                    <tr key={d.id} className="border-b border-border last:border-0">
-                      <td className="px-4 py-2">
-                        <input
-                          type="checkbox"
-                          name="deficiencyIds"
-                          value={d.id}
-                          defaultChecked
-                          className="size-3.5 accent-ver"
-                        />
-                      </td>
-                      <td className="px-4 py-2 font-mono text-[11px] text-navy">
-                        {d.userLicense.licenseNumber}
-                      </td>
-                      <td className="px-4 py-2 text-text-mid">{name}</td>
-                      <td className="px-4 py-2 text-text-muted">
-                        {d.userLicense.user.email}
-                      </td>
-                      <td className="px-4 py-2 text-text-muted">
-                        {licenseTypeShort(d.userLicense.licenseType)}
-                      </td>
-                      <td className="px-4 py-2 text-right tabular-nums text-text-mid">
-                        {Number(d.missingHours).toFixed(1)}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+            <div className="overflow-x-auto">
+              <table className="w-full text-[12px]">
+                <thead className="border-b border-border bg-white text-left text-[10px] uppercase tracking-wide text-text-muted">
+                  <tr>
+                    <th className="px-4 py-2 font-semibold">
+                      <span className="sr-only">Include</span>
+                    </th>
+                    <th className="px-4 py-2 font-semibold">License</th>
+                    <th className="px-4 py-2 font-semibold">Name</th>
+                    <th className="px-4 py-2 font-semibold">Email</th>
+                    <th className="px-4 py-2 font-semibold">Type</th>
+                    <th className="px-4 py-2 text-right font-semibold">
+                      Missing hrs
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {deficiencies.map((d) => {
+                    const name = d.userLicense.user.firstName
+                      ? `${d.userLicense.user.firstName} ${d.userLicense.user.lastName ?? ""}`.trim()
+                      : d.userLicense.user.email;
+                    return (
+                      <tr key={d.id} className="border-b border-border last:border-0">
+                        <td className="px-4 py-2">
+                          <input
+                            type="checkbox"
+                            name="deficiencyIds"
+                            value={d.id}
+                            defaultChecked
+                            className="size-3.5 accent-ver"
+                          />
+                        </td>
+                        <td className="px-4 py-2 font-mono text-[11px] text-navy">
+                          {d.userLicense.licenseNumber}
+                        </td>
+                        <td className="px-4 py-2 text-text-mid">{name}</td>
+                        <td className="px-4 py-2 text-text-muted">
+                          {d.userLicense.user.email}
+                        </td>
+                        <td className="px-4 py-2 text-text-muted">
+                          {licenseTypeShort(d.userLicense.licenseType)}
+                        </td>
+                        <td className="px-4 py-2 text-right tabular-nums text-text-mid">
+                          {Number(d.missingHours).toFixed(1)}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
 
           <div className="flex items-center justify-between border-t border-border pt-4">

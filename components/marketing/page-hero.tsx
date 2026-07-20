@@ -53,7 +53,7 @@ export function PageHero({
         {title}
       </h1>
       {sub ? (
-        <p className="relative z-10 mx-auto mt-5 max-w-[600px] text-pretty text-base leading-relaxed text-white/45 md:text-lg">
+        <p className="relative z-10 mx-auto mt-5 max-w-[600px] text-pretty text-base leading-relaxed text-white/70 md:text-lg">
           {sub}
         </p>
       ) : null}

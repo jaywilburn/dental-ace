@@ -137,137 +137,139 @@ export default async function MyCoursesPage({
             No accredited courses yet.
           </p>
         ) : (
-          <table className="w-full text-[12px]">
-            <thead>
-              <tr className="border-b border-border bg-surface text-left text-[10px] uppercase tracking-wide text-text-muted">
-                <th className="px-4 py-2 font-semibold">Course ID</th>
-                <th className="px-4 py-2 font-semibold">Course Name</th>
-                <th className="px-4 py-2 font-semibold">Approved</th>
-                <th className="px-4 py-2 font-semibold">Expires</th>
-                <th className="px-4 py-2 text-right font-semibold">Certs Issued</th>
-                <th className="px-4 py-2 font-semibold">Deliverables</th>
-              </tr>
-            </thead>
-            <tbody>
-              {courses.map((course) => {
-                const isSuperseded = course.supersededAt != null;
-                const daysToExpiry = Math.ceil(
-                  (course.expiresAt.getTime() - now.getTime()) / 86_400_000,
-                );
-                const renewable =
-                  !isSuperseded && daysToExpiry <= RENEW_WINDOW_DAYS;
-                const renewalInProgress = renewingCourseIds.has(course.id);
-                return (
-                <tr key={course.id} className="border-b border-border last:border-b-0">
-                  <td className="px-4 py-2 font-mono text-[11px] text-navy">
-                    {course.courseIdNumber}
-                  </td>
-                  <td className="px-4 py-2 font-medium text-navy">
-                    {course.application.courseTitle ?? `Course #${course.id.slice(0, 8)}`}
-                  </td>
-                  <td className="px-4 py-2 text-text-muted">
-                    {course.approvedAt.toLocaleDateString("en-US", {
-                      month: "short",
-                      year: "numeric",
-                    })}
-                  </td>
-                  <td className="px-4 py-2 text-text-muted">
-                    {course.expiresAt.toLocaleDateString("en-US", {
-                      month: "short",
-                      year: "numeric",
-                    })}
-                    {isSuperseded ? (
-                      <span className="ml-1 text-[10px] font-semibold uppercase tracking-wide text-text-muted">
-                        · Renewed
-                      </span>
-                    ) : daysToExpiry < 0 ? (
-                      <span className="ml-1 text-[10px] font-semibold uppercase tracking-wide text-red-600">
-                        · Expired
-                      </span>
-                    ) : null}
-                  </td>
-                  <td className="px-4 py-2 text-right text-text-mid tabular-nums">
-                    {course.certsIssuedCount}
-                  </td>
-                  <td className="px-4 py-2">
-                    <div className="flex flex-wrap items-center gap-x-3 gap-y-2 whitespace-nowrap">
-                      <a
-                        href={course.attendeeUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-ace underline"
-                      >
-                        Attendee Link
-                      </a>
-                      {course.qrViewUrl && course.qrDownloadUrl ? (
-                        <span className="inline-flex flex-col items-center gap-1">
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img
-                            src={course.qrViewUrl}
-                            alt={`Attendee QR code for ${course.application.courseTitle ?? course.courseIdNumber}`}
-                            width={112}
-                            height={112}
-                            className="h-28 w-28 rounded-md border border-border bg-white p-1.5"
-                          />
-                          <a
-                            href={course.qrDownloadUrl}
-                            className="text-ace underline"
-                          >
-                            Download QR
-                          </a>
+          <div className="overflow-x-auto">
+            <table className="w-full text-[12px]">
+              <thead>
+                <tr className="border-b border-border bg-surface text-left text-[10px] uppercase tracking-wide text-text-muted">
+                  <th className="px-4 py-2 font-semibold">Course ID</th>
+                  <th className="px-4 py-2 font-semibold">Course Name</th>
+                  <th className="px-4 py-2 font-semibold">Approved</th>
+                  <th className="px-4 py-2 font-semibold">Expires</th>
+                  <th className="px-4 py-2 text-right font-semibold">Certs Issued</th>
+                  <th className="px-4 py-2 font-semibold">Deliverables</th>
+                </tr>
+              </thead>
+              <tbody>
+                {courses.map((course) => {
+                  const isSuperseded = course.supersededAt != null;
+                  const daysToExpiry = Math.ceil(
+                    (course.expiresAt.getTime() - now.getTime()) / 86_400_000,
+                  );
+                  const renewable =
+                    !isSuperseded && daysToExpiry <= RENEW_WINDOW_DAYS;
+                  const renewalInProgress = renewingCourseIds.has(course.id);
+                  return (
+                  <tr key={course.id} className="border-b border-border last:border-b-0">
+                    <td className="px-4 py-2 font-mono text-[11px] text-navy">
+                      {course.courseIdNumber}
+                    </td>
+                    <td className="px-4 py-2 font-medium text-navy">
+                      {course.application.courseTitle ?? `Course #${course.id.slice(0, 8)}`}
+                    </td>
+                    <td className="px-4 py-2 text-text-muted">
+                      {course.approvedAt.toLocaleDateString("en-US", {
+                        month: "short",
+                        year: "numeric",
+                      })}
+                    </td>
+                    <td className="px-4 py-2 text-text-muted">
+                      {course.expiresAt.toLocaleDateString("en-US", {
+                        month: "short",
+                        year: "numeric",
+                      })}
+                      {isSuperseded ? (
+                        <span className="ml-1 text-[10px] font-semibold uppercase tracking-wide text-text-muted">
+                          · Renewed
                         </span>
-                      ) : (
-                        <span className="text-text-muted">QR unavailable</span>
-                      )}
-                      {course.letterDownloadUrl ? (
+                      ) : daysToExpiry < 0 ? (
+                        <span className="ml-1 text-[10px] font-semibold uppercase tracking-wide text-red-600">
+                          · Expired
+                        </span>
+                      ) : null}
+                    </td>
+                    <td className="px-4 py-2 text-right text-text-mid tabular-nums">
+                      {course.certsIssuedCount}
+                    </td>
+                    <td className="px-4 py-2">
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 whitespace-nowrap">
                         <a
-                          href={course.letterDownloadUrl}
+                          href={course.attendeeUrl}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-ace underline"
+                          className="text-ace-dark underline"
                         >
-                          Approval Letter
+                          Attendee Link
                         </a>
-                      ) : (
-                        <span className="text-text-muted">Letter unavailable</span>
-                      )}
-                      <a
-                        href={`/api/courses/${course.id}/badge`}
-                        className="text-ace underline"
-                        title="Download marketing logo"
-                      >
-                        Marketing Logo
-                      </a>
-                      <Link
-                        href={`/company/applications/${course.applicationId}`}
-                        className="text-ace underline"
-                      >
-                        {/* Migrated courses have no application on file; the
-                            detail page shows a course record instead. */}
-                        {course.legacyId != null ? "Details" : "Application"}
-                      </Link>
-                      {isSuperseded ? (
-                        <span className="text-text-muted">Renewed</span>
-                      ) : renewalInProgress ? (
-                        <span className="text-text-muted">Renewal in progress</span>
-                      ) : renewable ? (
-                        <form action={startCourseRenewal}>
-                          <input type="hidden" name="courseId" value={course.id} />
-                          <button
-                            type="submit"
-                            className="font-semibold text-ace underline"
+                        {course.qrViewUrl && course.qrDownloadUrl ? (
+                          <span className="inline-flex flex-col items-center gap-1">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={course.qrViewUrl}
+                              alt={`Attendee QR code for ${course.application.courseTitle ?? course.courseIdNumber}`}
+                              width={112}
+                              height={112}
+                              className="h-28 w-28 rounded-md border border-border bg-white p-1.5"
+                            />
+                            <a
+                              href={course.qrDownloadUrl}
+                              className="text-ace-dark underline"
+                            >
+                              Download QR
+                            </a>
+                          </span>
+                        ) : (
+                          <span className="text-text-muted">QR unavailable</span>
+                        )}
+                        {course.letterDownloadUrl ? (
+                          <a
+                            href={course.letterDownloadUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-ace-dark underline"
                           >
-                            Renew
-                          </button>
-                        </form>
-                      ) : null}
-                    </div>
-                  </td>
-                </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                            Approval Letter
+                          </a>
+                        ) : (
+                          <span className="text-text-muted">Letter unavailable</span>
+                        )}
+                        <a
+                          href={`/api/courses/${course.id}/badge`}
+                          className="text-ace-dark underline"
+                          title="Download marketing logo"
+                        >
+                          Marketing Logo
+                        </a>
+                        <Link
+                          href={`/company/applications/${course.applicationId}`}
+                          className="text-ace-dark underline"
+                        >
+                          {/* Migrated courses have no application on file; the
+                              detail page shows a course record instead. */}
+                          {course.legacyId != null ? "Details" : "Application"}
+                        </Link>
+                        {isSuperseded ? (
+                          <span className="text-text-muted">Renewed</span>
+                        ) : renewalInProgress ? (
+                          <span className="text-text-muted">Renewal in progress</span>
+                        ) : renewable ? (
+                          <form action={startCourseRenewal}>
+                            <input type="hidden" name="courseId" value={course.id} />
+                            <button
+                              type="submit"
+                              className="font-semibold text-ace-dark underline"
+                            >
+                              Renew
+                            </button>
+                          </form>
+                        ) : null}
+                      </div>
+                    </td>
+                  </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 
@@ -278,62 +280,64 @@ export default async function MyCoursesPage({
             No pending or rejected applications.
           </p>
         ) : (
-          <table className="w-full text-[12px]">
-            <thead>
-              <tr className="border-b border-border bg-surface text-left text-[10px] uppercase tracking-wide text-text-muted">
-                <th className="px-4 py-2 font-semibold">Submitted</th>
-                <th className="px-4 py-2 font-semibold">Course Title</th>
-                <th className="px-4 py-2 font-semibold">CE Hours</th>
-                <th className="px-4 py-2 font-semibold">Format</th>
-                <th className="px-4 py-2 font-semibold">Status</th>
-                <th className="px-4 py-2 font-semibold">
-                  <span className="sr-only">View application</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {applications.map((app) => (
-                <tr key={app.id} className="border-b border-border last:border-b-0">
-                  <td className="px-4 py-2 text-text-muted">
-                    {app.submittedAt
-                      ? app.submittedAt.toLocaleDateString("en-US", {
-                          month: "short",
-                          day: "numeric",
-                        })
-                      : "—"}
-                  </td>
-                  <td className="px-4 py-2 font-medium text-navy">
-                    {app.courseTitle ?? "(untitled draft)"}
-                  </td>
-                  <td className="px-4 py-2 text-text-mid tabular-nums">
-                    {app.ceHours ? Number(app.ceHours).toFixed(1) : "—"}
-                  </td>
-                  <td className="px-4 py-2 text-text-mid">
-                    {app.deliveryMethod ?? "—"}
-                  </td>
-                  <td className="px-4 py-2">
-                    {app.status === "PENDING" ? (
-                      <span className="rounded-full bg-ace/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-ace-dark">
-                        Pending review
-                      </span>
-                    ) : (
-                      <span className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-red-700">
-                        Rejected
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-4 py-2 text-right">
-                    <Link
-                      href={`/company/applications/${app.id}`}
-                      className="whitespace-nowrap text-ace underline"
-                    >
-                      View
-                    </Link>
-                  </td>
+          <div className="overflow-x-auto">
+            <table className="w-full text-[12px]">
+              <thead>
+                <tr className="border-b border-border bg-surface text-left text-[10px] uppercase tracking-wide text-text-muted">
+                  <th className="px-4 py-2 font-semibold">Submitted</th>
+                  <th className="px-4 py-2 font-semibold">Course Title</th>
+                  <th className="px-4 py-2 font-semibold">CE Hours</th>
+                  <th className="px-4 py-2 font-semibold">Format</th>
+                  <th className="px-4 py-2 font-semibold">Status</th>
+                  <th className="px-4 py-2 font-semibold">
+                    <span className="sr-only">View application</span>
+                  </th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {applications.map((app) => (
+                  <tr key={app.id} className="border-b border-border last:border-b-0">
+                    <td className="px-4 py-2 text-text-muted">
+                      {app.submittedAt
+                        ? app.submittedAt.toLocaleDateString("en-US", {
+                            month: "short",
+                            day: "numeric",
+                          })
+                        : "—"}
+                    </td>
+                    <td className="px-4 py-2 font-medium text-navy">
+                      {app.courseTitle ?? "(untitled draft)"}
+                    </td>
+                    <td className="px-4 py-2 text-text-mid tabular-nums">
+                      {app.ceHours ? Number(app.ceHours).toFixed(1) : "—"}
+                    </td>
+                    <td className="px-4 py-2 text-text-mid">
+                      {app.deliveryMethod ?? "—"}
+                    </td>
+                    <td className="px-4 py-2">
+                      {app.status === "PENDING" ? (
+                        <span className="rounded-full bg-ace/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-ace-dark">
+                          Pending review
+                        </span>
+                      ) : (
+                        <span className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-red-700">
+                          Rejected
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-2 text-right">
+                      <Link
+                        href={`/company/applications/${app.id}`}
+                        className="whitespace-nowrap text-ace-dark underline"
+                      >
+                        View
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
     </>

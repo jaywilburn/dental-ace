@@ -84,68 +84,70 @@ export default async function NoticesLedgerPage({
         </div>
       ) : (
         <div className="overflow-hidden rounded-lg border border-border bg-white">
-          <table className="w-full text-[12px]">
-            <thead className="border-b border-border bg-surface text-left text-[10px] uppercase tracking-wide text-text-muted">
-              <tr>
-                <th className="px-4 py-2 font-semibold">Sent</th>
-                <th className="px-4 py-2 font-semibold">Type</th>
-                <th className="px-4 py-2 font-semibold">License</th>
-                <th className="px-4 py-2 font-semibold">Recipient</th>
-                <th className="px-4 py-2 font-semibold">Batch</th>
-                <th className="px-4 py-2 font-semibold">Sent by</th>
-              </tr>
-            </thead>
-            <tbody>
-              {notices.map((n) => {
-                const meta = TYPE_META[n.noticeType];
-                const sentBy = n.sentBy
-                  ? n.sentBy.firstName
-                    ? `${n.sentBy.firstName} ${n.sentBy.lastName ?? ""}`.trim()
-                    : n.sentBy.email
-                  : "Cron";
-                const recipientName = n.deficiency.userLicense.user.firstName
-                  ? `${n.deficiency.userLicense.user.firstName} ${n.deficiency.userLicense.user.lastName ?? ""}`.trim()
-                  : n.recipientEmail;
-                return (
-                  <tr key={n.id} className="border-b border-border last:border-0">
-                    <td className="px-4 py-2 text-text-muted">
-                      {n.sentAt.toLocaleString("en-US", {
-                        month: "short",
-                        day: "numeric",
-                        hour: "numeric",
-                        minute: "2-digit",
-                      })}
-                    </td>
-                    <td className="px-4 py-2">
-                      <span
-                        className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${meta.className}`}
-                      >
-                        {meta.label}
-                      </span>
-                    </td>
-                    <td className="px-4 py-2 font-mono text-[11px] text-navy">
-                      {n.deficiency.userLicense.licenseNumber}
-                    </td>
-                    <td className="px-4 py-2 text-text-mid">
-                      <div>{recipientName}</div>
-                      <div className="text-[10px] text-text-muted">
-                        {n.recipientEmail}
-                      </div>
-                    </td>
-                    <td className="px-4 py-2 font-mono text-[11px] text-text-muted">
-                      <Link
-                        href={`/board/audits/${n.deficiency.batch.id}`}
-                        className="hover:underline"
-                      >
-                        {n.deficiency.batch.batchCode}
-                      </Link>
-                    </td>
-                    <td className="px-4 py-2 text-text-muted">{sentBy}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+          <div className="overflow-x-auto">
+            <table className="w-full text-[12px]">
+              <thead className="border-b border-border bg-surface text-left text-[10px] uppercase tracking-wide text-text-muted">
+                <tr>
+                  <th className="px-4 py-2 font-semibold">Sent</th>
+                  <th className="px-4 py-2 font-semibold">Type</th>
+                  <th className="px-4 py-2 font-semibold">License</th>
+                  <th className="px-4 py-2 font-semibold">Recipient</th>
+                  <th className="px-4 py-2 font-semibold">Batch</th>
+                  <th className="px-4 py-2 font-semibold">Sent by</th>
+                </tr>
+              </thead>
+              <tbody>
+                {notices.map((n) => {
+                  const meta = TYPE_META[n.noticeType];
+                  const sentBy = n.sentBy
+                    ? n.sentBy.firstName
+                      ? `${n.sentBy.firstName} ${n.sentBy.lastName ?? ""}`.trim()
+                      : n.sentBy.email
+                    : "Cron";
+                  const recipientName = n.deficiency.userLicense.user.firstName
+                    ? `${n.deficiency.userLicense.user.firstName} ${n.deficiency.userLicense.user.lastName ?? ""}`.trim()
+                    : n.recipientEmail;
+                  return (
+                    <tr key={n.id} className="border-b border-border last:border-0">
+                      <td className="px-4 py-2 text-text-muted">
+                        {n.sentAt.toLocaleString("en-US", {
+                          month: "short",
+                          day: "numeric",
+                          hour: "numeric",
+                          minute: "2-digit",
+                        })}
+                      </td>
+                      <td className="px-4 py-2">
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${meta.className}`}
+                        >
+                          {meta.label}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2 font-mono text-[11px] text-navy">
+                        {n.deficiency.userLicense.licenseNumber}
+                      </td>
+                      <td className="px-4 py-2 text-text-mid">
+                        <div>{recipientName}</div>
+                        <div className="text-[10px] text-text-muted">
+                          {n.recipientEmail}
+                        </div>
+                      </td>
+                      <td className="px-4 py-2 font-mono text-[11px] text-text-muted">
+                        <Link
+                          href={`/board/audits/${n.deficiency.batch.id}`}
+                          className="hover:underline"
+                        >
+                          {n.deficiency.batch.batchCode}
+                        </Link>
+                      </td>
+                      <td className="px-4 py-2 text-text-muted">{sentBy}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </>

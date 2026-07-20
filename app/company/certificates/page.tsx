@@ -134,58 +134,60 @@ export default async function CertificateLogPage({
             {query ? "No certificates match your search." : "No certificates issued yet."}
           </p>
         ) : (
-          <table className="w-full text-[12px]">
-            <thead>
-              <tr className="border-b border-border bg-surface text-left text-[10px] uppercase tracking-wide text-text-muted">
-                <th className="px-4 py-2 font-semibold">Issued</th>
-                <th className="px-4 py-2 font-semibold">Attendee</th>
-                <th className="px-4 py-2 font-semibold">Course</th>
-                <th className="px-4 py-2 text-right font-semibold">CE Hours</th>
-                <th className="px-4 py-2 font-semibold">License</th>
-                <th className="px-4 py-2 font-semibold">Certificate</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map(({ cert, downloadUrl }) => (
-                <tr key={cert.id} className="border-b border-border last:border-b-0">
-                  <td className="px-4 py-2 text-text-muted">
-                    {cert.issuedAt.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
-                  </td>
-                  <td className="px-4 py-2 font-medium text-navy">
-                    {cert.attendeeName}
-                    <span className="block text-[11px] font-normal text-text-muted">
-                      {cert.attendeeEmail}
-                    </span>
-                  </td>
-                  <td className="px-4 py-2 text-text-mid">
-                    {cert.course?.application.courseTitle ??
-                      cert.course?.courseIdNumber ??
-                      cert.event?.name ??
-                      "—"}
-                  </td>
-                  <td className="px-4 py-2 text-right text-text-mid tabular-nums">
-                    {cert.ceHours
-                      ? Number(cert.ceHours).toFixed(1)
-                      : cert.course?.application.ceHours
-                        ? Number(cert.course.application.ceHours).toFixed(1)
-                        : "—"}
-                  </td>
-                  <td className="px-4 py-2 text-text-muted">
-                    {cert.licenseType ?? ""} {cert.licenseNumber ?? ""}
-                  </td>
-                  <td className="px-4 py-2">
-                    {downloadUrl ? (
-                      <a href={downloadUrl} className="text-ace underline" target="_blank" rel="noopener noreferrer">
-                        Download PDF
-                      </a>
-                    ) : (
-                      <span className="text-text-muted">Processing</span>
-                    )}
-                  </td>
+          <div className="overflow-x-auto">
+            <table className="w-full text-[12px]">
+              <thead>
+                <tr className="border-b border-border bg-surface text-left text-[10px] uppercase tracking-wide text-text-muted">
+                  <th className="px-4 py-2 font-semibold">Issued</th>
+                  <th className="px-4 py-2 font-semibold">Attendee</th>
+                  <th className="px-4 py-2 font-semibold">Course</th>
+                  <th className="px-4 py-2 text-right font-semibold">CE Hours</th>
+                  <th className="px-4 py-2 font-semibold">License</th>
+                  <th className="px-4 py-2 font-semibold">Certificate</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {rows.map(({ cert, downloadUrl }) => (
+                  <tr key={cert.id} className="border-b border-border last:border-b-0">
+                    <td className="px-4 py-2 text-text-muted">
+                      {cert.issuedAt.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                    </td>
+                    <td className="px-4 py-2 font-medium text-navy">
+                      {cert.attendeeName}
+                      <span className="block text-[11px] font-normal text-text-muted">
+                        {cert.attendeeEmail}
+                      </span>
+                    </td>
+                    <td className="px-4 py-2 text-text-mid">
+                      {cert.course?.application.courseTitle ??
+                        cert.course?.courseIdNumber ??
+                        cert.event?.name ??
+                        "—"}
+                    </td>
+                    <td className="px-4 py-2 text-right text-text-mid tabular-nums">
+                      {cert.ceHours
+                        ? Number(cert.ceHours).toFixed(1)
+                        : cert.course?.application.ceHours
+                          ? Number(cert.course.application.ceHours).toFixed(1)
+                          : "—"}
+                    </td>
+                    <td className="px-4 py-2 text-text-muted">
+                      {cert.licenseType ?? ""} {cert.licenseNumber ?? ""}
+                    </td>
+                    <td className="px-4 py-2">
+                      {downloadUrl ? (
+                        <a href={downloadUrl} className="text-ace-dark underline" target="_blank" rel="noopener noreferrer">
+                          Download PDF
+                        </a>
+                      ) : (
+                        <span className="text-text-muted">Processing</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 

@@ -206,37 +206,39 @@ export default async function CompanyDashboard({
             started.
           </p>
         ) : (
-          <table className="w-full text-[12px]">
-            <thead>
-              <tr className="border-b border-border bg-surface text-left text-[10px] uppercase tracking-wide text-text-muted">
-                <th className="px-4 py-2 font-semibold">Date</th>
-                <th className="px-4 py-2 font-semibold">Event</th>
-                <th className="px-4 py-2 font-semibold">Details</th>
-              </tr>
-            </thead>
-            <tbody>
-              {recentTxns.map((txn) => (
-                <tr key={txn.id} className="border-b border-border last:border-b-0">
-                  <td className="px-4 py-2 text-text-muted">
-                    {new Intl.DateTimeFormat("en-US", {
-                      month: "short",
-                      day: "numeric",
-                      year: "numeric",
-                    }).format(txn.createdAt)}
-                  </td>
-                  <td className="px-4 py-2 font-medium text-navy">
-                    {labelFor(txn.type)}
-                  </td>
-                  <td className="px-4 py-2 text-text-mid">
-                    {txn.quantity} × {labelFor(txn.type, true)} · $
-                    {(txn.amountCents / 100).toLocaleString("en-US", {
-                      minimumFractionDigits: 2,
-                    })}
-                  </td>
+          <div className="overflow-x-auto">
+            <table className="w-full text-[12px]">
+              <thead>
+                <tr className="border-b border-border bg-surface text-left text-[10px] uppercase tracking-wide text-text-muted">
+                  <th className="px-4 py-2 font-semibold">Date</th>
+                  <th className="px-4 py-2 font-semibold">Event</th>
+                  <th className="px-4 py-2 font-semibold">Details</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {recentTxns.map((txn) => (
+                  <tr key={txn.id} className="border-b border-border last:border-b-0">
+                    <td className="px-4 py-2 text-text-muted">
+                      {new Intl.DateTimeFormat("en-US", {
+                        month: "short",
+                        day: "numeric",
+                        year: "numeric",
+                      }).format(txn.createdAt)}
+                    </td>
+                    <td className="px-4 py-2 font-medium text-navy">
+                      {labelFor(txn.type)}
+                    </td>
+                    <td className="px-4 py-2 text-text-mid">
+                      {txn.quantity} × {labelFor(txn.type, true)} · $
+                      {(txn.amountCents / 100).toLocaleString("en-US", {
+                        minimumFractionDigits: 2,
+                      })}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
     </>

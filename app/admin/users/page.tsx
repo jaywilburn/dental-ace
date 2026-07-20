@@ -89,7 +89,7 @@ export default async function AdminUsersPage({
 
       {/* Search + filter */}
       <div className="mb-4 flex flex-wrap items-center gap-3">
-        <form action="/admin/users" method="get" className="flex-1 min-w-[220px]">
+        <form action="/admin/users" method="get" className="flex-1 min-w-[220px] max-w-full">
           {activeFilter.key !== "all" ? <input type="hidden" name="filter" value={activeFilter.key} /> : null}
           <input
             type="search"
@@ -126,50 +126,52 @@ export default async function AdminUsersPage({
         {users.length === 0 ? (
           <p className="px-4 py-10 text-center text-[12px] text-text-muted">No accounts found.</p>
         ) : (
-          <table className="w-full text-[12px]">
-            <thead>
-              <tr className="border-b border-border bg-surface text-left text-[10px] uppercase tracking-wide text-text-muted">
-                <th className="px-4 py-2 font-semibold">Name</th>
-                <th className="px-4 py-2 font-semibold">Email</th>
-                <th className="px-4 py-2 font-semibold">Access</th>
-                <th className="px-4 py-2 font-semibold">Status</th>
-                <th className="px-4 py-2 font-semibold">Created</th>
-              </tr>
-            </thead>
-            <tbody>
-              {users.map((u) => (
-                <tr key={u.id} className="border-b border-border last:border-b-0">
-                  <td className="px-4 py-2 font-medium text-navy">
-                    <Link href={`/admin/users/${u.id}`} className="text-ace underline">
-                      {[u.firstName, u.lastName].filter(Boolean).join(" ") || "—"}
-                    </Link>
-                  </td>
-                  <td className="px-4 py-2 text-text-mid">{u.email}</td>
-                  <td className="px-4 py-2">
-                    <EntitlementBadges user={u} />
-                  </td>
-                  <td className="px-4 py-2">
-                    {u.disabledAt ? (
-                      <span className="inline-flex items-center rounded-full bg-red-bg px-2 py-0.5 text-[10px] font-semibold text-red">
-                        Suspended
-                      </span>
-                    ) : u.emailVerifiedAt ? (
-                      <span className="inline-flex items-center rounded-full bg-green-bg px-2 py-0.5 text-[10px] font-semibold text-green">
-                        Verified
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center rounded-full bg-orange-bg px-2 py-0.5 text-[10px] font-semibold text-orange">
-                        Unverified
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-4 py-2 text-text-muted tabular-nums">
-                    {u.createdAt.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
-                  </td>
+          <div className="overflow-x-auto">
+            <table className="w-full text-[12px]">
+              <thead>
+                <tr className="border-b border-border bg-surface text-left text-[10px] uppercase tracking-wide text-text-muted">
+                  <th className="px-4 py-2 font-semibold">Name</th>
+                  <th className="px-4 py-2 font-semibold">Email</th>
+                  <th className="px-4 py-2 font-semibold">Access</th>
+                  <th className="px-4 py-2 font-semibold">Status</th>
+                  <th className="px-4 py-2 font-semibold">Created</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {users.map((u) => (
+                  <tr key={u.id} className="border-b border-border last:border-b-0">
+                    <td className="px-4 py-2 font-medium text-navy">
+                      <Link href={`/admin/users/${u.id}`} className="text-ace-dark underline">
+                        {[u.firstName, u.lastName].filter(Boolean).join(" ") || "—"}
+                      </Link>
+                    </td>
+                    <td className="px-4 py-2 text-text-mid">{u.email}</td>
+                    <td className="px-4 py-2">
+                      <EntitlementBadges user={u} />
+                    </td>
+                    <td className="px-4 py-2">
+                      {u.disabledAt ? (
+                        <span className="inline-flex items-center rounded-full bg-red-bg px-2 py-0.5 text-[10px] font-semibold text-red">
+                          Suspended
+                        </span>
+                      ) : u.emailVerifiedAt ? (
+                        <span className="inline-flex items-center rounded-full bg-green-bg px-2 py-0.5 text-[10px] font-semibold text-green">
+                          Verified
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center rounded-full bg-orange-bg px-2 py-0.5 text-[10px] font-semibold text-orange">
+                          Unverified
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-2 text-text-muted tabular-nums">
+                      {u.createdAt.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 

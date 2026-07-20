@@ -75,7 +75,7 @@ export default async function VerifyPage({
         <h1 className="mt-4 font-serif text-3xl font-bold text-balance">
           Verify a CE Certificate
         </h1>
-        <p className="mx-auto mt-2 max-w-md text-[13px] text-white/55 text-pretty">
+        <p className="mx-auto mt-2 max-w-md text-[13px] text-white/70 text-pretty">
           Confirm continuing-education certificates issued through DentalACE or
           tracked in ProTrack. Free, no account required.
         </p>

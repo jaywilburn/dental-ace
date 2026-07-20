@@ -108,91 +108,93 @@ export default async function EventsIndexPage({
             </Link>
           </div>
         ) : (
-          <table className="w-full text-[12px]">
-            <thead>
-              <tr className="border-b border-border bg-surface text-left text-[10px] uppercase tracking-wide text-text-muted">
-                <th className="px-4 py-2 font-semibold">Name</th>
-                <th className="px-4 py-2 font-semibold">Date</th>
-                <th className="px-4 py-2 font-semibold">Type</th>
-                <th className="px-4 py-2 text-right font-semibold">Sessions</th>
-                <th className="px-4 py-2 font-semibold">Status</th>
-                <th className="px-4 py-2 font-semibold">Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {events.map((event) => {
-                const asset = assets.get(event.id);
-                return (
-                <tr key={event.id} className="border-b border-border last:border-b-0">
-                  <td className="px-4 py-2 font-medium text-navy">
-                    {event.name || "(untitled draft)"}
-                  </td>
-                  <td className="px-4 py-2 text-text-mid">{event.eventDate || "—"}</td>
-                  <td className="px-4 py-2 text-text-mid">
-                    {event.eventType ? TYPE_SHORT[event.eventType] : "—"}
-                  </td>
-                  <td className="px-4 py-2 text-right tabular-nums text-text-mid">
-                    {event.sessions.length}
-                  </td>
-                  <td className="px-4 py-2">
-                    <span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold ${STATUS_STYLE[event.status]}`}>
-                      {event.status}
-                    </span>
-                  </td>
-                  <td className="px-4 py-2">
-                    {event.status === "DRAFT" ? (
-                      <Link
-                        href="/company/events/new"
-                        className="rounded-md border border-border bg-white px-3 py-1.5 text-[11px] font-semibold text-navy hover:bg-surface"
-                      >
-                        Continue
-                      </Link>
-                    ) : event.status === "APPROVED" ? (
-                      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-[11px]">
-                        <Link href={`/attend/event/${event.attendeeLinkToken}`} className="text-ace underline">
-                          Attendee Link
-                        </Link>
-                        {asset?.qrViewUrl && asset?.qrDownloadUrl ? (
-                          <span className="inline-flex flex-col items-center gap-1">
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img
-                              src={asset.qrViewUrl}
-                              alt={`Attendee QR code for ${event.name || event.eventIdNumber}`}
-                              width={112}
-                              height={112}
-                              className="h-28 w-28 rounded-md border border-border bg-white p-1.5"
-                            />
-                            <a href={asset.qrDownloadUrl} className="text-ace underline">
-                              Download QR
-                            </a>
-                          </span>
-                        ) : (
-                          <span className="text-text-muted">QR unavailable</span>
-                        )}
-                        {asset?.letterDownloadUrl ? (
-                          <a href={asset.letterDownloadUrl} target="_blank" rel="noopener noreferrer" className="text-ace underline">
-                            Approval Letter
-                          </a>
-                        ) : null}
-                        <a
-                          href={`/api/events/${event.id}/badge`}
-                          className="text-ace underline"
-                          title="Download marketing logo"
-                        >
-                          Marketing Logo
-                        </a>
-                      </div>
-                    ) : event.eventIdNumber ? (
-                      <span className="font-mono text-[11px] text-text-muted">{event.eventIdNumber}</span>
-                    ) : (
-                      <span className="text-text-muted">—</span>
-                    )}
-                  </td>
+          <div className="overflow-x-auto">
+            <table className="w-full text-[12px]">
+              <thead>
+                <tr className="border-b border-border bg-surface text-left text-[10px] uppercase tracking-wide text-text-muted">
+                  <th className="px-4 py-2 font-semibold">Name</th>
+                  <th className="px-4 py-2 font-semibold">Date</th>
+                  <th className="px-4 py-2 font-semibold">Type</th>
+                  <th className="px-4 py-2 text-right font-semibold">Sessions</th>
+                  <th className="px-4 py-2 font-semibold">Status</th>
+                  <th className="px-4 py-2 font-semibold">Action</th>
                 </tr>
-                );
-              })}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {events.map((event) => {
+                  const asset = assets.get(event.id);
+                  return (
+                  <tr key={event.id} className="border-b border-border last:border-b-0">
+                    <td className="px-4 py-2 font-medium text-navy">
+                      {event.name || "(untitled draft)"}
+                    </td>
+                    <td className="px-4 py-2 text-text-mid">{event.eventDate || "—"}</td>
+                    <td className="px-4 py-2 text-text-mid">
+                      {event.eventType ? TYPE_SHORT[event.eventType] : "—"}
+                    </td>
+                    <td className="px-4 py-2 text-right tabular-nums text-text-mid">
+                      {event.sessions.length}
+                    </td>
+                    <td className="px-4 py-2">
+                      <span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold ${STATUS_STYLE[event.status]}`}>
+                        {event.status}
+                      </span>
+                    </td>
+                    <td className="px-4 py-2">
+                      {event.status === "DRAFT" ? (
+                        <Link
+                          href="/company/events/new"
+                          className="rounded-md border border-border bg-white px-3 py-1.5 text-[11px] font-semibold text-navy hover:bg-surface"
+                        >
+                          Continue
+                        </Link>
+                      ) : event.status === "APPROVED" ? (
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-[11px]">
+                          <Link href={`/attend/event/${event.attendeeLinkToken}`} className="text-ace-dark underline">
+                            Attendee Link
+                          </Link>
+                          {asset?.qrViewUrl && asset?.qrDownloadUrl ? (
+                            <span className="inline-flex flex-col items-center gap-1">
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img
+                                src={asset.qrViewUrl}
+                                alt={`Attendee QR code for ${event.name || event.eventIdNumber}`}
+                                width={112}
+                                height={112}
+                                className="h-28 w-28 rounded-md border border-border bg-white p-1.5"
+                              />
+                              <a href={asset.qrDownloadUrl} className="text-ace-dark underline">
+                                Download QR
+                              </a>
+                            </span>
+                          ) : (
+                            <span className="text-text-muted">QR unavailable</span>
+                          )}
+                          {asset?.letterDownloadUrl ? (
+                            <a href={asset.letterDownloadUrl} target="_blank" rel="noopener noreferrer" className="text-ace-dark underline">
+                              Approval Letter
+                            </a>
+                          ) : null}
+                          <a
+                            href={`/api/events/${event.id}/badge`}
+                            className="text-ace-dark underline"
+                            title="Download marketing logo"
+                          >
+                            Marketing Logo
+                          </a>
+                        </div>
+                      ) : event.eventIdNumber ? (
+                        <span className="font-mono text-[11px] text-text-muted">{event.eventIdNumber}</span>
+                      ) : (
+                        <span className="text-text-muted">—</span>
+                      )}
+                    </td>
+                  </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
     </>

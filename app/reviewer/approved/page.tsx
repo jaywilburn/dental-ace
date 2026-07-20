@@ -40,69 +40,71 @@ export default async function ReviewerApprovedPage() {
             No approved courses yet.
           </p>
         ) : (
-          <table className="w-full text-[12px]">
-            <thead>
-              <tr className="border-b border-border bg-surface text-left text-[10px] uppercase tracking-wide text-text-muted">
-                <th className="px-4 py-2 font-semibold">Course ID</th>
-                <th className="px-4 py-2 font-semibold">Company</th>
-                <th className="px-4 py-2 font-semibold">Approved</th>
-                <th className="px-4 py-2 font-semibold">Expires</th>
-                <th className="px-4 py-2 text-right font-semibold">Certs Issued</th>
-                <th className="px-4 py-2 font-semibold">Quiz</th>
-                <th className="px-4 py-2 font-semibold">Reviewed By</th>
-              </tr>
-            </thead>
-            <tbody>
-              {courses.map((c) => {
-                const hasQuiz = quizArraySchema.safeParse(c.quizQuestions).success;
-                return (
-                  <tr key={c.id} className="border-b border-border last:border-b-0">
-                    <td className="px-4 py-2 font-mono text-[11px] text-navy">
-                      {c.courseIdNumber}
-                    </td>
-                    <td className="px-4 py-2 text-text-mid">{c.company.name}</td>
-                    <td className="px-4 py-2 text-text-muted">
-                      {c.approvedAt.toLocaleDateString("en-US", {
-                        month: "short",
-                        year: "numeric",
-                      })}
-                    </td>
-                    <td className="px-4 py-2 text-text-muted">
-                      {c.expiresAt.toLocaleDateString("en-US", {
-                        month: "short",
-                        year: "numeric",
-                      })}
-                    </td>
-                    <td className="px-4 py-2 text-right text-text-mid tabular-nums">
-                      {c.certsIssuedCount}
-                    </td>
-                    <td className="px-4 py-2">
-                      <span className="flex items-center gap-2 whitespace-nowrap">
-                        {hasQuiz ? (
-                          <span className="text-text-muted">5 questions</span>
-                        ) : (
-                          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-700">
-                            Missing
-                          </span>
-                        )}
-                        {isAdmin ? (
-                          <Link
-                            href={`/admin/courses/${c.id}/quiz`}
-                            className="text-ace underline"
-                          >
-                            {hasQuiz ? "Edit" : "Add quiz"}
-                          </Link>
-                        ) : null}
-                      </span>
-                    </td>
-                    <td className="px-4 py-2 text-text-muted">
-                      {c.application.reviewedBy?.email ?? "—"}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+          <div className="overflow-x-auto">
+            <table className="w-full text-[12px]">
+              <thead>
+                <tr className="border-b border-border bg-surface text-left text-[10px] uppercase tracking-wide text-text-muted">
+                  <th className="px-4 py-2 font-semibold">Course ID</th>
+                  <th className="px-4 py-2 font-semibold">Company</th>
+                  <th className="px-4 py-2 font-semibold">Approved</th>
+                  <th className="px-4 py-2 font-semibold">Expires</th>
+                  <th className="px-4 py-2 text-right font-semibold">Certs Issued</th>
+                  <th className="px-4 py-2 font-semibold">Quiz</th>
+                  <th className="px-4 py-2 font-semibold">Reviewed By</th>
+                </tr>
+              </thead>
+              <tbody>
+                {courses.map((c) => {
+                  const hasQuiz = quizArraySchema.safeParse(c.quizQuestions).success;
+                  return (
+                    <tr key={c.id} className="border-b border-border last:border-b-0">
+                      <td className="px-4 py-2 font-mono text-[11px] text-navy">
+                        {c.courseIdNumber}
+                      </td>
+                      <td className="px-4 py-2 text-text-mid">{c.company.name}</td>
+                      <td className="px-4 py-2 text-text-muted">
+                        {c.approvedAt.toLocaleDateString("en-US", {
+                          month: "short",
+                          year: "numeric",
+                        })}
+                      </td>
+                      <td className="px-4 py-2 text-text-muted">
+                        {c.expiresAt.toLocaleDateString("en-US", {
+                          month: "short",
+                          year: "numeric",
+                        })}
+                      </td>
+                      <td className="px-4 py-2 text-right text-text-mid tabular-nums">
+                        {c.certsIssuedCount}
+                      </td>
+                      <td className="px-4 py-2">
+                        <span className="flex items-center gap-2 whitespace-nowrap">
+                          {hasQuiz ? (
+                            <span className="text-text-muted">5 questions</span>
+                          ) : (
+                            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-700">
+                              Missing
+                            </span>
+                          )}
+                          {isAdmin ? (
+                            <Link
+                              href={`/admin/courses/${c.id}/quiz`}
+                              className="text-ace-dark underline"
+                            >
+                              {hasQuiz ? "Edit" : "Add quiz"}
+                            </Link>
+                          ) : null}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2 text-text-muted">
+                        {c.application.reviewedBy?.email ?? "—"}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
     </>

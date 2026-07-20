@@ -51,53 +51,55 @@ export default async function BillingHistoryPage({
             to get started.
           </p>
         ) : (
-          <table className="w-full text-[12px]">
-            <thead>
-              <tr className="border-b border-border bg-surface text-left text-[10px] uppercase tracking-wide text-text-muted">
-                <th className="px-4 py-2 font-semibold">Date</th>
-                <th className="px-4 py-2 font-semibold">Type</th>
-                <th className="px-4 py-2 font-semibold">Description</th>
-                <th className="px-4 py-2 text-right font-semibold">Amount</th>
-                <th className="px-4 py-2 font-semibold">Receipt</th>
-              </tr>
-            </thead>
-            <tbody>
-              {txns.map((txn) => (
-                <tr key={txn.id} className="border-b border-border last:border-b-0">
-                  <td className="px-4 py-2 text-text-muted">
-                    {new Intl.DateTimeFormat("en-US", {
-                      month: "short",
-                      day: "numeric",
-                      year: "numeric",
-                    }).format(txn.createdAt)}
-                  </td>
-                  <td className="px-4 py-2 font-medium text-navy">
-                    {labelFor(txn.type)}
-                  </td>
-                  <td className="px-4 py-2 text-text-mid">
-                    {txn.quantity}{" "}
-                    {txn.type === "CERT_BUNDLE" ? "certificates" : "credits"}
-                  </td>
-                  <td className="px-4 py-2 text-right font-medium text-navy tabular-nums">
-                    {txn.amountCents > 0
-                      ? `$${(txn.amountCents / 100).toLocaleString("en-US", {
-                          minimumFractionDigits: 2,
-                        })}`
-                      : "—"}
-                  </td>
-                  <td className="px-4 py-2 text-text-muted">
-                    {txn.stripePaymentId ? (
-                      <code className="font-mono text-[10px]">
-                        {txn.stripePaymentId.slice(0, 14)}…
-                      </code>
-                    ) : (
-                      "—"
-                    )}
-                  </td>
+          <div className="overflow-x-auto">
+            <table className="w-full text-[12px]">
+              <thead>
+                <tr className="border-b border-border bg-surface text-left text-[10px] uppercase tracking-wide text-text-muted">
+                  <th className="px-4 py-2 font-semibold">Date</th>
+                  <th className="px-4 py-2 font-semibold">Type</th>
+                  <th className="px-4 py-2 font-semibold">Description</th>
+                  <th className="px-4 py-2 text-right font-semibold">Amount</th>
+                  <th className="px-4 py-2 font-semibold">Receipt</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {txns.map((txn) => (
+                  <tr key={txn.id} className="border-b border-border last:border-b-0">
+                    <td className="px-4 py-2 text-text-muted">
+                      {new Intl.DateTimeFormat("en-US", {
+                        month: "short",
+                        day: "numeric",
+                        year: "numeric",
+                      }).format(txn.createdAt)}
+                    </td>
+                    <td className="px-4 py-2 font-medium text-navy">
+                      {labelFor(txn.type)}
+                    </td>
+                    <td className="px-4 py-2 text-text-mid">
+                      {txn.quantity}{" "}
+                      {txn.type === "CERT_BUNDLE" ? "certificates" : "credits"}
+                    </td>
+                    <td className="px-4 py-2 text-right font-medium text-navy tabular-nums">
+                      {txn.amountCents > 0
+                        ? `$${(txn.amountCents / 100).toLocaleString("en-US", {
+                            minimumFractionDigits: 2,
+                          })}`
+                        : "—"}
+                    </td>
+                    <td className="px-4 py-2 text-text-muted">
+                      {txn.stripePaymentId ? (
+                        <code className="font-mono text-[10px]">
+                          {txn.stripePaymentId.slice(0, 14)}…
+                        </code>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
     </>

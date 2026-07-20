@@ -256,70 +256,72 @@ export default async function LicenseesPage({
         </div>
       ) : (
         <div className="overflow-hidden rounded-lg border border-border bg-white">
-          <table className="w-full text-[12px]">
-            <thead className="border-b border-border bg-surface text-left text-[10px] uppercase tracking-wide text-text-muted">
-              <tr>
-                <th className="px-4 py-2 font-semibold">License #</th>
-                <th className="px-4 py-2 font-semibold">Name</th>
-                <th className="px-4 py-2 font-semibold">Type</th>
-                <th className="px-4 py-2 text-right font-semibold">CE hrs</th>
-                <th className="px-4 py-2 font-semibold">Status</th>
-                <th className="px-4 py-2 font-semibold">Renewal</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((r) => {
-                const meta = STATUS_META[r.complianceStatus];
-                const name = r.firstName
-                  ? `${r.firstName} ${r.lastName ?? ""}`.trim()
-                  : r.email;
-                return (
-                  <tr
-                    key={r.userLicenseId}
-                    className="border-b border-border last:border-0"
-                  >
-                    <td className="px-4 py-2 font-mono text-[11px] text-navy">
-                      <Link
-                        href={`/board/licensees/${encodeURIComponent(r.licenseNumber)}`}
-                        className="hover:underline"
-                      >
-                        {r.licenseNumber}
-                      </Link>
-                    </td>
-                    <td className="px-4 py-2 text-text-mid">
-                      <Link
-                        href={`/board/licensees/${encodeURIComponent(r.licenseNumber)}`}
-                        className="hover:text-navy hover:underline"
-                      >
-                        {name}
-                      </Link>
-                    </td>
-                    <td className="px-4 py-2 text-text-muted">
-                      {licenseTypeShort(r.licenseType)}
-                    </td>
-                    <td className="px-4 py-2 text-right tabular-nums text-text-mid">
-                      {r.ceHoursCompleted.toFixed(1)}
-                      <span className="text-text-muted"> / {r.ceHoursRequired.toFixed(1)}</span>
-                    </td>
-                    <td className="px-4 py-2">
-                      <span
-                        className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${meta.className}`}
-                      >
-                        {meta.label}
-                      </span>
-                    </td>
-                    <td className="px-4 py-2 text-text-muted">
-                      {r.renewalDate.toLocaleDateString("en-US", {
-                        month: "short",
-                        day: "numeric",
-                        year: "numeric",
-                      })}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+          <div className="overflow-x-auto">
+            <table className="w-full text-[12px]">
+              <thead className="border-b border-border bg-surface text-left text-[10px] uppercase tracking-wide text-text-muted">
+                <tr>
+                  <th className="px-4 py-2 font-semibold">License #</th>
+                  <th className="px-4 py-2 font-semibold">Name</th>
+                  <th className="px-4 py-2 font-semibold">Type</th>
+                  <th className="px-4 py-2 text-right font-semibold">CE hrs</th>
+                  <th className="px-4 py-2 font-semibold">Status</th>
+                  <th className="px-4 py-2 font-semibold">Renewal</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r) => {
+                  const meta = STATUS_META[r.complianceStatus];
+                  const name = r.firstName
+                    ? `${r.firstName} ${r.lastName ?? ""}`.trim()
+                    : r.email;
+                  return (
+                    <tr
+                      key={r.userLicenseId}
+                      className="border-b border-border last:border-0"
+                    >
+                      <td className="px-4 py-2 font-mono text-[11px] text-navy">
+                        <Link
+                          href={`/board/licensees/${encodeURIComponent(r.licenseNumber)}`}
+                          className="hover:underline"
+                        >
+                          {r.licenseNumber}
+                        </Link>
+                      </td>
+                      <td className="px-4 py-2 text-text-mid">
+                        <Link
+                          href={`/board/licensees/${encodeURIComponent(r.licenseNumber)}`}
+                          className="hover:text-navy hover:underline"
+                        >
+                          {name}
+                        </Link>
+                      </td>
+                      <td className="px-4 py-2 text-text-muted">
+                        {licenseTypeShort(r.licenseType)}
+                      </td>
+                      <td className="px-4 py-2 text-right tabular-nums text-text-mid">
+                        {r.ceHoursCompleted.toFixed(1)}
+                        <span className="text-text-muted"> / {r.ceHoursRequired.toFixed(1)}</span>
+                      </td>
+                      <td className="px-4 py-2">
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${meta.className}`}
+                        >
+                          {meta.label}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2 text-text-muted">
+                        {r.renewalDate.toLocaleDateString("en-US", {
+                          month: "short",
+                          day: "numeric",
+                          year: "numeric",
+                        })}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
           {totalPages > 1 ? (
             <div className="flex items-center justify-between border-t border-border bg-surface px-4 py-2 text-[11px] text-text-muted">
               <span>

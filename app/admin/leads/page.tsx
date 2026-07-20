@@ -80,7 +80,7 @@ export default async function AdminLeadsPage() {
                   </td>
                   <td className="px-4 py-2 text-text-mid">{lead.organization}</td>
                   <td className="px-4 py-2 text-text-mid">
-                    <a href={`mailto:${lead.email}`} className="text-ace underline">
+                    <a href={`mailto:${lead.email}`} className="text-ace-dark underline">
                       {lead.email}
                     </a>
                   </td>

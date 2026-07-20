@@ -46,32 +46,34 @@ export default async function AdminCompaniesPage({
         {companies.length === 0 ? (
           <p className="px-4 py-10 text-center text-[12px] text-text-muted">No companies found.</p>
         ) : (
-          <table className="w-full text-[12px]">
-            <thead>
-              <tr className="border-b border-border bg-surface text-left text-[10px] uppercase tracking-wide text-text-muted">
-                <th className="px-4 py-2 font-semibold">Company</th>
-                <th className="px-4 py-2 font-semibold">Contact</th>
-                <th className="px-4 py-2 font-semibold">App Credits</th>
-                <th className="px-4 py-2 font-semibold">Cert Balance</th>
-                <th className="px-4 py-2 font-semibold">Certs Issued</th>
-              </tr>
-            </thead>
-            <tbody>
-              {companies.map((c) => (
-                <tr key={c.id} className="border-b border-border last:border-b-0">
-                  <td className="px-4 py-2 font-medium text-navy">
-                    <Link href={`/admin/companies/${c.id}`} className="text-ace underline">{c.name}</Link>
-                  </td>
-                  <td className="px-4 py-2 text-text-muted">{c.contactEmail ?? "·"}</td>
-                  <td className="px-4 py-2 text-text-mid tabular-nums">
-                    {c.applicationCredits}
-                  </td>
-                  <td className="px-4 py-2 text-text-mid tabular-nums">{c.certBalance}</td>
-                  <td className="px-4 py-2 text-text-muted tabular-nums">{c.totalCertsIssued}</td>
+          <div className="overflow-x-auto">
+            <table className="w-full text-[12px]">
+              <thead>
+                <tr className="border-b border-border bg-surface text-left text-[10px] uppercase tracking-wide text-text-muted">
+                  <th className="px-4 py-2 font-semibold">Company</th>
+                  <th className="px-4 py-2 font-semibold">Contact</th>
+                  <th className="px-4 py-2 font-semibold">App Credits</th>
+                  <th className="px-4 py-2 font-semibold">Cert Balance</th>
+                  <th className="px-4 py-2 font-semibold">Certs Issued</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {companies.map((c) => (
+                  <tr key={c.id} className="border-b border-border last:border-b-0">
+                    <td className="px-4 py-2 font-medium text-navy">
+                      <Link href={`/admin/companies/${c.id}`} className="text-ace-dark underline">{c.name}</Link>
+                    </td>
+                    <td className="px-4 py-2 text-text-muted">{c.contactEmail ?? "·"}</td>
+                    <td className="px-4 py-2 text-text-mid tabular-nums">
+                      {c.applicationCredits}
+                    </td>
+                    <td className="px-4 py-2 text-text-mid tabular-nums">{c.certBalance}</td>
+                    <td className="px-4 py-2 text-text-muted tabular-nums">{c.totalCertsIssued}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
       {totalPages > 1 && (

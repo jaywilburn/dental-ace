@@ -75,7 +75,7 @@ export default async function ReviewerQueuePage({
           name="q"
           defaultValue={query}
           placeholder="Search company name"
-          className={`${fieldClass} min-w-[200px] flex-1`}
+          className={`${fieldClass} min-w-[200px] max-w-full flex-1`}
         />
         <select name="format" defaultValue={formatFilter} className={fieldClass}>
           <option value="">All formats</option>
@@ -124,98 +124,54 @@ export default async function ReviewerQueuePage({
               : "Nothing pending. ☕"}
           </p>
         ) : (
-          <table className="w-full text-[12px]">
-            <thead>
-              <tr className="border-b border-border bg-surface text-left text-[10px] uppercase tracking-wide text-text-muted">
-                <th className="px-4 py-2 font-semibold">Submitted</th>
-                <th className="px-4 py-2 font-semibold">Company</th>
-                <th className="px-4 py-2 font-semibold">Course Name</th>
-                <th className="px-4 py-2 font-semibold">CE</th>
-                <th className="px-4 py-2 font-semibold">Format</th>
-                <th className="px-4 py-2 font-semibold">Days Pending</th>
-                <th className="px-4 py-2 font-semibold">Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {pending.map((app) => {
-                const submitted = app.submittedAt ?? app.createdAt;
-                const days = Math.floor(
-                  (now - submitted.getTime()) / (1000 * 60 * 60 * 24),
-                );
-                return (
-                  <tr
-                    key={app.id}
-                    className="border-b border-border last:border-b-0"
-                  >
-                    <td className="px-4 py-2 text-text-muted">
-                      {submitted.toLocaleDateString("en-US", {
-                        month: "short",
-                        day: "numeric",
-                      })}
-                    </td>
-                    <td className="px-4 py-2 text-text-mid">{app.company.name}</td>
-                    <td className="px-4 py-2 font-medium text-navy">
-                      {app.courseTitle ?? "(untitled)"}
-                    </td>
-                    <td className="px-4 py-2 text-text-mid tabular-nums">
-                      {app.ceHours ? Number(app.ceHours).toFixed(1) : "—"}
-                    </td>
-                    <td className="px-4 py-2 text-text-mid">{app.deliveryMethod ?? "—"}</td>
-                    <td
-                      className={`px-4 py-2 font-semibold tabular-nums ${
-                        days >= 5 ? "text-red-600" : days >= 3 ? "text-orange-600" : "text-text-muted"
-                      }`}
-                    >
-                      {days} day{days === 1 ? "" : "s"}
-                    </td>
-                    <td className="px-4 py-2">
-                      <Link
-                        href={`/reviewer/${app.id}`}
-                        className="rounded-md bg-navy px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-navy/90"
-                      >
-                        Review
-                      </Link>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        )}
-      </div>
-
-      {pendingEvents.length > 0 ? (
-        <div className="mt-8">
-          <h2 className="mb-2 text-[13px] font-semibold text-navy">
-            Pending Events ({pendingEvents.length})
-          </h2>
-          <div className="overflow-hidden rounded-lg border border-border bg-white">
+          <div className="overflow-x-auto">
             <table className="w-full text-[12px]">
               <thead>
                 <tr className="border-b border-border bg-surface text-left text-[10px] uppercase tracking-wide text-text-muted">
                   <th className="px-4 py-2 font-semibold">Submitted</th>
                   <th className="px-4 py-2 font-semibold">Company</th>
-                  <th className="px-4 py-2 font-semibold">Event</th>
-                  <th className="px-4 py-2 text-right font-semibold">Hours</th>
+                  <th className="px-4 py-2 font-semibold">Course Name</th>
+                  <th className="px-4 py-2 font-semibold">CE</th>
+                  <th className="px-4 py-2 font-semibold">Format</th>
+                  <th className="px-4 py-2 font-semibold">Days Pending</th>
                   <th className="px-4 py-2 font-semibold">Action</th>
                 </tr>
               </thead>
               <tbody>
-                {pendingEvents.map((ev) => {
-                  const submitted = ev.submittedAt ?? ev.createdAt;
+                {pending.map((app) => {
+                  const submitted = app.submittedAt ?? app.createdAt;
+                  const days = Math.floor(
+                    (now - submitted.getTime()) / (1000 * 60 * 60 * 24),
+                  );
                   return (
-                    <tr key={ev.id} className="border-b border-border last:border-b-0">
+                    <tr
+                      key={app.id}
+                      className="border-b border-border last:border-b-0"
+                    >
                       <td className="px-4 py-2 text-text-muted">
-                        {submitted.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                        {submitted.toLocaleDateString("en-US", {
+                          month: "short",
+                          day: "numeric",
+                        })}
                       </td>
-                      <td className="px-4 py-2 text-text-mid">{ev.company.name}</td>
-                      <td className="px-4 py-2 font-medium text-navy">{ev.name}</td>
-                      <td className="px-4 py-2 text-right tabular-nums text-text-mid">
-                        {ev.totalHours ? Number(ev.totalHours).toFixed(1) : "—"}
+                      <td className="px-4 py-2 text-text-mid">{app.company.name}</td>
+                      <td className="px-4 py-2 font-medium text-navy">
+                        {app.courseTitle ?? "(untitled)"}
+                      </td>
+                      <td className="px-4 py-2 text-text-mid tabular-nums">
+                        {app.ceHours ? Number(app.ceHours).toFixed(1) : "—"}
+                      </td>
+                      <td className="px-4 py-2 text-text-mid">{app.deliveryMethod ?? "—"}</td>
+                      <td
+                        className={`px-4 py-2 font-semibold tabular-nums ${
+                          days >= 5 ? "text-red-600" : days >= 3 ? "text-orange-600" : "text-text-muted"
+                        }`}
+                      >
+                        {days} day{days === 1 ? "" : "s"}
                       </td>
                       <td className="px-4 py-2">
                         <Link
-                          href={`/reviewer/events/${ev.id}`}
+                          href={`/reviewer/${app.id}`}
                           className="rounded-md bg-navy px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-navy/90"
                         >
                           Review
@@ -226,6 +182,54 @@ export default async function ReviewerQueuePage({
                 })}
               </tbody>
             </table>
+          </div>
+        )}
+      </div>
+
+      {pendingEvents.length > 0 ? (
+        <div className="mt-8">
+          <h2 className="mb-2 text-[13px] font-semibold text-navy">
+            Pending Events ({pendingEvents.length})
+          </h2>
+          <div className="overflow-hidden rounded-lg border border-border bg-white">
+            <div className="overflow-x-auto">
+              <table className="w-full text-[12px]">
+                <thead>
+                  <tr className="border-b border-border bg-surface text-left text-[10px] uppercase tracking-wide text-text-muted">
+                    <th className="px-4 py-2 font-semibold">Submitted</th>
+                    <th className="px-4 py-2 font-semibold">Company</th>
+                    <th className="px-4 py-2 font-semibold">Event</th>
+                    <th className="px-4 py-2 text-right font-semibold">Hours</th>
+                    <th className="px-4 py-2 font-semibold">Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pendingEvents.map((ev) => {
+                    const submitted = ev.submittedAt ?? ev.createdAt;
+                    return (
+                      <tr key={ev.id} className="border-b border-border last:border-b-0">
+                        <td className="px-4 py-2 text-text-muted">
+                          {submitted.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                        </td>
+                        <td className="px-4 py-2 text-text-mid">{ev.company.name}</td>
+                        <td className="px-4 py-2 font-medium text-navy">{ev.name}</td>
+                        <td className="px-4 py-2 text-right tabular-nums text-text-mid">
+                          {ev.totalHours ? Number(ev.totalHours).toFixed(1) : "—"}
+                        </td>
+                        <td className="px-4 py-2">
+                          <Link
+                            href={`/reviewer/events/${ev.id}`}
+                            className="rounded-md bg-navy px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-navy/90"
+                          >
+                            Review
+                          </Link>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       ) : null}

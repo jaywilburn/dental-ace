@@ -30,7 +30,7 @@ export default async function LoginPage({
       : null;
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-navy p-8">
+    <main className="flex min-h-dvh items-center justify-center bg-navy p-8">
       <div className="w-full max-w-[380px]">
         <form
           action="/api/auth/signin"
@@ -98,7 +98,7 @@ export default async function LoginPage({
             Sign in
           </button>
 
-          <p className="mt-4 text-center text-[10px] text-white/30">
+          <p className="mt-4 text-center text-[10px] text-white/70">
             New to DentalACE One?{" "}
             <Link className="text-ace-light" href="/signup">
               Create an account
@@ -112,7 +112,7 @@ export default async function LoginPage({
             method="POST"
             className="mt-3 rounded-xl border border-white/10 bg-white/[0.05] p-4"
           >
-            <p className="mb-2 text-[11px] text-white/55">
+            <p className="mb-2 text-[11px] text-white/70">
               Confirm your email to sign in. Enter it to resend the link.
             </p>
             <div className="flex gap-2">
