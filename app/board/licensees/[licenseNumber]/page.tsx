@@ -204,61 +204,63 @@ export default async function LicenseeDetailPage({
               detail.license.state,
             )}
           </div>
-          <table className="w-full text-[12px]">
-            <thead className="border-b border-border bg-surface text-left text-[10px] uppercase tracking-wide text-text-muted">
-              <tr>
-                <th className="px-4 py-2 font-semibold">Category</th>
-                <th className="px-4 py-2 font-semibold">Format</th>
-                <th className="px-4 py-2 text-right font-semibold">Earned</th>
-                <th className="px-4 py-2 text-right font-semibold">Required</th>
-                <th className="px-4 py-2 font-semibold">Progress</th>
-              </tr>
-            </thead>
-            <tbody>
-              {progress.categories.map((c) => {
-                const pct =
-                  c.required > 0
-                    ? Math.min(100, Math.round((c.earned / c.required) * 100))
-                    : 100;
-                return (
-                  <tr key={c.name} className="border-b border-border last:border-0">
-                    <td className="px-4 py-2 text-navy">
-                      <span className="mr-1.5">{categoryIcon(c.name)}</span>
-                      {c.name}
-                    </td>
-                    <td className="px-4 py-2 text-text-muted">
-                      {formatLabel(c.format)}
-                    </td>
-                    <td className="px-4 py-2 text-right tabular-nums text-text-mid">
-                      {formatHours(c.earned)}
-                    </td>
-                    <td className="px-4 py-2 text-right tabular-nums text-text-muted">
-                      {formatHours(c.required)}
-                    </td>
-                    <td className="px-4 py-2">
-                      <div className="flex items-center gap-2">
-                        <div className="h-1.5 w-32 overflow-hidden rounded-full bg-surface">
-                          <div
-                            className={`h-full ${
-                              c.status === "complete"
-                                ? "bg-green-500"
-                                : c.status === "in_progress"
-                                  ? "bg-ace"
-                                  : "bg-border"
-                            }`}
-                            style={{ width: `${pct}%` }}
-                          />
+          <div className="overflow-x-auto">
+            <table className="w-full text-[12px]">
+              <thead className="border-b border-border bg-surface text-left text-[10px] uppercase tracking-wide text-text-muted">
+                <tr>
+                  <th className="px-4 py-2 font-semibold">Category</th>
+                  <th className="px-4 py-2 font-semibold">Format</th>
+                  <th className="px-4 py-2 text-right font-semibold">Earned</th>
+                  <th className="px-4 py-2 text-right font-semibold">Required</th>
+                  <th className="px-4 py-2 font-semibold">Progress</th>
+                </tr>
+              </thead>
+              <tbody>
+                {progress.categories.map((c) => {
+                  const pct =
+                    c.required > 0
+                      ? Math.min(100, Math.round((c.earned / c.required) * 100))
+                      : 100;
+                  return (
+                    <tr key={c.name} className="border-b border-border last:border-0">
+                      <td className="px-4 py-2 text-navy">
+                        <span className="mr-1.5">{categoryIcon(c.name)}</span>
+                        {c.name}
+                      </td>
+                      <td className="px-4 py-2 text-text-muted">
+                        {formatLabel(c.format)}
+                      </td>
+                      <td className="px-4 py-2 text-right tabular-nums text-text-mid">
+                        {formatHours(c.earned)}
+                      </td>
+                      <td className="px-4 py-2 text-right tabular-nums text-text-muted">
+                        {formatHours(c.required)}
+                      </td>
+                      <td className="px-4 py-2">
+                        <div className="flex items-center gap-2">
+                          <div className="h-1.5 w-32 overflow-hidden rounded-full bg-surface">
+                            <div
+                              className={`h-full ${
+                                c.status === "complete"
+                                  ? "bg-green-500"
+                                  : c.status === "in_progress"
+                                    ? "bg-ace"
+                                    : "bg-border"
+                              }`}
+                              style={{ width: `${pct}%` }}
+                            />
+                          </div>
+                          <span className="text-[10px] tabular-nums text-text-muted">
+                            {pct}%
+                          </span>
                         </div>
-                        <span className="text-[10px] tabular-nums text-text-muted">
-                          {pct}%
-                        </span>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
       ) : (
         <div className="mb-5 rounded-lg border border-dashed border-border bg-white p-4 text-[12px] text-text-muted">
@@ -276,71 +278,73 @@ export default async function LicenseeDetailPage({
           <div className="border-b border-border bg-surface px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-text-muted">
             Deficiencies in your audits ({deficiencies.length})
           </div>
-          <table className="w-full text-[12px]">
-            <thead className="border-b border-border bg-surface text-left text-[10px] uppercase tracking-wide text-text-muted">
-              <tr>
-                <th className="px-4 py-2 font-semibold">Batch</th>
-                <th className="px-4 py-2 font-semibold">Status</th>
-                <th className="px-4 py-2 text-right font-semibold">Missing</th>
-                <th className="px-4 py-2 font-semibold">Missing categories</th>
-                <th className="px-4 py-2 text-right font-semibold">Notices</th>
-                <th className="px-4 py-2 font-semibold">Deadline</th>
-                <th className="px-4 py-2 font-semibold">Recorded</th>
-              </tr>
-            </thead>
-            <tbody>
-              {deficiencies.map((d) => {
-                const meta = DEFICIENCY_META[d.status];
-                const missingCats = Array.isArray(d.missingCategories)
-                  ? (d.missingCategories as string[])
-                  : [];
-                return (
-                  <tr key={d.id} className="border-b border-border last:border-0">
-                    <td className="px-4 py-2 font-mono text-[11px] text-navy">
-                      <Link
-                        href={`/board/audits/${d.batch.id}`}
-                        className="hover:underline"
-                      >
-                        {d.batch.batchCode}
-                      </Link>
-                    </td>
-                    <td className="px-4 py-2">
-                      <span
-                        className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${meta.className}`}
-                      >
-                        {meta.label}
-                      </span>
-                    </td>
-                    <td className="px-4 py-2 text-right tabular-nums text-text-mid">
-                      {Number(d.missingHours).toFixed(1)} hrs
-                    </td>
-                    <td className="px-4 py-2 text-[11px] text-text-muted">
-                      {missingCats.length === 0 ? "—" : missingCats.join(", ")}
-                    </td>
-                    <td className="px-4 py-2 text-right tabular-nums text-text-mid">
-                      {d.noticesSentCount}
-                    </td>
-                    <td className="px-4 py-2 text-text-muted">
-                      {d.deadlineAt
-                        ? d.deadlineAt.toLocaleDateString("en-US", {
-                            month: "short",
-                            day: "numeric",
-                            year: "numeric",
-                          })
-                        : "—"}
-                    </td>
-                    <td className="px-4 py-2 text-text-muted">
-                      {d.createdAt.toLocaleDateString("en-US", {
-                        month: "short",
-                        day: "numeric",
-                        year: "numeric",
-                      })}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+          <div className="overflow-x-auto">
+            <table className="w-full text-[12px]">
+              <thead className="border-b border-border bg-surface text-left text-[10px] uppercase tracking-wide text-text-muted">
+                <tr>
+                  <th className="px-4 py-2 font-semibold">Batch</th>
+                  <th className="px-4 py-2 font-semibold">Status</th>
+                  <th className="px-4 py-2 text-right font-semibold">Missing</th>
+                  <th className="px-4 py-2 font-semibold">Missing categories</th>
+                  <th className="px-4 py-2 text-right font-semibold">Notices</th>
+                  <th className="px-4 py-2 font-semibold">Deadline</th>
+                  <th className="px-4 py-2 font-semibold">Recorded</th>
+                </tr>
+              </thead>
+              <tbody>
+                {deficiencies.map((d) => {
+                  const meta = DEFICIENCY_META[d.status];
+                  const missingCats = Array.isArray(d.missingCategories)
+                    ? (d.missingCategories as string[])
+                    : [];
+                  return (
+                    <tr key={d.id} className="border-b border-border last:border-0">
+                      <td className="px-4 py-2 font-mono text-[11px] text-navy">
+                        <Link
+                          href={`/board/audits/${d.batch.id}`}
+                          className="hover:underline"
+                        >
+                          {d.batch.batchCode}
+                        </Link>
+                      </td>
+                      <td className="px-4 py-2">
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${meta.className}`}
+                        >
+                          {meta.label}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2 text-right tabular-nums text-text-mid">
+                        {Number(d.missingHours).toFixed(1)} hrs
+                      </td>
+                      <td className="px-4 py-2 text-[11px] text-text-muted">
+                        {missingCats.length === 0 ? "—" : missingCats.join(", ")}
+                      </td>
+                      <td className="px-4 py-2 text-right tabular-nums text-text-mid">
+                        {d.noticesSentCount}
+                      </td>
+                      <td className="px-4 py-2 text-text-muted">
+                        {d.deadlineAt
+                          ? d.deadlineAt.toLocaleDateString("en-US", {
+                              month: "short",
+                              day: "numeric",
+                              year: "numeric",
+                            })
+                          : "—"}
+                      </td>
+                      <td className="px-4 py-2 text-text-muted">
+                        {d.createdAt.toLocaleDateString("en-US", {
+                          month: "short",
+                          day: "numeric",
+                          year: "numeric",
+                        })}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
       ) : null}
 
@@ -354,51 +358,53 @@ export default async function LicenseeDetailPage({
             No CE certificates uploaded yet.
           </p>
         ) : (
-          <table className="w-full text-[12px]">
-            <thead className="border-b border-border bg-surface text-left text-[10px] uppercase tracking-wide text-text-muted">
-              <tr>
-                <th className="px-4 py-2 font-semibold">Completed</th>
-                <th className="px-4 py-2 font-semibold">Course</th>
-                <th className="px-4 py-2 font-semibold">Provider</th>
-                <th className="px-4 py-2 font-semibold">Category</th>
-                <th className="px-4 py-2 text-right font-semibold">Hours</th>
-                <th className="px-4 py-2 font-semibold">Format</th>
-                <th className="px-4 py-2 font-semibold">Source</th>
-              </tr>
-            </thead>
-            <tbody>
-              {certs.map((c) => {
-                const vm = VERIFICATION_META[c.verificationStatus];
-                return (
-                  <tr key={c.id} className="border-b border-border last:border-0">
-                    <td className="px-4 py-2 text-text-muted">
-                      {c.completedAt.toLocaleDateString("en-US", {
-                        month: "short",
-                        day: "numeric",
-                        year: "numeric",
-                      })}
-                    </td>
-                    <td className="px-4 py-2 text-navy">{c.courseTitle}</td>
-                    <td className="px-4 py-2 text-text-mid">{c.provider}</td>
-                    <td className="px-4 py-2 text-text-muted">{c.category}</td>
-                    <td className="px-4 py-2 text-right tabular-nums text-text-mid">
-                      {Number(c.hours).toFixed(1)}
-                    </td>
-                    <td className="px-4 py-2 text-[11px] text-text-muted">
-                      {c.deliveryFormat ?? "—"}
-                    </td>
-                    <td className="px-4 py-2">
-                      <span
-                        className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${vm.className}`}
-                      >
-                        {vm.label}
-                      </span>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+          <div className="overflow-x-auto">
+            <table className="w-full text-[12px]">
+              <thead className="border-b border-border bg-surface text-left text-[10px] uppercase tracking-wide text-text-muted">
+                <tr>
+                  <th className="px-4 py-2 font-semibold">Completed</th>
+                  <th className="px-4 py-2 font-semibold">Course</th>
+                  <th className="px-4 py-2 font-semibold">Provider</th>
+                  <th className="px-4 py-2 font-semibold">Category</th>
+                  <th className="px-4 py-2 text-right font-semibold">Hours</th>
+                  <th className="px-4 py-2 font-semibold">Format</th>
+                  <th className="px-4 py-2 font-semibold">Source</th>
+                </tr>
+              </thead>
+              <tbody>
+                {certs.map((c) => {
+                  const vm = VERIFICATION_META[c.verificationStatus];
+                  return (
+                    <tr key={c.id} className="border-b border-border last:border-0">
+                      <td className="px-4 py-2 text-text-muted">
+                        {c.completedAt.toLocaleDateString("en-US", {
+                          month: "short",
+                          day: "numeric",
+                          year: "numeric",
+                        })}
+                      </td>
+                      <td className="px-4 py-2 text-navy">{c.courseTitle}</td>
+                      <td className="px-4 py-2 text-text-mid">{c.provider}</td>
+                      <td className="px-4 py-2 text-text-muted">{c.category}</td>
+                      <td className="px-4 py-2 text-right tabular-nums text-text-mid">
+                        {Number(c.hours).toFixed(1)}
+                      </td>
+                      <td className="px-4 py-2 text-[11px] text-text-muted">
+                        {c.deliveryFormat ?? "—"}
+                      </td>
+                      <td className="px-4 py-2">
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${vm.className}`}
+                        >
+                          {vm.label}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
     </>

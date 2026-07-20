@@ -163,50 +163,52 @@ export default async function AuditBatchPage({
         </p>
       ) : (
         <div className="overflow-hidden rounded-lg border border-border bg-white">
-          <table className="w-full text-[12px]">
-            <thead className="border-b border-border bg-surface text-left text-[10px] uppercase tracking-wide text-text-muted">
-              <tr>
-                <th className="px-4 py-2 font-semibold">License</th>
-                <th className="px-4 py-2 font-semibold">Name</th>
-                <th className="px-4 py-2 font-semibold">Type</th>
-                <th className="px-4 py-2 text-right font-semibold">Completed</th>
-                <th className="px-4 py-2 text-right font-semibold">Required</th>
-                <th className="px-4 py-2 font-semibold">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {selections.map((s) => {
-                const meta = COMPLIANCE_META[s.complianceStatus];
-                const name = s.userLicense.user.firstName
-                  ? `${s.userLicense.user.firstName} ${s.userLicense.user.lastName ?? ""}`.trim()
-                  : s.userLicense.user.email;
-                return (
-                  <tr key={s.id} className="border-b border-border last:border-0">
-                    <td className="px-4 py-2 font-mono text-[11px] text-navy">
-                      {s.userLicense.licenseNumber}
-                    </td>
-                    <td className="px-4 py-2 text-text-mid">{name}</td>
-                    <td className="px-4 py-2 text-text-muted">
-                      {licenseTypeShort(s.userLicense.licenseType)}
-                    </td>
-                    <td className="px-4 py-2 text-right tabular-nums text-text-mid">
-                      {Number(s.ceHoursCompleted).toFixed(1)}
-                    </td>
-                    <td className="px-4 py-2 text-right tabular-nums text-text-muted">
-                      {Number(s.ceHoursRequired).toFixed(1)}
-                    </td>
-                    <td className="px-4 py-2">
-                      <span
-                        className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${meta.className}`}
-                      >
-                        {meta.label}
-                      </span>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+          <div className="overflow-x-auto">
+            <table className="w-full text-[12px]">
+              <thead className="border-b border-border bg-surface text-left text-[10px] uppercase tracking-wide text-text-muted">
+                <tr>
+                  <th className="px-4 py-2 font-semibold">License</th>
+                  <th className="px-4 py-2 font-semibold">Name</th>
+                  <th className="px-4 py-2 font-semibold">Type</th>
+                  <th className="px-4 py-2 text-right font-semibold">Completed</th>
+                  <th className="px-4 py-2 text-right font-semibold">Required</th>
+                  <th className="px-4 py-2 font-semibold">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {selections.map((s) => {
+                  const meta = COMPLIANCE_META[s.complianceStatus];
+                  const name = s.userLicense.user.firstName
+                    ? `${s.userLicense.user.firstName} ${s.userLicense.user.lastName ?? ""}`.trim()
+                    : s.userLicense.user.email;
+                  return (
+                    <tr key={s.id} className="border-b border-border last:border-0">
+                      <td className="px-4 py-2 font-mono text-[11px] text-navy">
+                        {s.userLicense.licenseNumber}
+                      </td>
+                      <td className="px-4 py-2 text-text-mid">{name}</td>
+                      <td className="px-4 py-2 text-text-muted">
+                        {licenseTypeShort(s.userLicense.licenseType)}
+                      </td>
+                      <td className="px-4 py-2 text-right tabular-nums text-text-mid">
+                        {Number(s.ceHoursCompleted).toFixed(1)}
+                      </td>
+                      <td className="px-4 py-2 text-right tabular-nums text-text-muted">
+                        {Number(s.ceHoursRequired).toFixed(1)}
+                      </td>
+                      <td className="px-4 py-2">
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${meta.className}`}
+                        >
+                          {meta.label}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </>

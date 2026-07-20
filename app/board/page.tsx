@@ -120,64 +120,66 @@ export default async function BoardOverviewPage() {
           <EmptyAudits />
         ) : (
           <div className="overflow-hidden rounded-lg border border-border bg-white">
-            <table className="w-full text-[12px]">
-              <thead className="border-b border-border bg-surface text-left text-[10px] uppercase tracking-wide text-text-muted">
-                <tr>
-                  <th className="px-4 py-2 font-semibold">Batch</th>
-                  <th className="px-4 py-2 font-semibold">Name</th>
-                  <th className="px-4 py-2 font-semibold">Run</th>
-                  <th className="px-4 py-2 text-right font-semibold">
-                    Selected
-                  </th>
-                  <th className="px-4 py-2 text-right font-semibold">
-                    Deficient
-                  </th>
-                  <th className="px-4 py-2 font-semibold">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {recentBatches.map((b) => (
-                  <tr
-                    key={b.id}
-                    className="border-b border-border last:border-0"
-                  >
-                    <td className="px-4 py-2 font-mono text-[11px] text-navy">
-                      <Link
-                        href={`/board/audits/${b.id}`}
-                        className="hover:underline"
-                      >
-                        {b.batchCode}
-                      </Link>
-                    </td>
-                    <td className="px-4 py-2 text-text-mid">{b.name}</td>
-                    <td className="px-4 py-2 text-text-muted">
-                      {b.createdAt.toLocaleDateString("en-US", {
-                        month: "short",
-                        day: "numeric",
-                        year: "numeric",
-                      })}
-                    </td>
-                    <td className="px-4 py-2 text-right tabular-nums text-text-mid">
-                      {b.selectedCount}
-                    </td>
-                    <td className="px-4 py-2 text-right tabular-nums text-text-mid">
-                      {b.deficientCount}
-                    </td>
-                    <td className="px-4 py-2">
-                      <span
-                        className={
-                          b.status === "ACTIVE"
-                            ? "rounded-full bg-ace-bg px-2 py-0.5 text-[10px] font-semibold text-ace-dark"
-                            : "rounded-full bg-surface px-2 py-0.5 text-[10px] font-semibold text-text-muted"
-                        }
-                      >
-                        {b.status}
-                      </span>
-                    </td>
+            <div className="overflow-x-auto">
+              <table className="w-full text-[12px]">
+                <thead className="border-b border-border bg-surface text-left text-[10px] uppercase tracking-wide text-text-muted">
+                  <tr>
+                    <th className="px-4 py-2 font-semibold">Batch</th>
+                    <th className="px-4 py-2 font-semibold">Name</th>
+                    <th className="px-4 py-2 font-semibold">Run</th>
+                    <th className="px-4 py-2 text-right font-semibold">
+                      Selected
+                    </th>
+                    <th className="px-4 py-2 text-right font-semibold">
+                      Deficient
+                    </th>
+                    <th className="px-4 py-2 font-semibold">Status</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {recentBatches.map((b) => (
+                    <tr
+                      key={b.id}
+                      className="border-b border-border last:border-0"
+                    >
+                      <td className="px-4 py-2 font-mono text-[11px] text-navy">
+                        <Link
+                          href={`/board/audits/${b.id}`}
+                          className="hover:underline"
+                        >
+                          {b.batchCode}
+                        </Link>
+                      </td>
+                      <td className="px-4 py-2 text-text-mid">{b.name}</td>
+                      <td className="px-4 py-2 text-text-muted">
+                        {b.createdAt.toLocaleDateString("en-US", {
+                          month: "short",
+                          day: "numeric",
+                          year: "numeric",
+                        })}
+                      </td>
+                      <td className="px-4 py-2 text-right tabular-nums text-text-mid">
+                        {b.selectedCount}
+                      </td>
+                      <td className="px-4 py-2 text-right tabular-nums text-text-mid">
+                        {b.deficientCount}
+                      </td>
+                      <td className="px-4 py-2">
+                        <span
+                          className={
+                            b.status === "ACTIVE"
+                              ? "rounded-full bg-ace-bg px-2 py-0.5 text-[10px] font-semibold text-ace-dark"
+                              : "rounded-full bg-surface px-2 py-0.5 text-[10px] font-semibold text-text-muted"
+                          }
+                        >
+                          {b.status}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
       </section>
