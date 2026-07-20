@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { BrandMark } from "@/components/brand-mark";
+import { PortalSidebar } from "@/components/portal-sidebar";
 import { SidebarNav } from "@/components/sidebar-nav";
 import type { NavItem, NavSection } from "@/lib/nav/portal-nav";
 
@@ -35,8 +36,8 @@ export function PortalShell({
 }) {
   return (
     <div className="grid min-h-dvh grid-cols-1 bg-surface md:grid-cols-[220px_1fr]">
-      <aside className="flex flex-col bg-navy text-white">
-        <div className="border-b border-white/[0.07] px-4 pb-3.5 pt-4">
+      <PortalSidebar topBarBrand={<BrandMark size="sm" product={product} />}>
+        <div className="hidden border-b border-white/[0.07] px-4 pb-3.5 pt-4 md:block">
           <BrandMark tag="AADB" product={product} />
         </div>
 
@@ -95,7 +96,7 @@ export function PortalShell({
             Sign out
           </button>
         </form>
-      </aside>
+      </PortalSidebar>
 
       <main className="overflow-y-auto bg-surface px-7 py-6">{children}</main>
     </div>
