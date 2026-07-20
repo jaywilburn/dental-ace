@@ -78,7 +78,7 @@ export default async function EventSessionsPage({
                 <div className="flex shrink-0 items-center gap-3 text-[12px]">
                   <Link
                     href={`/company/events/new/sessions/${s.id}/course`}
-                    className="font-semibold text-ace underline"
+                    className="font-semibold text-ace-dark underline"
                   >
                     Edit
                   </Link>

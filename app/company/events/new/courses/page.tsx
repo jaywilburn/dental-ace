@@ -56,32 +56,34 @@ export default async function EventCoursesPage({
               first, then attach it here.
             </p>
           ) : (
-            <table className="w-full text-[12px]">
-              <thead>
-                <tr className="border-b border-border bg-surface text-left text-[10px] uppercase tracking-wide text-text-muted">
-                  <th className="px-4 py-2 font-semibold">Attach</th>
-                  <th className="px-4 py-2 font-semibold">Course ID</th>
-                  <th className="px-4 py-2 font-semibold">Title</th>
-                  <th className="px-4 py-2 text-right font-semibold">Hours</th>
-                </tr>
-              </thead>
-              <tbody>
-                {courses.map((c) => (
-                  <tr key={c.id} className="border-b border-border last:border-b-0">
-                    <td className="px-4 py-2">
-                      <input type="checkbox" name="courseIds" value={c.id} defaultChecked={attached.has(c.id)} />
-                    </td>
-                    <td className="px-4 py-2 font-mono text-[11px] text-navy">{c.courseIdNumber}</td>
-                    <td className="px-4 py-2 font-medium text-navy">
-                      {c.application.courseTitle ?? "(untitled)"}
-                    </td>
-                    <td className="px-4 py-2 text-right tabular-nums text-text-mid">
-                      {c.application.ceHours ? Number(c.application.ceHours).toFixed(1) : "—"}
-                    </td>
+            <div className="overflow-x-auto">
+              <table className="w-full text-[12px]">
+                <thead>
+                  <tr className="border-b border-border bg-surface text-left text-[10px] uppercase tracking-wide text-text-muted">
+                    <th className="px-4 py-2 font-semibold">Attach</th>
+                    <th className="px-4 py-2 font-semibold">Course ID</th>
+                    <th className="px-4 py-2 font-semibold">Title</th>
+                    <th className="px-4 py-2 text-right font-semibold">Hours</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {courses.map((c) => (
+                    <tr key={c.id} className="border-b border-border last:border-b-0">
+                      <td className="px-4 py-2">
+                        <input type="checkbox" name="courseIds" value={c.id} defaultChecked={attached.has(c.id)} />
+                      </td>
+                      <td className="px-4 py-2 font-mono text-[11px] text-navy">{c.courseIdNumber}</td>
+                      <td className="px-4 py-2 font-medium text-navy">
+                        {c.application.courseTitle ?? "(untitled)"}
+                      </td>
+                      <td className="px-4 py-2 text-right tabular-nums text-text-mid">
+                        {c.application.ceHours ? Number(c.application.ceHours).toFixed(1) : "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
         <FormNav back={{ href: "/company/events/new/qualifiers", label: "Back" }} nextLabel="Next: Review" />

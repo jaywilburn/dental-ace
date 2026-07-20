@@ -227,7 +227,7 @@ function StatusCard({
           ) : null}
           <p>
             Deliverables (attendee link, QR code, approval letter) are on{" "}
-            <Link href="/company/courses" className="text-ace underline">
+            <Link href="/company/courses" className="text-ace-dark underline">
               My Courses
             </Link>
             .
