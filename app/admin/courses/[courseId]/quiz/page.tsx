@@ -103,7 +103,7 @@ export default async function AdminCourseQuizPage({
             href={`/attend/${course.attendeeLinkToken}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-ace underline"
+            className="text-ace-dark underline"
           >
             /attend/{course.attendeeLinkToken}
           </a>

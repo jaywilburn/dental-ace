@@ -58,10 +58,10 @@ export default async function AdminDashboard() {
       <div className="mt-5 rounded-lg border border-border bg-white p-4">
         <p className="text-[13px] text-text-mid">
           Manage providers under{" "}
-          <Link href="/admin/companies" className="text-ace underline">Companies</Link>, all accounts under{" "}
-          <Link href="/admin/users" className="text-ace underline">Users</Link>, review the{" "}
-          <Link href="/admin/audit" className="text-ace underline">Audit Log</Link>, and see marketing{" "}
-          <Link href="/admin/leads" className="text-ace underline">Leads</Link>.
+          <Link href="/admin/companies" className="text-ace-dark underline">Companies</Link>, all accounts under{" "}
+          <Link href="/admin/users" className="text-ace-dark underline">Users</Link>, review the{" "}
+          <Link href="/admin/audit" className="text-ace-dark underline">Audit Log</Link>, and see marketing{" "}
+          <Link href="/admin/leads" className="text-ace-dark underline">Leads</Link>.
         </p>
       </div>
     </>

@@ -100,7 +100,7 @@ export default async function AdminUserDetailPage({
         title={fullName}
         subtitle={user.email}
         action={
-          <Link href="/admin/users" className="text-[12px] text-ace underline">
+          <Link href="/admin/users" className="text-[12px] text-ace-dark underline">
             ← All users
           </Link>
         }
