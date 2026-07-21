@@ -5,7 +5,10 @@ import { requireStaff } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { approveEvent, rejectEvent } from "@/lib/reviewer/event-actions";
 import { isEventOnly } from "@/lib/forms/event/schemas";
-import { applicationDataReadSchema } from "@/lib/forms/application/schemas";
+import {
+  applicationDataReadSchema,
+  type ApplicationDataRead,
+} from "@/lib/forms/application/schemas";
 import {
   courseInfoRows,
   creatorRows,
@@ -32,8 +35,10 @@ type QuizItem =
 /*
   Reviewer event detail. Event-only events under the full-course model list each
   inline session as its full course application; SELECTIVE_INLINE events under
-  the lightweight model (and true legacy inline/quiz events) render their
-  Session/Question/Answer rows; per-course events list their attached courses.
+  the lightweight model render the event-level application content (Course Info
+  + Creator + Presenters from eventData.eventApplication, when present) above
+  their Session/Question/Answer rows; per-course events list their attached
+  courses.
 */
 export default async function ReviewEventPage({
   params,
@@ -75,6 +80,19 @@ export default async function ReviewEventPage({
     return { id: a.id, position: a.sessionPosition ?? 0, parsed };
   });
   const showSessionApps = eventOnly && sessionApps.length > 0;
+
+  // Lightweight SELECTIVE_INLINE events carry the event-level application
+  // content (Course Info + Creator + Presenters, no quiz — the per-session
+  // questions replace it) under eventData.eventApplication. Tolerant read;
+  // events approved before the step existed simply lack the key.
+  const eventAppParsed = data.eventApplication
+    ? applicationDataReadSchema.omit({ quiz: true }).safeParse(data.eventApplication)
+    : null;
+  const eventApp: ApplicationDataRead | null = eventAppParsed?.success
+    ? { ...eventAppParsed.data, quiz: [] }
+    : null;
+  const statedHours = eventApp?.ceCreditHours ?? null;
+  const operativeHours = event.totalHours != null ? Number(event.totalHours) : null;
 
   return (
     <>
@@ -138,35 +156,52 @@ export default async function ReviewEventPage({
             </div>
           </div>
         ) : event.eventType === "SELECTIVE_INLINE" ? (
-          <div className="rounded-lg border border-border bg-white p-5">
-            <p className="mb-1 text-[13px] font-semibold text-navy">
-              Sessions ({event.sessions.length}) — one question each
-            </p>
-            <p className="mb-3 text-[11px] text-text-muted">
-              Attendees answer one question per attended session; a correct
-              answer earns that session&apos;s hours on the certificate.
-            </p>
-            <ul className="space-y-3">
-              {event.sessions.map((s) => {
-                const q = (s.question as StoredQuestion | null) ?? {};
-                return (
-                  <li key={s.id} className="rounded-md border border-border p-3 text-[12px]">
-                    <p className="font-semibold text-navy">
-                      {s.name} <span className="font-normal text-text-muted">· {s.durationHours ? Number(s.durationHours).toFixed(1) : "?"} hrs</span>
-                    </p>
-                    <p className="mt-1 text-text-mid">{q.question}</p>
-                    <ol className="mt-1 list-inside list-decimal text-text-muted">
-                      {(q.options ?? []).map((opt, i) => (
-                        <li key={i} className={i === q.correctIndex ? "font-semibold text-green-700" : ""}>
-                          {opt}{i === q.correctIndex ? " ✓" : ""}
-                        </li>
-                      ))}
-                    </ol>
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
+          <>
+            {eventApp ? (
+              <>
+                <DetailSection title="Course Information" rows={courseInfoRows(eventApp)} />
+                <DetailSection title="Course Creator" rows={creatorRows(eventApp)} />
+                <DetailSection title="Presenters" rows={presenterRows(eventApp)} />
+              </>
+            ) : (
+              <div className="rounded-md border border-border bg-surface px-4 py-3 text-[12px] text-text-muted">
+                This event predates the event-level course information step, so
+                only its sessions are shown.
+              </div>
+            )}
+            <div className="rounded-lg border border-border bg-white p-5">
+              <p className="mb-1 text-[13px] font-semibold text-navy">
+                Sessions ({event.sessions.length}) — one question each
+              </p>
+              <p className="mb-3 text-[11px] text-text-muted">
+                Attendees answer one question per attended session; a correct
+                answer earns that session&apos;s hours on the certificate.
+                {statedHours != null && operativeHours != null && statedHours !== operativeHours
+                  ? ` Certificate hours come from the session durations below (${operativeHours.toFixed(1)} total), not the stated CE Credit Hours.`
+                  : ""}
+              </p>
+              <ul className="space-y-3">
+                {event.sessions.map((s) => {
+                  const q = (s.question as StoredQuestion | null) ?? {};
+                  return (
+                    <li key={s.id} className="rounded-md border border-border p-3 text-[12px]">
+                      <p className="font-semibold text-navy">
+                        {s.name} <span className="font-normal text-text-muted">· {s.durationHours ? Number(s.durationHours).toFixed(1) : "?"} hrs</span>
+                      </p>
+                      <p className="mt-1 text-text-mid">{q.question}</p>
+                      <ol className="mt-1 list-inside list-decimal text-text-muted">
+                        {(q.options ?? []).map((opt, i) => (
+                          <li key={i} className={i === q.correctIndex ? "font-semibold text-green-700" : ""}>
+                            {opt}{i === q.correctIndex ? " ✓" : ""}
+                          </li>
+                        ))}
+                      </ol>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          </>
         ) : event.eventType !== "FULL_EVENT_QUIZ" ? (
           <div className="rounded-lg border border-border bg-white p-5">
             <p className="mb-3 text-[13px] font-semibold text-navy">Attached courses</p>

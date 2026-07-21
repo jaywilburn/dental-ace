@@ -1,6 +1,11 @@
 import { z } from "zod";
 import { EventType } from "@prisma/client";
-import { orgStepSchema } from "@/lib/forms/application/schemas";
+import {
+  orgStepSchema,
+  step1Schema,
+  step2Schema,
+  step3Schema,
+} from "@/lib/forms/application/schemas";
 
 /*
   Event-submission form schemas. An event is accredited through its own
@@ -139,6 +144,50 @@ export const attachedCoursesSchema = z.object({
   courseIds: z.array(z.string().uuid()).min(1).max(20),
 });
 
+/*
+  Opt 3 (SELECTIVE_INLINE) event-level application content: the front half of a
+  course application (Course Information + Creator + Presenters), entered ONCE
+  for the whole event before the Session/Question/Answer grid. Stored under
+  eventData.eventApplication, NOT as an event-level CourseApplication row —
+  approveEvent keys the accreditation model on whether pending session
+  applications exist, and an event-level row would trip that branch. The quiz
+  half of the application is replaced by the per-session questions on
+  event_sessions.
+*/
+export const eventApplicationSchema = step1Schema
+  .merge(step2Schema)
+  .merge(step3Schema);
+
+export type EventApplicationData = z.infer<typeof eventApplicationSchema>;
+
+/** Event-application step slugs; each is also its wizard route segment. */
+export type EventApplicationStep = "course" | "creator" | "presenters";
+
+/** Route for a SELECTIVE_INLINE event-application step page. */
+export function eventApplicationStepRoute(step: EventApplicationStep): string {
+  return `/company/events/new/${step}`;
+}
+
+/**
+ * First unfinished event-application step for a SELECTIVE_INLINE draft, or
+ * null when Course Information + Creator + Presenters are all complete. The
+ * step schemas ignore unknown keys, so each slice is checked against the same
+ * merged eventApplication object.
+ */
+export function nextEventApplicationStep(
+  raw: unknown,
+): EventApplicationStep | null {
+  if (!step1Schema.safeParse(raw).success) return "course";
+  if (!step2Schema.safeParse(raw).success) return "creator";
+  if (!step3Schema.safeParse(raw).success) return "presenters";
+  return null;
+}
+
+/** All three event-application steps valid (SELECTIVE_INLINE submit gate). */
+export function isEventApplicationComplete(raw: unknown): boolean {
+  return nextEventApplicationStep(raw) === null;
+}
+
 // Persisted in Event.eventData. Qualifier answers + (Opt 1) the event quiz live
 // here; sessions/attached courses live in event_sessions; hours on Event.totalHours.
 export const eventDataSchema = orgStepSchema
@@ -148,6 +197,10 @@ export const eventDataSchema = orgStepSchema
   .extend({
     // Opt 1 only.
     quiz: eventQuizSchema.shape.quiz.optional(),
+    // Opt 3 only: event-level Course Info + Creator + Presenters. Partial while
+    // the wizard is in progress; validated in full at submit
+    // (isEventApplicationComplete).
+    eventApplication: eventApplicationSchema.partial().optional(),
   });
 
 export type EventData = z.infer<typeof eventDataSchema>;

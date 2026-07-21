@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { EventType } from "@prisma/client";
 import { PageHeader } from "@/components/portal-shell";
 import { FormErrorBanner, FormNav } from "@/components/application-form/form-controls";
 import { requireDentalAce } from "@/lib/auth/session";
@@ -21,10 +22,13 @@ export default async function EventQualifiersPage({
   if (!draft?.name) redirect("/company/events/new");
   const coverage = draft?.data.coverage;
   const reuse = draft?.data.reuse;
+  // SELECTIVE_INLINE drafts run the longer 7-step flow (event-level Course
+  // Info -> Creator -> Presenters before the session grid).
+  const stepCount = draft?.eventType === EventType.SELECTIVE_INLINE ? 7 : 4;
 
   return (
     <>
-      <PageHeader title="New Event" subtitle="Step 2 of 4 — Event Type" />
+      <PageHeader title="New Event" subtitle={`Step 2 of ${stepCount} — Event Type`} />
       {error === "validation" ? <FormErrorBanner detail={detail} /> : null}
       <form action={saveQualifiers} className="space-y-5">
         <input type="hidden" name="eventId" value={eventId} />
