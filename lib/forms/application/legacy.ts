@@ -13,10 +13,44 @@ import type { DetailRow } from "@/lib/forms/application/detail-rows";
   migration (title, hours, type, delivery, status, approval date).
 */
 
-const legacyStubSchema = z.object({ legacy: z.literal(true) });
+/*
+  Strict: a stub is ONLY the marker keys. A real submission that carries a
+  leftover legacy marker (the renewal-prefill bug: renewing a migrated course
+  copied the stub keys into the new application) must NOT classify as a stub,
+  or the detail pages hide the actual submitted content behind the
+  "no application on file" panel.
+*/
+const legacyStubSchema = z
+  .object({
+    legacy: z.literal(true),
+    legacyCourseId: z.string().nullish(),
+    source: z.string().optional(),
+  })
+  .strict();
 
 export function isLegacyApplicationData(applicationData: unknown): boolean {
   return legacyStubSchema.safeParse(applicationData).success;
+}
+
+const LEGACY_STUB_KEYS = ["legacy", "legacyCourseId", "source"] as const;
+
+/**
+ * Remove the migration-stub marker keys from application data that carries a
+ * `legacy: true` flag, so a renewal pre-filled from a migrated course starts
+ * from clean data. Anything without the flag passes through untouched.
+ */
+export function stripLegacyStubKeys(applicationData: unknown): unknown {
+  if (
+    typeof applicationData !== "object" ||
+    applicationData === null ||
+    Array.isArray(applicationData) ||
+    (applicationData as Record<string, unknown>).legacy !== true
+  ) {
+    return applicationData;
+  }
+  const rest = { ...(applicationData as Record<string, unknown>) };
+  for (const key of LEGACY_STUB_KEYS) delete rest[key];
+  return rest;
 }
 
 export type LegacyCourseColumns = {

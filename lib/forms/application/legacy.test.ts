@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   isLegacyApplicationData,
   legacyCourseRows,
+  stripLegacyStubKeys,
 } from "@/lib/forms/application/legacy";
 
 /*
@@ -43,6 +44,64 @@ describe("isLegacyApplicationData", () => {
     expect(isLegacyApplicationData(undefined)).toBe(false);
     expect(isLegacyApplicationData("legacy")).toBe(false);
     expect(isLegacyApplicationData([])).toBe(false);
+  });
+
+  it("matches a stub with a null legacyCourseId (some migrated rows)", () => {
+    expect(
+      isLegacyApplicationData({
+        legacy: true,
+        legacyCourseId: null,
+        source: "legacy-migration-v3",
+      }),
+    ).toBe(true);
+  });
+
+  it("rejects a real submission polluted with leftover stub keys (renewal-prefill bug)", () => {
+    expect(
+      isLegacyApplicationData({
+        legacy: true,
+        legacyCourseId: "DA255",
+        source: "legacy-migration-v3",
+        courseTitle: "Pearl AI: Clinical Roundtable",
+        ceCreditHours: 1,
+        quiz: [],
+      }),
+    ).toBe(false);
+  });
+});
+
+describe("stripLegacyStubKeys", () => {
+  it("removes exactly the marker keys from a legacy stub", () => {
+    expect(
+      stripLegacyStubKeys({
+        legacy: true,
+        legacyCourseId: "DA255",
+        source: "legacy-migration-v3",
+      }),
+    ).toEqual({});
+  });
+
+  it("keeps every real field when stripping a polluted submission", () => {
+    expect(
+      stripLegacyStubKeys({
+        legacy: true,
+        legacyCourseId: "DA255",
+        source: "legacy-migration-v3",
+        courseTitle: "Pearl AI: Clinical Roundtable",
+        quiz: [],
+      }),
+    ).toEqual({ courseTitle: "Pearl AI: Clinical Roundtable", quiz: [] });
+  });
+
+  it("passes non-legacy data through untouched, including a real 'source'-less app", () => {
+    const real = { courseTitle: "Modern Periodontal Therapy", quiz: [] };
+    expect(stripLegacyStubKeys(real)).toBe(real);
+    expect(stripLegacyStubKeys(null)).toBe(null);
+    expect(stripLegacyStubKeys([])).toEqual([]);
+    expect(stripLegacyStubKeys({ legacy: false, source: "x" })).toEqual({
+      legacy: false,
+      source: "x",
+    });
   });
 });
 
