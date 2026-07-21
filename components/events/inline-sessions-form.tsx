@@ -5,10 +5,11 @@ import { saveInlineSessions } from "@/lib/events/event-actions";
 import { FormNav } from "@/components/application-form/form-controls";
 
 /*
-  Opt 3 (SELECTIVE_INLINE) inline-session builder. Each session has a name, a
-  duration (0.5 increments), and one 4-option multiple-choice question with a
-  marked correct answer. Rows are add/removable client-side; submit posts every
-  s{i}_* field plus sessionCount to saveInlineSessions.
+  Opt 3 (SELECTIVE_INLINE) inline-session builder, laid out as Session /
+  Question / Answer. Each session has a title, CE hours (0.5 increments), and
+  one 4-option multiple-choice question with a marked correct answer. Rows are
+  add/removable client-side; submit posts every s{i}_* field plus sessionCount
+  to saveInlineSessions.
 */
 
 export type SessionDraft = {
@@ -69,7 +70,7 @@ export function InlineSessionsForm({
           </div>
           <div className="grid gap-3 sm:grid-cols-[1fr_140px]">
             <label className="block">
-              <span className="mb-1 block text-[11px] font-semibold text-text-mid">Session Name</span>
+              <span className="mb-1 block text-[11px] font-semibold text-text-mid">Session Title</span>
               <input
                 name={`s${i}_name`}
                 value={s.name}
@@ -79,7 +80,7 @@ export function InlineSessionsForm({
               />
             </label>
             <label className="block">
-              <span className="mb-1 block text-[11px] font-semibold text-text-mid">Hours (0.5 steps)</span>
+              <span className="mb-1 block text-[11px] font-semibold text-text-mid">CE Hours (0.5 steps)</span>
               <input
                 type="number"
                 step="0.5"
@@ -94,7 +95,7 @@ export function InlineSessionsForm({
             </label>
           </div>
           <label className="mt-3 block">
-            <span className="mb-1 block text-[11px] font-semibold text-text-mid">Quiz Question (multiple choice)</span>
+            <span className="mb-1 block text-[11px] font-semibold text-text-mid">Question (multiple choice)</span>
             <input
               name={`s${i}_question`}
               value={s.question}
@@ -103,7 +104,8 @@ export function InlineSessionsForm({
               required
             />
           </label>
-          <div className="mt-2 grid gap-2 sm:grid-cols-2">
+          <span className="mt-2 block text-[11px] font-semibold text-text-mid">Answers (select the correct one)</span>
+          <div className="mt-1 grid gap-2 sm:grid-cols-2">
             {s.options.map((opt, j) => (
               <label key={j} className="flex items-center gap-2 rounded-md border border-border bg-surface px-2 py-1.5">
                 <input

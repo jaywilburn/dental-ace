@@ -14,8 +14,10 @@ import {
   qualifierSchema,
   eventQuizSchema,
   inlineSessionsSchema,
+  mcQuestionSchema,
   attachedCoursesSchema,
   deriveEventType,
+  isEventOnly,
   isInlineFullCourse,
   type EventData,
   type InlineSession,
@@ -55,9 +57,11 @@ async function customerCompanyId(): Promise<string> {
 
 /** The wizard step a given event type routes to after the qualifiers step. */
 function typeStepRoute(type: EventType): string {
-  // Both event-only types now capture a full course application per session,
-  // so they share the sessions list (each row is an inline session application).
-  if (isInlineFullCourse(type)) return ROUTES.sessions;
+  // Both event-only types share the sessions step. FULL_EVENT_QUIZ captures a
+  // full course application per session; SELECTIVE_INLINE captures lightweight
+  // Session/Question/Answer rows (one MC question each). The step page renders
+  // the right builder for the type.
+  if (isEventOnly(type)) return ROUTES.sessions;
   return ROUTES.courses; // FULL_PER_COURSE | SELECTIVE_PER_COURSE
 }
 
@@ -89,6 +93,9 @@ export type EventDraft = {
     name: string | null;
     durationHours: number | null;
     position: number;
+    // Inline MC question (SELECTIVE_INLINE lightweight sessions); parse with
+    // mcQuestionSchema at the call site. Null for course-backed sessions.
+    question: unknown;
   }>;
   // Inline event-scoped session applications (event-only full-course path).
   sessionApplications: Array<{
@@ -119,6 +126,7 @@ export async function getEventDraft(eventId: string): Promise<EventDraft | null>
           name: true,
           durationHours: true,
           position: true,
+          question: true,
         },
       },
       sessionApplications: {
@@ -342,9 +350,14 @@ export async function saveInlineSessions(formData: FormData) {
   await prisma.$transaction(async (tx) => {
     const owned = await tx.event.findFirst({
       where: { id: eventId, companyId, status: "DRAFT" },
-      select: { id: true },
+      select: { id: true, eventType: true },
     });
     if (!owned) throw new Error("Event draft not found");
+    // Only the lightweight inline type stores Session/Question/Answer rows;
+    // FULL_EVENT_QUIZ sessions are full course applications (session-actions).
+    if (owned.eventType !== EventType.SELECTIVE_INLINE) {
+      throw new Error("Inline sessions apply only to selective event-only events");
+    }
     await tx.eventSession.deleteMany({ where: { eventId } });
     await tx.eventSession.createMany({
       data: valid.map((s, position) => ({
@@ -430,7 +443,16 @@ export async function submitEvent(formData: FormData) {
     where: { id: eventId, companyId, status: "DRAFT" },
     include: {
       company: { select: { name: true } },
-      sessions: { select: { id: true, courseId: true } },
+      sessions: {
+        orderBy: { position: "asc" },
+        select: {
+          id: true,
+          courseId: true,
+          name: true,
+          durationHours: true,
+          question: true,
+        },
+      },
       sessionApplications: {
         orderBy: { sessionPosition: "asc" },
         select: { id: true, applicationData: true },
@@ -452,10 +474,83 @@ export async function submitEvent(formData: FormData) {
     );
   }
 
-  // Event-only path: each session is a full course application. Validate every
-  // one, charge one application credit per session, and move them + the event to
-  // PENDING atomically. Per-course path stays free (its courses were already paid).
-  if (inlineFull) {
+  // Lightweight inline path (SELECTIVE_INLINE): the event is ONE application
+  // whose sessions are Session/Question/Answer rows on event_sessions. Charge
+  // one application credit per session (the same per-session rate as the
+  // full-course path) and move the event to PENDING atomically.
+  if (type === EventType.SELECTIVE_INLINE) {
+    const inline = draft.sessions.filter((s) => s.courseId === null);
+    if (inline.length === 0) {
+      redirect(
+        `${ROUTES.sessions}?error=validation&detail=${encodeURIComponent(
+          "Add at least one session before submitting.",
+        )}`,
+      );
+    }
+    // Defense in depth: every row was validated at save, but re-check the shape
+    // before charging credits.
+    const wellFormed = inline.every(
+      (s) =>
+        s.name &&
+        s.durationHours !== null &&
+        mcQuestionSchema.safeParse(s.question).success,
+    );
+    if (!wellFormed) {
+      redirect(
+        `${ROUTES.sessions}?error=validation&detail=${encodeURIComponent(
+          "One of your sessions is incomplete. Check each session's title, hours, and question.",
+        )}`,
+      );
+    }
+    const n = inline.length;
+    const totalHours = inline.reduce(
+      (sum, s) => sum + (s.durationHours ? Number(s.durationHours) : 0),
+      0,
+    );
+    const submittedAt = new Date();
+
+    // Pre-check for a friendly redirect (the locked re-check below is the guard).
+    const bal = await prisma.company.findUnique({
+      where: { id: companyId },
+      select: { applicationCredits: true },
+    });
+    if ((bal?.applicationCredits ?? 0) < n) {
+      redirect(`${ROUTES.review}?error=credits`);
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`select id from public.companies where id = ${companyId}::uuid for update`;
+      const company = await tx.company.findUniqueOrThrow({
+        where: { id: companyId },
+        select: { applicationCredits: true },
+      });
+      if (company.applicationCredits < n) {
+        throw new Error("Not enough application credits");
+      }
+      await tx.company.update({
+        where: { id: companyId },
+        data: { applicationCredits: { decrement: n } },
+      });
+      // Drop any stale DRAFT session applications left behind by the retired
+      // full-course SELECTIVE_INLINE flow so they cannot linger after submit.
+      await tx.courseApplication.deleteMany({
+        where: { eventId, companyId, status: "DRAFT" },
+      });
+      const updated = await tx.event.updateMany({
+        where: { id: eventId, companyId, status: "DRAFT" },
+        data: {
+          status: "PENDING",
+          submittedAt,
+          totalHours: new Prisma.Decimal(totalHours),
+        },
+      });
+      if (updated.count !== 1) throw new Error("Event was already submitted");
+    });
+  } else if (inlineFull) {
+    // Event-only full-course path (FULL_EVENT_QUIZ): each session is a full
+    // course application. Validate every one, charge one application credit per
+    // session, and move them + the event to PENDING atomically. Per-course
+    // types stay free (their courses were already paid).
     const apps = draft.sessionApplications;
     if (apps.length === 0) {
       redirect(

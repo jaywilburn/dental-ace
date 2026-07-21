@@ -38,3 +38,33 @@ export function scoreEventQuiz(
   const score = correct.filter(Boolean).length;
   return { score, passed: score >= passThreshold(questions.length, passPct), correct };
 }
+
+export type SessionCredit = {
+  /** Indices (into the attended-session arrays) that earned their hours. */
+  creditedIndices: number[];
+  /** Sum of the credited sessions' hours. */
+  creditedHours: number;
+  /** At least one credited session; zero credited = fail, no certificate. */
+  passed: boolean;
+};
+
+/*
+  Per-session credit for SELECTIVE_INLINE events: each attended session asks ONE
+  question, scored on its own. A correct answer earns that session's hours; a
+  wrong answer drops the session from the certificate. `correct` comes from
+  scoreEventQuiz (its threshold-based `passed` is ignored on this path) and is
+  index-aligned with the assembled quiz's sessionHours.
+*/
+export function creditSessions(
+  correct: boolean[],
+  sessionHours: number[],
+): SessionCredit {
+  if (correct.length !== sessionHours.length) {
+    throw new Error(
+      `session hour count (${sessionHours.length}) does not match answer count (${correct.length})`,
+    );
+  }
+  const creditedIndices = correct.flatMap((c, i) => (c ? [i] : []));
+  const creditedHours = creditedIndices.reduce((sum, i) => sum + sessionHours[i], 0);
+  return { creditedIndices, creditedHours, passed: creditedIndices.length > 0 };
+}

@@ -3,6 +3,7 @@ import { z } from "zod";
 import { EventType, type Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { quizQuestionSchema, type QuizQuestion } from "@/lib/forms/application/schemas";
+import type { PublicQuestion, EventPublicForm } from "@/lib/attend/event-form-items";
 
 /*
   Event quiz assembly. The ONE place that decides which questions an event
@@ -13,11 +14,17 @@ import { quizQuestionSchema, type QuizQuestion } from "@/lib/forms/application/s
   Keyed off SESSION SHAPE, not just event type, so both the current model and
   already-approved legacy events work:
 
-  - Course-backed sessions (EventSession.courseId set) — every event-only event
+  - Course-backed sessions (EventSession.courseId set) — event-only events
     approved under the full-course model, plus per-course events (Opt 2/4): one
     MC question per course. FULL coverage asks all; SELECTIVE asks the attended.
   - Legacy FULL_EVENT_QUIZ (no sessions): the 5 event-level questions (eventData.quiz).
-  - Legacy SELECTIVE_INLINE (courseId null): one question per attended inline session.
+  - SELECTIVE_INLINE (courseId null) — the current lightweight model (and its
+    pre-July twin): one question per attended inline session.
+
+  SELECTIVE_INLINE events (either branch) credit per session: a correct answer
+  earns that session's hours, a wrong one drops the session from the
+  certificate. The assembler flags this via perSessionCredit + sessionHours;
+  the submit action applies it (lib/attend/event-actions.ts + event-scoring.ts).
 */
 
 const quizArray = z.array(quizQuestionSchema);
@@ -25,23 +32,18 @@ const quizArray = z.array(quizQuestionSchema);
 export type EventForAttend = NonNullable<Awaited<ReturnType<typeof loadEventByToken>>>;
 export type EventSessionForAttend = EventForAttend["sessions"][number];
 
-export type PublicQuestion =
-  | { type: "TF"; question: string }
-  | { type: "MC"; question: string; options: string[] };
-
-export type EventPublicForm =
-  | { mode: "full"; questions: PublicQuestion[] }
-  | {
-      mode: "selective";
-      items: Array<{ id: string; label: string; sub: string; question: PublicQuestion }>;
-    };
+export type { PublicQuestion, EventPublicForm } from "@/lib/attend/event-form-items";
 
 export type AssembledQuiz = {
   questions: QuizQuestion[]; // WITH answers — never sent to the client
   hours: number;
   attendedSessionIds: string[];
   sessionNames: string[];
+  /** Per-question session hours, aligned with questions[] (selective only). */
+  sessionHours: number[];
   passPct: number;
+  /** SELECTIVE_INLINE: score each session's question on its own (see header). */
+  perSessionCredit: boolean;
 };
 
 const SELECT = {
@@ -181,7 +183,15 @@ export function assembleForSubmit(
   if (event.eventType === EventType.FULL_EVENT_QUIZ && !courseBacked) {
     const q = eventQuiz(event);
     if (!q) return null;
-    return { questions: q, hours: totalHours, attendedSessionIds: [], sessionNames: [], passPct: 0.6 };
+    return {
+      questions: q,
+      hours: totalHours,
+      attendedSessionIds: [],
+      sessionNames: [],
+      sessionHours: [],
+      passPct: 0.6,
+      perSessionCredit: false,
+    };
   }
 
   // Full coverage, course-backed (FULL_PER_COURSE, or event-only under the
@@ -194,18 +204,22 @@ export function assembleForSubmit(
       hours: totalHours,
       attendedSessionIds: [],
       sessionNames: [],
+      sessionHours: [],
       passPct: 0.7,
+      perSessionCredit: false,
     };
   }
 
-  // Selective: derive from the selected ids, in order. Legacy inline sessions
-  // read their inline question; course-backed sessions read the course's first MC.
+  // Selective: derive from the selected ids, in order. Inline sessions read
+  // their inline question; course-backed sessions read the course's first MC.
   if (selectedSessionIds.length === 0) return null;
+  // Reject duplicates — a repeated session id must not earn its hours twice.
+  if (new Set(selectedSessionIds).size !== selectedSessionIds.length) return null;
   const useInline = event.eventType === EventType.SELECTIVE_INLINE && !courseBacked;
   const byId = new Map(event.sessions.map((s) => [s.id, s]));
   const questions: QuizQuestion[] = [];
   const sessionNames: string[] = [];
-  let hours = 0;
+  const sessionHours: number[] = [];
   for (const id of selectedSessionIds) {
     const s = byId.get(id);
     if (!s) return null;
@@ -213,15 +227,27 @@ export function assembleForSubmit(
       const q = inlineQuestion(s);
       if (!q) return null;
       questions.push(q);
-      hours += s.durationHours ? Number(s.durationHours) : 0;
+      sessionHours.push(s.durationHours ? Number(s.durationHours) : 0);
       sessionNames.push(s.name ?? "Session");
     } else {
       const q = firstCourseMc(s);
       if (!q) return null;
       questions.push(q);
-      hours += s.course?.application.ceHours ? Number(s.course.application.ceHours) : 0;
+      sessionHours.push(
+        s.course?.application.ceHours ? Number(s.course.application.ceHours) : 0,
+      );
       sessionNames.push(s.course?.application.courseTitle ?? "Course");
     }
   }
-  return { questions, hours, attendedSessionIds: selectedSessionIds, sessionNames, passPct: 0.7 };
+  return {
+    questions,
+    hours: sessionHours.reduce((sum, h) => sum + h, 0),
+    attendedSessionIds: selectedSessionIds,
+    sessionNames,
+    sessionHours,
+    passPct: 0.7,
+    // SELECTIVE_INLINE (both branches): credit each attended session on its own
+    // answer. SELECTIVE_PER_COURSE keeps the single overall threshold.
+    perSessionCredit: event.eventType === EventType.SELECTIVE_INLINE,
+  };
 }
