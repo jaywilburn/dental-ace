@@ -4,7 +4,7 @@ import { PageHeader } from "@/components/portal-shell";
 import { requireStaff } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { approveEvent, rejectEvent } from "@/lib/reviewer/event-actions";
-import { isInlineFullCourse } from "@/lib/forms/event/schemas";
+import { isEventOnly } from "@/lib/forms/event/schemas";
 import { applicationDataReadSchema } from "@/lib/forms/application/schemas";
 import {
   courseInfoRows,
@@ -20,7 +20,7 @@ import type { EventType } from "@prisma/client";
 const TYPE_LABEL: Record<EventType, string> = {
   FULL_EVENT_QUIZ: "Full attendance · sessions accredited as courses (not reused)",
   FULL_PER_COURSE: "Full attendance · courses reused",
-  SELECTIVE_INLINE: "Selective attendance · sessions accredited as courses (not reused)",
+  SELECTIVE_INLINE: "Selective attendance · event only (sessions not reused)",
   SELECTIVE_PER_COURSE: "Selective attendance · courses reused",
 };
 
@@ -30,9 +30,10 @@ type QuizItem =
   | { type: "MC"; question: string; options: string[]; correctIndex: number };
 
 /*
-  Reviewer event detail. Event-only events (new model) list each inline session
-  as its full course application; legacy inline/quiz events and per-course events
-  keep their original rendering for back-compat.
+  Reviewer event detail. Event-only events under the full-course model list each
+  inline session as its full course application; SELECTIVE_INLINE events under
+  the lightweight model (and true legacy inline/quiz events) render their
+  Session/Question/Answer rows; per-course events list their attached courses.
 */
 export default async function ReviewEventPage({
   params,
@@ -66,14 +67,14 @@ export default async function ReviewEventPage({
   const data = (event.eventData as Record<string, unknown>) ?? {};
   const quiz = (data.quiz as QuizItem[] | undefined) ?? [];
   const pending = event.status === "PENDING";
-  const inlineFull = event.eventType ? isInlineFullCourse(event.eventType) : false;
+  const eventOnly = event.eventType ? isEventOnly(event.eventType) : false;
 
-  // New model: parse each session's full application for display.
+  // Full-course model: parse each session's full application for display.
   const sessionApps = event.sessionApplications.map((a) => {
     const parsed = applicationDataReadSchema.safeParse(a.applicationData);
     return { id: a.id, position: a.sessionPosition ?? 0, parsed };
   });
-  const showSessionApps = inlineFull && sessionApps.length > 0;
+  const showSessionApps = eventOnly && sessionApps.length > 0;
 
   return (
     <>
@@ -138,7 +139,13 @@ export default async function ReviewEventPage({
           </div>
         ) : event.eventType === "SELECTIVE_INLINE" ? (
           <div className="rounded-lg border border-border bg-white p-5">
-            <p className="mb-3 text-[13px] font-semibold text-navy">Sessions (legacy)</p>
+            <p className="mb-1 text-[13px] font-semibold text-navy">
+              Sessions ({event.sessions.length}) — one question each
+            </p>
+            <p className="mb-3 text-[11px] text-text-muted">
+              Attendees answer one question per attended session; a correct
+              answer earns that session&apos;s hours on the certificate.
+            </p>
             <ul className="space-y-3">
               {event.sessions.map((s) => {
                 const q = (s.question as StoredQuestion | null) ?? {};

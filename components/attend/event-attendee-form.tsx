@@ -3,28 +3,21 @@
 import { useState } from "react";
 import { submitEventAttendance, type EventAttendResult } from "@/lib/attend/event-actions";
 import { COURSE_FORMATS } from "@/lib/forms/application/schemas";
+import { activeQuizItems, type EventPublicForm } from "@/lib/attend/event-form-items";
 import { JurisdictionOptions } from "@/components/jurisdiction-options";
 import { ErrorSummary, FieldError, toDisplayErrors } from "@/components/attend/form-errors";
 
 type CourseFormat = (typeof COURSE_FORMATS)[number];
 
+export type { EventPublicForm };
+
 /*
   Event attendee form. Full types (Opt 1/2) go identity -> affirm -> quiz; the
   selective types (Opt 3/4) insert a session-selection step and only ask one
-  question per selected session. Answers are stripped of correctness; scoring is
-  server-side. selectedSessionIds + answers submit in item order so the server
-  re-derives the same questions.
+  question per selected session, titled with the session it belongs to. Answers
+  are stripped of correctness; scoring is server-side. selectedSessionIds +
+  answers submit in item order so the server re-derives the same questions.
 */
-
-type PublicQuestion =
-  | { type: "TF"; question: string }
-  | { type: "MC"; question: string; options: string[] };
-
-type Item = { id: string; label: string; sub: string; question: PublicQuestion };
-
-export type EventPublicForm =
-  | { mode: "full"; questions: PublicQuestion[] }
-  | { mode: "selective"; items: Item[] };
 
 type Answer = { type: "TF"; answer: "True" | "False" } | { type: "MC"; answer: number };
 
@@ -91,13 +84,9 @@ export function EventAttendeeForm({
     new Set(licenseStates.map((s) => s.trim().toUpperCase()).filter(Boolean)),
   );
 
-  // The questions to answer, with their answer-keys, in submit order.
-  const active: Array<{ key: string; question: PublicQuestion }> =
-    form.mode === "full"
-      ? form.questions.map((q, i) => ({ key: String(i), question: q }))
-      : form.items
-          .filter((it) => selectedIds.includes(it.id))
-          .map((it) => ({ key: it.id, question: it.question }));
+  // The questions to answer, with their answer-keys + session labels, in
+  // submit order (pure helper; see lib/attend/event-form-items.ts).
+  const active = activeQuizItems(form, selectedIds);
 
   // Step flow differs by mode.
   const steps = selective
@@ -321,9 +310,16 @@ export function EventAttendeeForm({
 
       {stage === "quiz" && (
         <section className="space-y-5">
-          {active.map(({ key, question: q }) => (
+          {active.map(({ key, label, question: q }) => (
             <fieldset key={key} className="space-y-2">
-              <legend className="text-sm font-medium text-slate-900">{q.question}</legend>
+              <legend className="text-sm font-medium text-slate-900">
+                {label ? (
+                  <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    {label}
+                  </span>
+                ) : null}
+                {q.question}
+              </legend>
               {q.type === "TF"
                 ? (["True", "False"] as const).map((opt) => (
                     <Option

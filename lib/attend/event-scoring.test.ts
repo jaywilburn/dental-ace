@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { passThreshold, scoreEventQuiz } from "@/lib/attend/event-scoring";
+import { passThreshold, scoreEventQuiz, creditSessions } from "@/lib/attend/event-scoring";
 import type { QuizQuestion } from "@/lib/forms/application/schemas";
 import type { AttendeeAnswer } from "@/lib/attend/scoring";
 
@@ -66,5 +66,30 @@ describe("scoreEventQuiz", () => {
   });
   it("throws on a length mismatch", () => {
     expect(() => scoreEventQuiz([mc(0)], [], 0.7)).toThrow();
+  });
+});
+
+describe("creditSessions (SELECTIVE_INLINE per-session credit)", () => {
+  it("credits only the correctly answered sessions (partial sum)", () => {
+    const r = creditSessions([true, false, true], [1.5, 2, 0.5]);
+    expect(r).toEqual({ creditedIndices: [0, 2], creditedHours: 2, passed: true });
+  });
+  it("fails with zero hours when every answer is wrong", () => {
+    const r = creditSessions([false, false], [1, 2.5]);
+    expect(r).toEqual({ creditedIndices: [], creditedHours: 0, passed: false });
+  });
+  it("credits the full sum when every answer is correct", () => {
+    const r = creditSessions([true, true, true], [1, 2, 3]);
+    expect(r).toEqual({ creditedIndices: [0, 1, 2], creditedHours: 6, passed: true });
+  });
+  it("passes a single attended session answered correctly", () => {
+    expect(creditSessions([true], [0.5])).toEqual({
+      creditedIndices: [0],
+      creditedHours: 0.5,
+      passed: true,
+    });
+  });
+  it("throws on a length mismatch", () => {
+    expect(() => creditSessions([true, false], [1])).toThrow();
   });
 });

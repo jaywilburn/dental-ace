@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { eventAttendeeSubmissionSchema } from "@/lib/attend/event-schemas";
 import { flattenFieldErrors } from "@/lib/attend/schemas";
 import { loadEventByToken, assembleForSubmit } from "@/lib/attend/event-quiz";
-import { scoreEventQuiz } from "@/lib/attend/event-scoring";
+import { scoreEventQuiz, creditSessions } from "@/lib/attend/event-scoring";
 import type { AttendeeAnswer } from "@/lib/attend/scoring";
 import { decideAttempt } from "@/lib/attend/lockout";
 import { issueEventCertificateTx } from "@/lib/attend/event-issue";
@@ -21,7 +21,8 @@ import CertificateIssuedEmail from "@/emails/certificate-issued";
 /*
   Public event attendee submission. Mirrors lib/attend/actions.ts submitAttendance
   but assembles a variable-length quiz (lib/attend/event-quiz.ts), scores at the
-  type's threshold (event-scoring.ts), and issues exactly ONE event certificate.
+  type's threshold (event-scoring.ts) or per session for SELECTIVE_INLINE
+  (creditSessions), and issues exactly ONE event certificate.
 */
 
 class AlreadyCertifiedError extends Error {
@@ -94,8 +95,26 @@ export async function submitEventAttendance(input: unknown): Promise<EventAttend
 
   const scored = scoreEventQuiz(assembled.questions, sub.answers as AttendeeAnswer[], assembled.passPct);
 
-  // FAIL — record the attempt; never touch the balance.
-  if (!scored.passed) {
+  // SELECTIVE_INLINE events credit each attended session individually: a
+  // correct answer earns that session's hours, a wrong answer drops the session
+  // from the certificate. Pass = at least one credited session; the cert's
+  // hours, session ids, and session list cover only credited sessions. All
+  // other types keep the single overall threshold and full attended values.
+  let passed = scored.passed;
+  let certHours = assembled.hours;
+  let certSessionIds = assembled.attendedSessionIds;
+  let certSessionNames = assembled.sessionNames;
+  if (assembled.perSessionCredit) {
+    const credit = creditSessions(scored.correct, assembled.sessionHours);
+    passed = credit.passed;
+    certHours = credit.creditedHours;
+    certSessionIds = credit.creditedIndices.map((i) => assembled.attendedSessionIds[i]);
+    certSessionNames = credit.creditedIndices.map((i) => assembled.sessionNames[i]);
+  }
+
+  // FAIL — record the attempt; never touch the balance. The failed row keeps
+  // the ATTENDED hours/sessions (the attempt), not the credited ones.
+  if (!passed) {
     await prisma.issuedCertificate.create({
       data: {
         eventId: event.id,
@@ -139,8 +158,8 @@ export async function submitEventAttendance(input: unknown): Promise<EventAttend
         deliveryMethod: certFormat,
         quizResponses: sub.answers,
         score: scored.score,
-        ceHours: assembled.hours,
-        attendedSessionIds: assembled.attendedSessionIds,
+        ceHours: certHours,
+        attendedSessionIds: certSessionIds,
         completedAt,
       });
       return cert.id;
@@ -166,9 +185,11 @@ export async function submitEventAttendance(input: unknown): Promise<EventAttend
       eventName: event.name,
       eventIdNumber: event.eventIdNumber ?? "ACE-EVT",
       certificateId,
-      ceHours: assembled.hours,
+      ceHours: certHours,
       completedAt,
-      sessions: assembled.sessionNames,
+      // Credited sessions only on the per-session-credit path; otherwise the
+      // attended list (unchanged for the other types).
+      sessions: certSessionNames,
       // Matches the deliveryMethod written to the event cert row
       // (event-issue.ts / the FAIL path above): the attendee's chosen format.
       deliveryMethod: certFormat,
@@ -197,7 +218,7 @@ export async function submitEventAttendance(input: unknown): Promise<EventAttend
     courseTitle: event.name,
     courseIdNumber: event.eventIdNumber ?? "ACE-EVT",
     certificateId,
-    ceHours: assembled.hours,
+    ceHours: certHours,
     completedAt: completedAt.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric", timeZone: "UTC" }),
     verifyUrl: `${appBase}/attend/event/${sub.token}`,
     // Signed claim link (mailed only to attendeeEmail, so clicking it proves

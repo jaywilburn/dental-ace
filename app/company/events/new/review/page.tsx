@@ -1,24 +1,25 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { EventType } from "@prisma/client";
 import { PageHeader } from "@/components/portal-shell";
 import { FormNav } from "@/components/application-form/form-controls";
 import { requireDentalAce } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { ensureEventDraft, getEventDraft, submitEvent } from "@/lib/events/event-actions";
 import { isInlineFullCourse } from "@/lib/forms/event/schemas";
-import type { EventType } from "@prisma/client";
 
 const TYPE_LABEL: Record<EventType, string> = {
   FULL_EVENT_QUIZ: "Full attendance · sessions accredited as courses (not reused)",
   FULL_PER_COURSE: "Full attendance · courses reused (per-course accreditation)",
-  SELECTIVE_INLINE: "Selective attendance · sessions accredited as courses (not reused)",
+  SELECTIVE_INLINE: "Selective attendance · event only (sessions not reused)",
   SELECTIVE_PER_COURSE: "Selective attendance · courses reused (per-course accreditation)",
 };
 
 /*
-  Event wizard, Step 4 — Review & Submit. Event-only types now bill one
-  application credit per inline session (each is a full course application);
-  per-course types remain free (their courses were already paid).
+  Event wizard, Step 4 — Review & Submit. Event-only types bill one application
+  credit per session: FULL_EVENT_QUIZ per inline session application (each is a
+  full course application), SELECTIVE_INLINE per lightweight Session/Question/
+  Answer row. Per-course types remain free (their courses were already paid).
 */
 export default async function EventReviewPage({
   searchParams,
@@ -31,7 +32,9 @@ export default async function EventReviewPage({
   const draft = await getEventDraft(eventId);
   if (!draft?.eventType) redirect("/company/events/new/qualifiers");
   const type = draft.eventType;
-  const inlineFull = isInlineFullCourse(type);
+  const inlineFull = isInlineFullCourse(type); // FULL_EVENT_QUIZ
+  const lightweightInline = type === EventType.SELECTIVE_INLINE;
+  const eventOnly = inlineFull || lightweightInline;
 
   // Per-course types attach existing courses; titles for the summary.
   const courseIds = draft.sessions.map((s) => s.courseId).filter(Boolean) as string[];
@@ -43,18 +46,25 @@ export default async function EventReviewPage({
     : [];
 
   const sessionApps = draft.sessionApplications;
-  const sessionCount = sessionApps.length;
-  const allComplete = sessionCount > 0 && sessionApps.every((s) => s.complete);
-  const creditCost = inlineFull ? sessionCount : 0;
-  const inlineHours = sessionApps.reduce((sum, s) => sum + (s.ceHours ?? 0), 0);
-  const displayHours = inlineFull ? inlineHours : draft.totalHours ?? 0;
+  const inlineSessions = lightweightInline
+    ? draft.sessions.filter((s) => s.courseId === null)
+    : [];
+  const sessionCount = lightweightInline ? inlineSessions.length : sessionApps.length;
+  const allComplete = lightweightInline
+    ? inlineSessions.length > 0 // each row is validated in full at save time
+    : sessionApps.length > 0 && sessionApps.every((s) => s.complete);
+  const creditCost = eventOnly ? sessionCount : 0;
+  const inlineHours = lightweightInline
+    ? inlineSessions.reduce((sum, s) => sum + (s.durationHours ?? 0), 0)
+    : sessionApps.reduce((sum, s) => sum + (s.ceHours ?? 0), 0);
+  const displayHours = eventOnly ? inlineHours : draft.totalHours ?? 0;
 
   const credits = user.companyId
     ? (await prisma.company.findUnique({ where: { id: user.companyId }, select: { applicationCredits: true } }))
         ?.applicationCredits ?? 0
     : 0;
 
-  const backHref = inlineFull
+  const backHref = eventOnly
     ? "/company/events/new/sessions"
     : "/company/events/new/courses";
 
@@ -88,7 +98,23 @@ export default async function EventReviewPage({
           </dl>
         </div>
 
-        {inlineFull ? (
+        {lightweightInline ? (
+          <div className="rounded-lg border border-border bg-white p-5">
+            <p className="mb-2 text-[13px] font-semibold text-navy">
+              Sessions ({sessionCount}) — one question each
+            </p>
+            <ul className="space-y-1 text-[12px] text-text-mid">
+              {inlineSessions.map((s) => (
+                <li key={s.id} className="flex justify-between gap-4">
+                  <span>{s.name ?? "(untitled session)"}</span>
+                  <span className="tabular-nums text-text-muted">
+                    {s.durationHours != null ? `${s.durationHours.toFixed(1)} hrs` : "—"}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : inlineFull ? (
           <div className="rounded-lg border border-border bg-white p-5">
             <p className="mb-2 text-[13px] font-semibold text-navy">
               Sessions ({sessionCount}) — each accredited as a course
@@ -124,12 +150,12 @@ export default async function EventReviewPage({
         )}
 
         <div className="rounded-md border border-ace/40 bg-ace-bg p-3 text-[12px] text-ace-dark text-pretty">
-          {inlineFull
+          {eventOnly
             ? `Submitting this event uses ${creditCost} application credit${creditCost === 1 ? "" : "s"} (one per session; you have ${credits}). It then goes to AADB for review.`
             : "This event attaches courses you already had accredited, so submitting it uses no credits. It then goes to AADB for review."}
         </div>
 
-        {inlineFull && !allComplete ? (
+        {eventOnly && !allComplete ? (
           <div className="rounded-md border border-orange-300 bg-orange-50 p-3 text-[12px] text-orange-700">
             {sessionCount === 0
               ? "Add at least one session before submitting."

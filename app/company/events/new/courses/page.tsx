@@ -4,7 +4,7 @@ import { FormErrorBanner, FormNav } from "@/components/application-form/form-con
 import { requireDentalAce } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { ensureEventDraft, getEventDraft, saveAttachedCourses } from "@/lib/events/event-actions";
-import { isInlineFullCourse } from "@/lib/forms/event/schemas";
+import { isEventOnly } from "@/lib/forms/event/schemas";
 
 /*
   Event wizard (Opt 2/4, PER_COURSE) — attach already-approved courses as the
@@ -21,8 +21,8 @@ export default async function EventCoursesPage({
   const eventId = await ensureEventDraft();
   const draft = await getEventDraft(eventId);
   if (!draft?.eventType) redirect("/company/events/new/qualifiers");
-  // Event-only types capture full-course sessions inline, not attached courses.
-  if (isInlineFullCourse(draft.eventType)) redirect("/company/events/new/sessions");
+  // Event-only types capture their sessions inline, not attached courses.
+  if (isEventOnly(draft.eventType)) redirect("/company/events/new/sessions");
 
   const courses = await prisma.accreditedCourse.findMany({
     // eventId:null keeps event-scoped session courses out of the attach picker.

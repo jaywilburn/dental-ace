@@ -14,7 +14,7 @@ import ApplicationApprovedEmail from "@/emails/application-approved";
 import ApplicationRejectedEmail from "@/emails/application-rejected";
 import { formatEventId, nextSeqFromLast } from "@/lib/reviewer/event-id";
 import { applicationDataReadSchema } from "@/lib/forms/application/schemas";
-import { isInlineFullCourse } from "@/lib/forms/event/schemas";
+import { isEventOnly } from "@/lib/forms/event/schemas";
 import { accreditApplicationTx, renderCourseAssets } from "@/lib/reviewer/accredit";
 import { getLetterSignatory } from "@/lib/admin/letter-settings";
 
@@ -71,17 +71,27 @@ export async function approveEvent(formData: FormData) {
           sessionPosition: true,
         },
       },
+      // Lightweight inline Session/Question/Answer rows (SELECTIVE_INLINE).
+      sessions: { where: { courseId: null }, select: { id: true } },
     },
   });
   if (!event) throw new Error("Event not found");
   if (event.status !== "PENDING") throw new Error("Only PENDING events can be approved");
   if (!event.eventType) throw new Error("Event has no type");
 
-  const inlineFull = isInlineFullCourse(event.eventType);
+  // Which accreditation model this event was submitted under, keyed by data
+  // shape so both keep working: pending session applications mean the
+  // full-course model (FULL_EVENT_QUIZ, plus SELECTIVE_INLINE events submitted
+  // before the 2026-07-21 revert); a SELECTIVE_INLINE event without them is the
+  // lightweight model and approves as a single event (no courses to accredit).
+  const eventOnly = isEventOnly(event.eventType);
+  const fullCourseModel = eventOnly && event.sessionApplications.length > 0;
+  const lightweightInline =
+    event.eventType === "SELECTIVE_INLINE" && !fullCourseModel;
 
-  // Event-only events accredit each inline session as its own event-scoped
+  // Full-course model accredits each inline session as its own event-scoped
   // course. Parse every session's application up front (tolerant read schema).
-  const sessions = inlineFull
+  const sessions = fullCourseModel
     ? event.sessionApplications.map((a) => {
         const parsed = applicationDataReadSchema.safeParse(a.applicationData);
         if (!parsed.success) {
@@ -90,15 +100,20 @@ export async function approveEvent(formData: FormData) {
         return { app: a, data: parsed.data };
       })
     : [];
-  if (inlineFull && sessions.length === 0) {
+  if (eventOnly && !fullCourseModel && !lightweightInline) {
     throw new Error("Event has no sessions to accredit");
+  }
+  if (lightweightInline && event.sessions.length === 0) {
+    throw new Error("Event has no sessions");
   }
 
   const approvedAt = new Date();
   const expiresAt = new Date(approvedAt);
   expiresAt.setFullYear(expiresAt.getFullYear() + 3);
   const year = approvedAt.getFullYear();
-  const totalHours = inlineFull
+  // Lightweight inline events carry their hours on Event.totalHours (set from
+  // the session durations at submit), like the per-course types.
+  const totalHours = fullCourseModel
     ? sessions.reduce((sum, s) => sum + s.data.ceCreditHours, 0)
     : event.totalHours
       ? Number(event.totalHours)
@@ -113,7 +128,7 @@ export async function approveEvent(formData: FormData) {
   // it never deadlocks with standalone approveApplication, which takes only the
   // course lock), then the event namespace.
   const { eventIdNumber, sessionResults } = await prisma.$transaction(async (tx) => {
-    if (inlineFull) {
+    if (fullCourseModel) {
       await tx.$executeRaw`select pg_advisory_xact_lock(${year})`;
     }
     await tx.$executeRaw`select pg_advisory_xact_lock(${year}, 1)`;

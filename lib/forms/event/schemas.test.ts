@@ -5,7 +5,9 @@ import {
   isEventOnly,
   isSelective,
   isPerCourse,
+  isInlineFullCourse,
   inlineSessionSchema,
+  inlineSessionsSchema,
 } from "@/lib/forms/event/schemas";
 
 describe("deriveEventType", () => {
@@ -34,6 +36,12 @@ describe("type predicates", () => {
     expect(isPerCourse(EventType.SELECTIVE_PER_COURSE)).toBe(true);
     expect(isPerCourse(EventType.SELECTIVE_INLINE)).toBe(false);
   });
+  it("isInlineFullCourse is FULL_EVENT_QUIZ only (SELECTIVE_INLINE is lightweight)", () => {
+    expect(isInlineFullCourse(EventType.FULL_EVENT_QUIZ)).toBe(true);
+    expect(isInlineFullCourse(EventType.SELECTIVE_INLINE)).toBe(false);
+    expect(isInlineFullCourse(EventType.FULL_PER_COURSE)).toBe(false);
+    expect(isInlineFullCourse(EventType.SELECTIVE_PER_COURSE)).toBe(false);
+  });
 });
 
 describe("inlineSessionSchema", () => {
@@ -54,6 +62,68 @@ describe("inlineSessionSchema", () => {
         ...base,
         question: { ...base.question, options: ["a", "b", "c"] },
       }).success,
+    ).toBe(false);
+    expect(
+      inlineSessionSchema.safeParse({
+        ...base,
+        question: { ...base.question, options: ["a", "b", "c", "d", "e"] },
+      }).success,
+    ).toBe(false);
+  });
+  it("rejects a blank answer option", () => {
+    expect(
+      inlineSessionSchema.safeParse({
+        ...base,
+        question: { ...base.question, options: ["a", "", "c", "d"] },
+      }).success,
+    ).toBe(false);
+  });
+  it("rejects an out-of-range or non-integer correct index", () => {
+    for (const correctIndex of [4, -1, 1.5]) {
+      expect(
+        inlineSessionSchema.safeParse({
+          ...base,
+          question: { ...base.question, correctIndex },
+        }).success,
+      ).toBe(false);
+    }
+    for (const correctIndex of [0, 3]) {
+      expect(
+        inlineSessionSchema.safeParse({
+          ...base,
+          question: { ...base.question, correctIndex },
+        }).success,
+      ).toBe(true);
+    }
+  });
+  it("rejects a blank or too-short question", () => {
+    expect(
+      inlineSessionSchema.safeParse({
+        ...base,
+        question: { ...base.question, question: "" },
+      }).success,
+    ).toBe(false);
+    expect(
+      inlineSessionSchema.safeParse({
+        ...base,
+        question: { ...base.question, question: "Why?" },
+      }).success,
+    ).toBe(false);
+  });
+});
+
+describe("inlineSessionsSchema", () => {
+  const session = {
+    name: "Intro to Sedation",
+    durationHours: 1.5,
+    question: { type: "MC", question: "What is X?", options: ["a", "b", "c", "d"], correctIndex: 1 },
+  };
+  it("requires at least one session and caps at 20", () => {
+    expect(inlineSessionsSchema.safeParse({ sessions: [] }).success).toBe(false);
+    expect(inlineSessionsSchema.safeParse({ sessions: [session] }).success).toBe(true);
+    expect(
+      inlineSessionsSchema.safeParse({ sessions: Array.from({ length: 21 }, () => session) })
+        .success,
     ).toBe(false);
   });
 });

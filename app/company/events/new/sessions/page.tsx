@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { EventType } from "@prisma/client";
 import { PageHeader } from "@/components/portal-shell";
 import { FormErrorBanner } from "@/components/application-form/form-controls";
 import { requireDentalAce } from "@/lib/auth/session";
@@ -8,13 +9,19 @@ import {
   addSessionApplication,
   removeSessionApplication,
 } from "@/lib/events/session-actions";
-import { isInlineFullCourse, isSelective } from "@/lib/forms/event/schemas";
+import { isEventOnly, mcQuestionSchema } from "@/lib/forms/event/schemas";
+import {
+  InlineSessionsForm,
+  type SessionDraft,
+} from "@/components/events/inline-sessions-form";
 
 /*
-  Event wizard, Sessions step (event-only full-course path, Opt 1 & 3). Each
-  session is a full course application captured inline; this page lists them with
-  a completeness badge and Add / Edit / Remove. Coverage (FULL vs SELECTIVE) only
-  changes the intro copy and later attendee/cert logic.
+  Event wizard, Sessions step (event-only types). Two builders share this step:
+
+  - FULL_EVENT_QUIZ (Opt 1): each session is a full course application captured
+    inline; this page lists them with a completeness badge and Add/Edit/Remove.
+  - SELECTIVE_INLINE (Opt 3): the event is ONE application; each session is a
+    lightweight Session/Question/Answer row (title, CE hours, one MC question).
 */
 export default async function EventSessionsPage({
   searchParams,
@@ -26,13 +33,48 @@ export default async function EventSessionsPage({
   const eventId = await ensureEventDraft();
   const draft = await getEventDraft(eventId);
   if (!draft?.eventType) redirect("/company/events/new/qualifiers");
-  if (!isInlineFullCourse(draft.eventType)) {
+  if (!isEventOnly(draft.eventType)) {
     redirect("/company/events/new/courses");
   }
 
+  // Lightweight inline builder (SELECTIVE_INLINE).
+  if (draft.eventType === EventType.SELECTIVE_INLINE) {
+    const initial: SessionDraft[] = draft.sessions
+      .filter((s) => s.courseId === null)
+      .map((s) => {
+        const q = mcQuestionSchema.safeParse(s.question);
+        return {
+          name: s.name ?? "",
+          durationHours: s.durationHours != null ? String(s.durationHours) : "1",
+          question: q.success ? q.data.question : "",
+          options: q.success ? q.data.options : ["", "", "", ""],
+          correctIndex: q.success ? q.data.correctIndex : 0,
+        };
+      });
+
+    return (
+      <>
+        <PageHeader title="New Event" subtitle="Step 3 of 4 — Sessions" />
+        {error === "validation" ? <FormErrorBanner detail={detail} /> : null}
+
+        <div className="mb-4 rounded-md border border-ver bg-ver-bg p-3 text-[12px] text-ver-dark text-pretty">
+          Because these sessions are offered only at this event, the whole event
+          is accredited as a single application. List each session with its CE
+          hours and one multiple choice question. Attendees select the sessions
+          they attended and answer each session&apos;s question; a correct
+          answer earns that session&apos;s hours on their certificate, and a
+          wrong answer drops that session. Submitting the event uses one
+          application credit per session.
+        </div>
+
+        <InlineSessionsForm eventId={eventId} initial={initial} />
+      </>
+    );
+  }
+
+  // Full-course builder (FULL_EVENT_QUIZ): each session is a full application.
   const sessions = draft.sessionApplications;
   const completeCount = sessions.filter((s) => s.complete).length;
-  const selective = isSelective(draft.eventType);
 
   return (
     <>
@@ -43,10 +85,9 @@ export default async function EventSessionsPage({
         Because you are not reusing these sessions as standalone courses, each one
         is accredited as its own course. Add every session below and complete its
         full application (course info, creator, presenters, and a 5-question
-        quiz). {selective
-          ? "Attendees pick which sessions they attended and their certificate shows the total hours completed."
-          : "Attendees complete every session and their certificate shows the full event hours."}{" "}
-        Submitting the event uses one application credit per session.
+        quiz). Attendees complete every session and their certificate shows the
+        full event hours. Submitting the event uses one application credit per
+        session.
       </div>
 
       <div className="space-y-3">

@@ -43,14 +43,17 @@ export function isEventOnly(type: EventType): boolean {
 }
 
 /*
-  Inline full-course path (event-only types). Each session is captured as a full
-  CourseApplication inside the Event wizard and accredited as an event-scoped
-  course; the event is billed one application credit per session. Coverage
-  (FULL vs SELECTIVE) only affects attendee/cert logic, not accreditation.
-  (Same set as isEventOnly today, named for intent at the call sites.)
+  Inline full-course path: each session is captured as a full CourseApplication
+  inside the Event wizard and accredited as an event-scoped course. Since
+  2026-07-21 this is FULL_EVENT_QUIZ only; SELECTIVE_INLINE reverted to the
+  lightweight path (one event application whose sessions are Session/Question/
+  Answer rows on event_sessions, one MC question each). Both event-only types
+  still bill one application credit per session at submit. Reviewer-side code
+  keys on data shape (pending session applications present or not) so
+  SELECTIVE_INLINE events submitted under the full-course model keep working.
 */
 export function isInlineFullCourse(type: EventType): boolean {
-  return isEventOnly(type);
+  return type === EventType.FULL_EVENT_QUIZ;
 }
 
 /** Selective attendance (attendee picks sessions/courses). */
@@ -114,8 +117,11 @@ export const eventQuizSchema = z.object({
     }),
 });
 
-// Opt 3: inline sessions, each with a name, a duration (0.5 increments), and a
-// single multiple-choice question.
+// Opt 3 (SELECTIVE_INLINE): inline sessions, each with a title, CE hours (0.5
+// increments), and ONE multiple-choice question (exactly 4 non-empty options +
+// a correct index; mcQuestionSchema mirrors the standard MC question shape in
+// lib/forms/application/schemas.ts). A correct answer earns that session's
+// hours on the certificate; a wrong answer drops the session.
 export const inlineSessionSchema = z.object({
   name: z.string().min(2).max(200),
   durationHours: z.number().min(0.5).max(40).refine(halfHour, {
