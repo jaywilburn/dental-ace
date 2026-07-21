@@ -1,3 +1,4 @@
+import { EventType } from "@prisma/client";
 import { PageHeader } from "@/components/portal-shell";
 import {
   FormCard,
@@ -40,9 +41,14 @@ export default async function EventDetailsPage({
     d.adminName ?? [user.firstName, user.lastName].filter(Boolean).join(" ").trim();
   const adminEmailDefault = d.adminEmail ?? user.email ?? "";
 
+  // SELECTIVE_INLINE drafts run the longer 7-step flow (event-level Course
+  // Info -> Creator -> Presenters before the session grid); before a type is
+  // chosen the wizard shows the 4-step baseline.
+  const stepCount = draft?.eventType === EventType.SELECTIVE_INLINE ? 7 : 4;
+
   return (
     <>
-      <PageHeader title="New Event" subtitle="Step 1 of 4 — Organization & Event" />
+      <PageHeader title="New Event" subtitle={`Step 1 of ${stepCount} — Organization & Event`} />
       {error === "validation" ? <FormErrorBanner detail={detail} /> : null}
       <form action={saveEventDetails} className="space-y-5">
         <input type="hidden" name="eventId" value={eventId} />

@@ -30,9 +30,11 @@ const inputBase =
 export function InlineSessionsForm({
   eventId,
   initial,
+  backHref,
 }: {
   eventId: string;
   initial: SessionDraft[];
+  backHref: string;
 }) {
   const [sessions, setSessions] = useState<SessionDraft[]>(
     initial.length > 0 ? initial : [blank()],
@@ -140,7 +142,7 @@ export function InlineSessionsForm({
         </button>
       )}
 
-      <FormNav back={{ href: "/company/events/new/qualifiers", label: "Back" }} nextLabel="Next: Review" />
+      <FormNav back={{ href: backHref, label: "Back" }} nextLabel="Next: Review" />
     </form>
   );
 }

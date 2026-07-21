@@ -9,7 +9,12 @@ import {
   addSessionApplication,
   removeSessionApplication,
 } from "@/lib/events/session-actions";
-import { isEventOnly, mcQuestionSchema } from "@/lib/forms/event/schemas";
+import {
+  eventApplicationStepRoute,
+  isEventOnly,
+  mcQuestionSchema,
+  nextEventApplicationStep,
+} from "@/lib/forms/event/schemas";
 import {
   InlineSessionsForm,
   type SessionDraft,
@@ -37,8 +42,12 @@ export default async function EventSessionsPage({
     redirect("/company/events/new/courses");
   }
 
-  // Lightweight inline builder (SELECTIVE_INLINE).
+  // Lightweight inline builder (SELECTIVE_INLINE). The event-level application
+  // content (Course Info -> Creator -> Presenters) comes first; route drafts
+  // that have not finished it (including pre-rework drafts) into those steps.
   if (draft.eventType === EventType.SELECTIVE_INLINE) {
+    const appStep = nextEventApplicationStep(draft.data.eventApplication);
+    if (appStep) redirect(eventApplicationStepRoute(appStep));
     const initial: SessionDraft[] = draft.sessions
       .filter((s) => s.courseId === null)
       .map((s) => {
@@ -54,7 +63,7 @@ export default async function EventSessionsPage({
 
     return (
       <>
-        <PageHeader title="New Event" subtitle="Step 3 of 4 — Sessions" />
+        <PageHeader title="New Event" subtitle="Step 6 of 7 — Sessions" />
         {error === "validation" ? <FormErrorBanner detail={detail} /> : null}
 
         <div className="mb-4 rounded-md border border-ver bg-ver-bg p-3 text-[12px] text-ver-dark text-pretty">
@@ -67,7 +76,11 @@ export default async function EventSessionsPage({
           application credit per session.
         </div>
 
-        <InlineSessionsForm eventId={eventId} initial={initial} />
+        <InlineSessionsForm
+          eventId={eventId}
+          initial={initial}
+          backHref={eventApplicationStepRoute("presenters")}
+        />
       </>
     );
   }

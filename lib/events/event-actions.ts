@@ -8,7 +8,12 @@ import { Prisma, EventType } from "@prisma/client";
 import { getCurrentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { rateLimit } from "@/lib/rate-limit";
-import { orgStepSchema } from "@/lib/forms/application/schemas";
+import {
+  orgStepSchema,
+  step1Schema,
+  step2Schema,
+  step3Schema,
+} from "@/lib/forms/application/schemas";
 import {
   eventDetailsSchema,
   qualifierSchema,
@@ -17,8 +22,10 @@ import {
   mcQuestionSchema,
   attachedCoursesSchema,
   deriveEventType,
+  eventApplicationStepRoute,
   isEventOnly,
   isInlineFullCourse,
+  nextEventApplicationStep,
   type EventData,
   type InlineSession,
 } from "@/lib/forms/event/schemas";
@@ -26,6 +33,15 @@ import {
   applicationDataSchema,
   type ApplicationData,
 } from "@/lib/forms/application/schemas";
+import {
+  courseInfoRawFromForm,
+  creatorRawFromForm,
+  presentersRawFromForm,
+} from "@/lib/forms/application/form-mapping";
+import {
+  sanitizeRichText,
+  richTextPlainLength,
+} from "@/lib/forms/application/rich-text";
 import { sendEmail } from "@/lib/email/send";
 import ApplicationSubmittedEmail from "@/emails/application-submitted";
 import {
@@ -57,10 +73,13 @@ async function customerCompanyId(): Promise<string> {
 
 /** The wizard step a given event type routes to after the qualifiers step. */
 function typeStepRoute(type: EventType): string {
-  // Both event-only types share the sessions step. FULL_EVENT_QUIZ captures a
-  // full course application per session; SELECTIVE_INLINE captures lightweight
-  // Session/Question/Answer rows (one MC question each). The step page renders
-  // the right builder for the type.
+  // SELECTIVE_INLINE first captures the event-level application content
+  // (Course Information -> Creator -> Presenters, entered once per event),
+  // then its lightweight Session/Question/Answer grid. FULL_EVENT_QUIZ goes
+  // straight to the sessions list (each session there is a full application).
+  if (type === EventType.SELECTIVE_INLINE) {
+    return eventApplicationStepRoute("course");
+  }
   if (isEventOnly(type)) return ROUTES.sessions;
   return ROUTES.courses; // FULL_PER_COURSE | SELECTIVE_PER_COURSE
 }
@@ -253,7 +272,7 @@ export async function saveQualifiers(formData: FormData) {
   await prisma.$transaction(async (tx) => {
     const current = await tx.event.findFirst({
       where: { id: eventId, companyId, status: "DRAFT" },
-      select: { eventType: true },
+      select: { eventType: true, eventData: true },
     });
     if (current && current.eventType !== type) {
       await tx.eventSession.deleteMany({ where: { eventId } });
@@ -262,6 +281,16 @@ export async function saveQualifiers(formData: FormData) {
       await tx.courseApplication.deleteMany({
         where: { eventId, status: "DRAFT" },
       });
+      // Drop the event-level application content (SELECTIVE_INLINE) so it does
+      // not linger in eventData after switching to another type.
+      const ed = (current.eventData as Record<string, unknown> | null) ?? {};
+      if ("eventApplication" in ed) {
+        delete ed.eventApplication;
+        await tx.event.update({
+          where: { id: eventId },
+          data: { eventData: ed as Prisma.InputJsonValue },
+        });
+      }
     }
     await tx.event.updateMany({
       where: { id: eventId, companyId, status: "DRAFT" },
@@ -269,6 +298,101 @@ export async function saveQualifiers(formData: FormData) {
     });
   });
   redirect(typeStepRoute(type));
+}
+
+/*
+  SELECTIVE_INLINE event-level application steps (Course Information -> Creator
+  -> Presenters). Entered ONCE per event, validated with the same step schemas
+  as the standalone application wizard, and persisted under
+  eventData.eventApplication — NOT as an event-level CourseApplication row
+  (approveEvent keys the accreditation model on pending session applications).
+*/
+
+/**
+ * Validate a course-application step slice and merge it into
+ * eventData.eventApplication. Mirrors mergeEventStep, one level down.
+ */
+async function mergeEventApplicationStep(
+  eventId: string,
+  schema: z.ZodTypeAny,
+  raw: unknown,
+  route: string,
+): Promise<void> {
+  const companyId = await customerCompanyId();
+  const result = schema.safeParse(raw);
+  if (!result.success) {
+    const issue = result.error.issues[0];
+    const detail = issue
+      ? `${String(issue.path[0] ?? "Form")}: ${issue.message}`.slice(0, 200)
+      : "Please check the highlighted fields.";
+    redirect(`${route}?error=validation&detail=${encodeURIComponent(detail)}`);
+  }
+  const existing = await prisma.event.findFirst({
+    where: { id: eventId, companyId, status: "DRAFT" },
+    select: { eventType: true, eventData: true },
+  });
+  if (!existing) throw new Error("Event draft not found");
+  if (existing.eventType !== EventType.SELECTIVE_INLINE) {
+    throw new Error(
+      "The event-level application applies only to selective event-only events",
+    );
+  }
+  const data = (existing.eventData as Record<string, unknown>) ?? {};
+  const app = (data.eventApplication as Record<string, unknown> | undefined) ?? {};
+  const merged = {
+    ...data,
+    eventApplication: { ...app, ...(result.data as Record<string, unknown>) },
+  };
+  await prisma.event.update({
+    where: { id: eventId },
+    data: { eventData: merged as Prisma.InputJsonValue },
+  });
+}
+
+export async function saveEventCourseInfo(formData: FormData) {
+  const eventId = String(formData.get("eventId") ?? "");
+  if (!eventId) throw new Error("Missing eventId");
+  await mergeEventApplicationStep(
+    eventId,
+    step1Schema,
+    courseInfoRawFromForm(formData),
+    eventApplicationStepRoute("course"),
+  );
+  redirect(eventApplicationStepRoute("creator"));
+}
+
+export async function saveEventCreator(formData: FormData) {
+  const eventId = String(formData.get("eventId") ?? "");
+  if (!eventId) throw new Error("Missing eventId");
+  const detailedBioHtml = sanitizeRichText(
+    String(formData.get("detailedBioHtml") ?? ""),
+  );
+  if (richTextPlainLength(detailedBioHtml) < 20) {
+    redirect(
+      `${eventApplicationStepRoute("creator")}?error=validation&detail=${encodeURIComponent(
+        "Detailed bio: please write at least 20 characters.",
+      )}`,
+    );
+  }
+  await mergeEventApplicationStep(
+    eventId,
+    step2Schema,
+    creatorRawFromForm(formData, detailedBioHtml),
+    eventApplicationStepRoute("creator"),
+  );
+  redirect(eventApplicationStepRoute("presenters"));
+}
+
+export async function saveEventPresenters(formData: FormData) {
+  const eventId = String(formData.get("eventId") ?? "");
+  if (!eventId) throw new Error("Missing eventId");
+  await mergeEventApplicationStep(
+    eventId,
+    step3Schema,
+    presentersRawFromForm(formData),
+    eventApplicationStepRoute("presenters"),
+  );
+  redirect(ROUTES.sessions);
 }
 
 export async function saveEventQuiz(formData: FormData) {
@@ -479,6 +603,16 @@ export async function submitEvent(formData: FormData) {
   // one application credit per session (the same per-session rate as the
   // full-course path) and move the event to PENDING atomically.
   if (type === EventType.SELECTIVE_INLINE) {
+    // The event-level application content (Course Information + Creator +
+    // Presenters, entered once per event) must be complete before review.
+    const appStep = nextEventApplicationStep(data.eventApplication);
+    if (appStep) {
+      redirect(
+        `${eventApplicationStepRoute(appStep)}?error=validation&detail=${encodeURIComponent(
+          "Finish this step before submitting your event.",
+        )}`,
+      );
+    }
     const inline = draft.sessions.filter((s) => s.courseId === null);
     if (inline.length === 0) {
       redirect(
