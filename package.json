@@ -15,6 +15,7 @@
     "import:requirements": "tsx scripts/import-state-requirements.ts",
     "migrate:legacy": "tsx scripts/migrate-legacy.ts",
     "import:pearl-quiz": "tsx scripts/import-pearl-legacy-quiz.ts",
+    "import:new-companies": "tsx scripts/import-new-companies.ts",
     "reconcile:certs": "tsx scripts/reconcile-cert-balances.ts",
     "backfill:course-expirations": "tsx scripts/backfill-legacy-course-expirations.ts",
     "backfill:course-assets": "tsx scripts/backfill-legacy-course-assets.ts",

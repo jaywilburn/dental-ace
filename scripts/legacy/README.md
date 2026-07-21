@@ -208,3 +208,39 @@ Both parts stamp the same `legacyProvisionedAt` / `activationEmailSentAt` column
 send scripts are fenced by `companyId`: Part 2 (`invite:legacy`) targets `companyId == null`
 (ProTrack individuals), Part 3 (`invite:legacy-providers`) targets `companyId != null`
 (providers). Neither can ever pick up the other's accounts.
+
+---
+
+## Part 4 — July 2026 new-companies batch
+
+Client-delivered follow-up batch (2026-07-21): 3 NEW companies (**Emme Sanders RDH**
+legacy_id 40, **SKF Practice Solutions** 41, **Chairside Collaborative** 42) + 2 new
+courses for the existing **People + Practice LLC** (legacy_id 7). 6 courses
+(legacy_id 107-112 / `ACE-LEG-00107..00112` = DA252, DA254, DA256, DA257, DA258,
+DA260), each imported WITH its validated 5-question quiz, and 83 certificates
+(DA252: 12, DA256: 14, DA258: 57 — of which 45 passed / 12 failed; the client's
+records show all 57 historically received certs, decision was to record true
+scores and flip the 12 later if SKF confirms).
+
+| Step | Command |
+|---|---|
+| Derive artifacts from the client xlsx/CSVs | `python3 scripts/legacy/extract-new-companies.py` |
+| Import companies + courses + quizzes + certs | `pnpm import:new-companies [--apply]` (dry run default) |
+| QR + letter asset paths | `pnpm backfill:course-assets --apply` |
+| Provision the 4 POC owners | `pnpm provision:legacy-providers scripts/data/legacy/new-companies/providers.csv` |
+| Activation invites (HELD for client go-ahead) | `pnpm invite:legacy-providers` |
+
+Artifacts live in `scripts/data/legacy/new-companies/` (`attendees-*.csv` +
+`providers.csv` are PII and gitignored, like the Pearl CSVs; tests skip when
+absent). Parser: `scripts/legacy/new-companies-parse.ts` (unit-tested).
+Cert idempotency keys are `NEWCO-<DA###>-<submit ts>-<email hash>` (Pearl-style).
+The importer also runs the ProTrack backfill for attendee emails that already
+have accounts (verification-time sync never re-fires for them).
+
+**Run record (production, 2026-07-21):** import applied — 3 companies, 6 courses,
+83 certs inserted, counters recomputed (PPL 15, SKF 45, Emme Sanders 14), 3
+ProTrack CE records linked; assets applied — 6 QRs uploaded; provisioning run —
+4 owners created (Emme Sanders, Brittany Rogars, Stacey Sloan, Abby FaQuin), all
+linked, **activation emails NOT sent yet**. Re-runs are no-ops. All 4 companies
+still have `cert_balance = 0`, so attend links stay gated until balances are
+granted.

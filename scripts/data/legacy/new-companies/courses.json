@@ -1,0 +1,74 @@
+[
+  {
+    "legacyId": 107,
+    "companyLegacyId": 7,
+    "legacyCourseId": "DA252",
+    "courseIdNumber": "ACE-LEG-00107",
+    "courseTitle": "When aligners fall short: improving efficiency and control with aesthetic fixed appliances",
+    "ceHours": 1.0,
+    "subjectRaw": "Business/Practice Management",
+    "formatRaw": "LIVE/Online (Virtual Event, Webinar, Social Media Platform) (Presenter(s) must be available LIVE for Q & A to constitute as a LIVE/Online course) (Requires a 5 question quiz which will need to be provided below)",
+    "sheetOrg": "People + Practice LLC",
+    "approvedAt": "2026-06-09"
+  },
+  {
+    "legacyId": 108,
+    "companyLegacyId": 41,
+    "legacyCourseId": "DA254",
+    "courseIdNumber": "ACE-LEG-00108",
+    "courseTitle": "Open Dental Users Workshop 2026",
+    "ceHours": 4.75,
+    "subjectRaw": "Business/Practice Management",
+    "formatRaw": "LIVE/In Person (Presenter(s) must be available LIVE for Q & A during the duration of the course to constitute as a LIVE/In Person course) (Requires a 5 question quiz which will need to be provided below)",
+    "sheetOrg": null,
+    "approvedAt": "2026-07-21"
+  },
+  {
+    "legacyId": 109,
+    "companyLegacyId": 40,
+    "legacyCourseId": "DA256",
+    "courseIdNumber": "ACE-LEG-00109",
+    "courseTitle": "Building a High-Performing Hygiene Department: Clinical Excellence, Patient Care, and Team Collaboration",
+    "ceHours": 10.0,
+    "subjectRaw": "Scientific (Clinical)",
+    "formatRaw": "LIVE/In Person (Presenter(s) must be available LIVE for Q & A during the duration of the course to constitute as a LIVE/In Person course) (Requires a 5 question quiz which will need to be provided below)",
+    "sheetOrg": "COLLABricon",
+    "approvedAt": "2026-06-12"
+  },
+  {
+    "legacyId": 110,
+    "companyLegacyId": 42,
+    "legacyCourseId": "DA257",
+    "courseIdNumber": "ACE-LEG-00110",
+    "courseTitle": "Hygiene Leadership Institute",
+    "ceHours": 6.0,
+    "subjectRaw": "Business/Practice Management",
+    "formatRaw": "LIVE/Online (Virtual Event, Webinar, Social Media Platform) (Presenter(s) must be available LIVE for Q & A to constitute as a LIVE/Online course) (Requires a 5 question quiz which will need to be provided below)",
+    "sheetOrg": null,
+    "approvedAt": "2026-07-21"
+  },
+  {
+    "legacyId": 111,
+    "companyLegacyId": 41,
+    "legacyCourseId": "DA258",
+    "courseIdNumber": "ACE-LEG-00111",
+    "courseTitle": "Streamline and Succeed: Open Dental Training for Dental Office Efficiency",
+    "ceHours": 6.0,
+    "subjectRaw": "Scientific (Clinical)",
+    "formatRaw": "onDemand Recorded Video (Requires a 5 question quiz which will need to be provided below)",
+    "sheetOrg": "SKF Practice Solutions",
+    "approvedAt": "2026-04-09"
+  },
+  {
+    "legacyId": 112,
+    "companyLegacyId": 7,
+    "legacyCourseId": "DA260",
+    "courseIdNumber": "ACE-LEG-00112",
+    "courseTitle": "What No One Tells You About Going Digital in Orthodontics: Unlocking Speed, Control, and Profit",
+    "ceHours": 1.0,
+    "subjectRaw": "Business/Practice Management",
+    "formatRaw": "LIVE/Online (Virtual Event, Webinar, Social Media Platform) (Presenter(s) must be available LIVE for Q & A to constitute as a LIVE/Online course) (Requires a 5 question quiz which will need to be provided below)",
+    "sheetOrg": null,
+    "approvedAt": "2026-07-21"
+  }
+]

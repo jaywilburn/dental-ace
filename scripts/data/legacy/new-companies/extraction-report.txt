@@ -1,0 +1,7 @@
+new-companies extraction  |  source: /Users/jasonwilburn/Downloads/Migration Plan/Migration report.xlsx
+DA252: 12 attendee rows (sheet 'DA252 - When aligners fall shor')
+DA256: 14 attendee rows (sheet 'DA256 - Building a High-Perform')
+DA258: 57 attendee rows (sheet 'DA258 - Streamline and Succeed ')
+DA252: earliest cert date 2026-06-09
+DA256: earliest cert date 2026-06-12
+DA258: earliest cert date 2026-04-09
