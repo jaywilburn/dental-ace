@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 
@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
   SidebarNav, switch links, sign-out form) as `children` here unchanged; this
   component only adds a sticky mobile top bar + toggle that shows/hides the
   aside below md. Expansion is in-flow (pushes the main content down), no
-  overlay. Closes automatically on navigation via the pathname effect.
+  overlay. Closes automatically on navigation (render-phase reset below).
 */
 export function PortalSidebar({
   topBarBrand,
@@ -22,9 +22,14 @@ export function PortalSidebar({
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
 
-  useEffect(() => {
+  // Close on navigation. State is adjusted during render (React's documented
+  // pattern for resetting state when a value changes) instead of in an effect,
+  // which would commit the open menu first and re-render to close it.
+  const [prevPathname, setPrevPathname] = useState(pathname);
+  if (pathname !== prevPathname) {
+    setPrevPathname(pathname);
     setOpen(false);
-  }, [pathname]);
+  }
 
   return (
     <>
