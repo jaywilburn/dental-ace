@@ -8,18 +8,22 @@
   Outputs are validated with the step schemas at the call site.
 */
 
-/** Course Information fields (step1Schema slice). */
-export function courseInfoRawFromForm(formData: FormData) {
+/**
+ * Course Information fields (step1Schema slice). `prefix` scopes the field
+ * names for forms carrying several course-info groups at once (the inline
+ * sessions form posts one group per session as `s{i}_courseTitle`, ...).
+ */
+export function courseInfoRawFromForm(formData: FormData, prefix = "") {
   return {
-    courseTitle: String(formData.get("courseTitle") ?? ""),
-    ceCreditHours: Number(formData.get("ceCreditHours") ?? 0),
-    subjectMatter: String(formData.get("subjectMatter") ?? ""),
-    deliveryFormat: String(formData.get("deliveryFormat") ?? ""),
-    primaryDistributionFormat: String(formData.get("primaryDistributionFormat") ?? ""),
-    shortDescription: String(formData.get("shortDescription") ?? ""),
-    publicProtectionStatement: String(formData.get("publicProtectionStatement") ?? ""),
-    courseObjectives: String(formData.get("courseObjectives") ?? ""),
-    courseOutline: String(formData.get("courseOutline") ?? ""),
+    courseTitle: String(formData.get(`${prefix}courseTitle`) ?? ""),
+    ceCreditHours: Number(formData.get(`${prefix}ceCreditHours`) ?? 0),
+    subjectMatter: String(formData.get(`${prefix}subjectMatter`) ?? ""),
+    deliveryFormat: String(formData.get(`${prefix}deliveryFormat`) ?? ""),
+    primaryDistributionFormat: String(formData.get(`${prefix}primaryDistributionFormat`) ?? ""),
+    shortDescription: String(formData.get(`${prefix}shortDescription`) ?? ""),
+    publicProtectionStatement: String(formData.get(`${prefix}publicProtectionStatement`) ?? ""),
+    courseObjectives: String(formData.get(`${prefix}courseObjectives`) ?? ""),
+    courseOutline: String(formData.get(`${prefix}courseOutline`) ?? ""),
   };
 }
 

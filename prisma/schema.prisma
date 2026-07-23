@@ -456,6 +456,11 @@ model EventSession {
   name          String?
   durationHours Decimal?          @map("duration_hours") @db.Decimal(4, 2)
   question      Json?
+  // Per-session Course Information (SELECTIVE_INLINE; step1Schema shape).
+  // name/durationHours are mirrored from courseTitle/ceCreditHours at save so
+  // quiz assembly, scoring, certificates, and totalHours read them unchanged.
+  // Null on sessions saved before July 2026.
+  courseInfo    Json?             @map("course_info")
 
   // PG treats multiple NULL course_ids as distinct, so many inline rows are
   // allowed; this still blocks attaching the same course twice.

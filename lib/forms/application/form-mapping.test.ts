@@ -76,6 +76,19 @@ describe("courseInfoRawFromForm", () => {
     );
     expect(step1Schema.safeParse(raw).success).toBe(false);
   });
+  it("reads prefixed field names when a prefix is passed (inline sessions form)", () => {
+    const prefixed = Object.fromEntries(
+      Object.entries(COURSE_FIELDS).map(([k, v]) => [`s0_${k}`, v]),
+    );
+    const raw = courseInfoRawFromForm(formDataFrom(prefixed), "s0_");
+    const parsed = step1Schema.safeParse(raw);
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.courseTitle).toBe("Implant Dentistry Update");
+    }
+    // Without the prefix the same form yields an empty (invalid) slice.
+    expect(step1Schema.safeParse(courseInfoRawFromForm(formDataFrom(prefixed))).success).toBe(false);
+  });
 });
 
 describe("creatorRawFromForm", () => {

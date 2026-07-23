@@ -11,11 +11,22 @@ export type PublicQuestion =
   | { type: "TF"; question: string }
   | { type: "MC"; question: string; options: string[] };
 
+export type EventFormItemDetails = {
+  objectives?: string;
+  outline?: string;
+  category?: string;
+  format?: string;
+};
+
 export type EventFormItem = {
   id: string;
   label: string;
   sub: string;
   question: PublicQuestion;
+  /** Short description shown under the title (sessions with course info). */
+  description?: string;
+  /** Extra fields behind the "View details" expander on the select step. */
+  details?: EventFormItemDetails;
 };
 
 export type EventPublicForm =

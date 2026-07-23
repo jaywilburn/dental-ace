@@ -7,6 +7,33 @@ import type { ApplicationDataRead } from "@/lib/forms/application/schemas";
   Rows are built by lib/forms/application/detail-rows.ts.
 */
 
+/** The bare rows grid, for embedding inside expanders/cards without the card chrome. */
+export function DetailRowsList({ rows }: { rows: DetailRow[] }) {
+  return (
+    <dl className="grid grid-cols-1 gap-x-6 gap-y-3 px-4 py-4 sm:grid-cols-2">
+      {rows.map((row, i) => (
+        <div key={i} className={row.full ? "sm:col-span-2" : undefined}>
+          <dt className="text-[10px] font-semibold uppercase tracking-wide text-text-muted">
+            {row.label}
+          </dt>
+          {row.html ? (
+            // html rows contain ONLY sanitizeRichText() output (enforced by
+            // the row builders in detail-rows.ts).
+            <dd
+              className="mt-0.5 text-[13px] leading-relaxed text-navy [&_li]:ml-5 [&_ol]:list-decimal [&_ul]:list-disc"
+              dangerouslySetInnerHTML={{ __html: row.value }}
+            />
+          ) : (
+            <dd className="mt-0.5 whitespace-pre-line text-[13px] text-navy">
+              {row.value}
+            </dd>
+          )}
+        </div>
+      ))}
+    </dl>
+  );
+}
+
 export function DetailSection({
   title,
   rows,
@@ -19,27 +46,7 @@ export function DetailSection({
       <div className="border-b border-border bg-surface px-4 py-2.5">
         <p className="text-[12px] font-semibold text-navy">{title}</p>
       </div>
-      <dl className="grid grid-cols-1 gap-x-6 gap-y-3 px-4 py-4 sm:grid-cols-2">
-        {rows.map((row, i) => (
-          <div key={i} className={row.full ? "sm:col-span-2" : undefined}>
-            <dt className="text-[10px] font-semibold uppercase tracking-wide text-text-muted">
-              {row.label}
-            </dt>
-            {row.html ? (
-              // html rows contain ONLY sanitizeRichText() output (enforced by
-              // the row builders in detail-rows.ts).
-              <dd
-                className="mt-0.5 text-[13px] leading-relaxed text-navy [&_li]:ml-5 [&_ol]:list-decimal [&_ul]:list-disc"
-                dangerouslySetInnerHTML={{ __html: row.value }}
-              />
-            ) : (
-              <dd className="mt-0.5 whitespace-pre-line text-[13px] text-navy">
-                {row.value}
-              </dd>
-            )}
-          </div>
-        ))}
-      </dl>
+      <DetailRowsList rows={rows} />
     </div>
   );
 }

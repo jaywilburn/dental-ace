@@ -27,7 +27,14 @@ export function organizationRows(data: ApplicationDataRead): DetailRow[] {
   ];
 }
 
-export function courseInfoRows(data: ApplicationDataRead): DetailRow[] {
+export function courseInfoRows(
+  data: ApplicationDataRead,
+  opts?: {
+    // Event-level applications label the outline "Event Outline"; the field
+    // key stays courseOutline everywhere.
+    outlineLabel?: string;
+  },
+): DetailRow[] {
   return [
     { label: "Course Title", value: data.courseTitle, full: true },
     { label: "CE Credit Hours", value: `${data.ceCreditHours.toFixed(1)} hours` },
@@ -52,7 +59,50 @@ export function courseInfoRows(data: ApplicationDataRead): DetailRow[] {
     // Text since 2026-06; legacy applications carry an uploaded file under
     // this key instead, shown in the Attachments card.
     ...(typeof data.courseOutline === "string"
-      ? [{ label: "Course Outline", value: data.courseOutline, full: true }]
+      ? [{ label: opts?.outlineLabel ?? "Course Outline", value: data.courseOutline, full: true }]
+      : []),
+  ];
+}
+
+/**
+ * Rows for a per-session Course Information slice (SELECTIVE_INLINE inline
+ * sessions; step1 shape only). Tolerant of missing fields: sessions saved
+ * before per-session course info existed render whatever they have.
+ * courseInfoRows() requires a full ApplicationDataRead, so it cannot parse
+ * these slices.
+ */
+export function sessionCourseInfoRows(info: {
+  courseTitle?: string;
+  ceCreditHours?: number;
+  subjectMatter?: string;
+  deliveryFormat?: string;
+  primaryDistributionFormat?: string;
+  shortDescription?: string;
+  publicProtectionStatement?: string;
+  courseObjectives?: string;
+  courseOutline?: string;
+}): DetailRow[] {
+  return [
+    ...(info.courseTitle ? [{ label: "Course Title", value: info.courseTitle, full: true }] : []),
+    ...(info.ceCreditHours != null
+      ? [{ label: "CE Credit Hours", value: `${info.ceCreditHours.toFixed(1)} hours` }]
+      : []),
+    ...(info.subjectMatter ? [{ label: "Category", value: info.subjectMatter }] : []),
+    ...(info.deliveryFormat ? [{ label: "Course Format", value: info.deliveryFormat }] : []),
+    ...(info.primaryDistributionFormat
+      ? [{ label: "Most-Used Format", value: info.primaryDistributionFormat }]
+      : []),
+    ...(info.shortDescription
+      ? [{ label: "Short Description", value: info.shortDescription, full: true }]
+      : []),
+    ...(info.publicProtectionStatement
+      ? [{ label: "Public Protection Statement", value: info.publicProtectionStatement, full: true }]
+      : []),
+    ...(info.courseObjectives
+      ? [{ label: "Course Objectives", value: info.courseObjectives, full: true }]
+      : []),
+    ...(info.courseOutline
+      ? [{ label: "Course Outline", value: info.courseOutline, full: true }]
       : []),
   ];
 }

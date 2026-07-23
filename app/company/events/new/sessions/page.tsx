@@ -14,7 +14,13 @@ import {
   isEventOnly,
   mcQuestionSchema,
   nextEventApplicationStep,
+  sessionCourseInfoReadSchema,
 } from "@/lib/forms/event/schemas";
+import {
+  CATEGORIES,
+  COURSE_FORMATS,
+  DELIVERY_FORMATS,
+} from "@/lib/forms/application/schemas";
 import {
   InlineSessionsForm,
   type SessionDraft,
@@ -31,10 +37,10 @@ import {
 export default async function EventSessionsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; detail?: string }>;
+  searchParams: Promise<{ error?: string; detail?: string; saved?: string }>;
 }) {
   await requireDentalAce();
-  const { error, detail } = await searchParams;
+  const { error, detail, saved } = await searchParams;
   const eventId = await ensureEventDraft();
   const draft = await getEventDraft(eventId);
   if (!draft?.eventType) redirect("/company/events/new/qualifiers");
@@ -48,32 +54,57 @@ export default async function EventSessionsPage({
   if (draft.eventType === EventType.SELECTIVE_INLINE) {
     const appStep = nextEventApplicationStep(draft.data.eventApplication);
     if (appStep) redirect(eventApplicationStepRoute(appStep));
-    const initial: SessionDraft[] = draft.sessions
-      .filter((s) => s.courseId === null)
-      .map((s) => {
-        const q = mcQuestionSchema.safeParse(s.question);
-        return {
-          name: s.name ?? "",
-          durationHours: s.durationHours != null ? String(s.durationHours) : "1",
-          question: q.success ? q.data.question : "",
-          options: q.success ? q.data.options : ["", "", "", ""],
-          correctIndex: q.success ? q.data.correctIndex : 0,
-        };
-      });
+    const inline = draft.sessions.filter((s) => s.courseId === null);
+    const initial: SessionDraft[] = inline.map((s) => {
+      const q = mcQuestionSchema.safeParse(s.question);
+      const ci = sessionCourseInfoReadSchema.safeParse(s.courseInfo ?? {});
+      const info = ci.success ? ci.data : {};
+      return {
+        // Legacy fallback: sessions saved before per-session course info
+        // existed prefill title/hours from the mirrored columns.
+        courseTitle: info.courseTitle ?? s.name ?? "",
+        ceCreditHours:
+          info.ceCreditHours != null
+            ? String(info.ceCreditHours)
+            : s.durationHours != null
+              ? String(s.durationHours)
+              : "1",
+        subjectMatter: info.subjectMatter ?? CATEGORIES[0],
+        deliveryFormat: info.deliveryFormat ?? COURSE_FORMATS[0],
+        primaryDistributionFormat:
+          info.primaryDistributionFormat ?? DELIVERY_FORMATS[0],
+        shortDescription: info.shortDescription ?? "",
+        publicProtectionStatement: info.publicProtectionStatement ?? "",
+        courseObjectives: info.courseObjectives ?? "",
+        courseOutline: info.courseOutline ?? "",
+        question: q.success ? q.data.question : "",
+        options: q.success ? q.data.options : ["", "", "", ""],
+        correctIndex: q.success ? q.data.correctIndex : 0,
+      };
+    });
+    const completeCount = inline.filter((s) => s.complete).length;
 
     return (
       <>
         <PageHeader title="New Event" subtitle="Step 6 of 7 — Sessions" />
         {error === "validation" ? <FormErrorBanner detail={detail} /> : null}
+        {saved === "1" && completeCount < inline.length ? (
+          <div className="mb-4 rounded-md border border-emerald-400 bg-emerald-50 px-4 py-2.5 text-[13px] text-emerald-700">
+            ✓ Progress saved. {completeCount} of {inline.length} sessions are
+            complete. Finish each session&apos;s course information and
+            question to submit.
+          </div>
+        ) : null}
 
         <div className="mb-4 rounded-md border border-ver bg-ver-bg p-3 text-[12px] text-ver-dark text-pretty">
           Because these sessions are offered only at this event, the whole event
-          is accredited as a single application. List each session with its CE
-          hours and one multiple choice question. Attendees select the sessions
-          they attended and answer each session&apos;s question; a correct
-          answer earns that session&apos;s hours on their certificate, and a
-          wrong answer drops that session. Submitting the event uses one
-          application credit per session.
+          is accredited as a single application. Each session carries its own
+          course information plus one multiple choice question. Attendees can
+          read each session&apos;s details, select the sessions they attended,
+          and answer each session&apos;s question; a correct answer earns that
+          session&apos;s hours on their certificate, and a wrong answer drops
+          that session. Submitting the event uses one application credit per
+          session. Your work is saved even if a session is not finished yet.
         </div>
 
         <InlineSessionsForm

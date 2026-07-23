@@ -8,6 +8,7 @@ import {
   creatorRows,
   organizationRows,
   presenterRows,
+  sessionCourseInfoRows,
 } from "@/lib/forms/application/detail-rows";
 
 /*
@@ -138,6 +139,54 @@ describe("courseInfoRows", () => {
       (r) => r.label === "CE Credit Hours",
     );
     expect(row?.value).toBe("2.5 hours");
+  });
+
+  it("relabels the outline row when outlineLabel is passed (event-level applications)", () => {
+    const rows = courseInfoRows(
+      parseRead({ courseOutline: "Day 1: sessions. Day 2: workshops." }),
+      { outlineLabel: "Event Outline" },
+    );
+    expect(rows.find((r) => r.label === "Event Outline")?.value).toBe(
+      "Day 1: sessions. Day 2: workshops.",
+    );
+    expect(rows.map((r) => r.label)).not.toContain("Course Outline");
+    // Default stays "Course Outline" for regular applications.
+    const defaults = courseInfoRows(parseRead({ courseOutline: "Outline text" }));
+    expect(defaults.map((r) => r.label)).toContain("Course Outline");
+  });
+});
+
+describe("sessionCourseInfoRows", () => {
+  it("renders all rows for a full per-session slice", () => {
+    const rows = sessionCourseInfoRows({
+      courseTitle: "Intro to Sedation",
+      ceCreditHours: 1.5,
+      subjectMatter: "Scientific",
+      deliveryFormat: "LIVE In Person",
+      primaryDistributionFormat: "Live/In Person",
+      shortDescription: "A focused session on sedation protocols.",
+      publicProtectionStatement: "Keeps sedated patients safe.",
+      courseObjectives: "1. Learn A\n2. Apply B",
+      courseOutline: "Part 1: overview.",
+    });
+    expect(rows.map((r) => r.label)).toEqual([
+      "Course Title",
+      "CE Credit Hours",
+      "Category",
+      "Course Format",
+      "Most-Used Format",
+      "Short Description",
+      "Public Protection Statement",
+      "Course Objectives",
+      "Course Outline",
+    ]);
+    expect(rows.find((r) => r.label === "CE Credit Hours")?.value).toBe("1.5 hours");
+  });
+
+  it("skips missing fields instead of crashing (sessions saved before per-session info)", () => {
+    expect(sessionCourseInfoRows({})).toEqual([]);
+    const partial = sessionCourseInfoRows({ courseTitle: "Only a title" });
+    expect(partial.map((r) => r.label)).toEqual(["Course Title"]);
   });
 });
 
