@@ -25,7 +25,17 @@ const CATEGORY_LABELS: Record<string, string> = {
   "Business/Practice Management": "Business/Practice Management",
 };
 
-export function CourseFields({ draft }: { draft: Partial<ApplicationData> }) {
+export function CourseFields({
+  draft,
+  // The SELECTIVE_INLINE event-level application relabels the outline "Event
+  // Outline" with a higher ceiling (EVENT_OUTLINE_MAX); courses keep 20k.
+  outlineLabel = "Course Outline",
+  outlineMaxLength = 20000,
+}: {
+  draft: Partial<ApplicationData>;
+  outlineLabel?: string;
+  outlineMaxLength?: number;
+}) {
   // Tolerate legacy drafts: a stored deliveryFormat that predates the four
   // canonical COURSE_FORMATS (e.g. "Live/Online") falls back to the first
   // option rather than rendering a value that isn't in the list.
@@ -133,7 +143,7 @@ export function CourseFields({ draft }: { draft: Partial<ApplicationData> }) {
       </FormField>
       <FormField fullWidth>
         <FormLabel required hint="Paste or type the full outline, including section timings">
-          Course Outline
+          {outlineLabel}
         </FormLabel>
         <FormTextarea
           name="courseOutline"
@@ -142,7 +152,7 @@ export function CourseFields({ draft }: { draft: Partial<ApplicationData> }) {
           }
           required
           minLength={1}
-          maxLength={20000}
+          maxLength={outlineMaxLength}
           className="min-h-[140px]"
         />
       </FormField>

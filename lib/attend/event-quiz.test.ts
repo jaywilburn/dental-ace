@@ -132,4 +132,53 @@ describe("buildPublicForm — SELECTIVE_INLINE (lightweight inline sessions)", (
       expect(item.question).not.toHaveProperty("correctAnswer");
     }
   });
+
+  it("sessions without course info carry no description or details (pre-July-2026 back-compat)", () => {
+    const form = buildPublicForm(inlineSelectiveEvent());
+    if (!form || form.mode !== "selective") throw new Error("expected selective form");
+    for (const item of form.items) {
+      expect(item.description).toBeUndefined();
+      expect(item.details).toBeUndefined();
+    }
+  });
+
+  it("sessions with course info expose description + details, still without answers", () => {
+    const event = baseEvent({
+      eventType: EventType.SELECTIVE_INLINE,
+      sessions: [
+        {
+          id: "s1",
+          position: 0,
+          name: "Session A",
+          durationHours: 1.5,
+          question: mc(0, "About A?"),
+          course: null,
+          courseInfo: {
+            courseTitle: "Session A",
+            ceCreditHours: 1.5,
+            subjectMatter: "Scientific",
+            deliveryFormat: "LIVE In Person",
+            primaryDistributionFormat: "Live/In Person",
+            shortDescription: "A focused session on sedation protocols.",
+            publicProtectionStatement: "Keeps sedated patients safe.",
+            courseObjectives: "1. Learn A\n2. Apply B",
+            courseOutline: "Part 1: overview. Part 2: practice.",
+          },
+        },
+      ],
+    });
+    const form = buildPublicForm(event);
+    if (!form || form.mode !== "selective") throw new Error("expected selective form");
+    const item = form.items[0];
+    expect(item.description).toBe("A focused session on sedation protocols.");
+    expect(item.details).toEqual({
+      objectives: "1. Learn A\n2. Apply B",
+      outline: "Part 1: overview. Part 2: practice.",
+      category: "Scientific",
+      format: "LIVE In Person",
+    });
+    expect(item.question).not.toHaveProperty("correctIndex");
+    // The public payload never carries the protection statement or raw info blob.
+    expect(item).not.toHaveProperty("courseInfo");
+  });
 });

@@ -4,7 +4,10 @@ import { PageHeader } from "@/components/portal-shell";
 import { requireStaff } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { approveEvent, rejectEvent } from "@/lib/reviewer/event-actions";
-import { isEventOnly } from "@/lib/forms/event/schemas";
+import {
+  isEventOnly,
+  sessionCourseInfoReadSchema,
+} from "@/lib/forms/event/schemas";
 import {
   applicationDataReadSchema,
   type ApplicationDataRead,
@@ -13,8 +16,10 @@ import {
   courseInfoRows,
   creatorRows,
   presenterRows,
+  sessionCourseInfoRows,
 } from "@/lib/forms/application/detail-rows";
 import {
+  DetailRowsList,
   DetailSection,
   QuizPreviewCard,
 } from "@/components/application-form/detail-section";
@@ -159,7 +164,10 @@ export default async function ReviewEventPage({
           <>
             {eventApp ? (
               <>
-                <DetailSection title="Course Information" rows={courseInfoRows(eventApp)} />
+                <DetailSection
+                  title="Course Information"
+                  rows={courseInfoRows(eventApp, { outlineLabel: "Event Outline" })}
+                />
                 <DetailSection title="Course Creator" rows={creatorRows(eventApp)} />
                 <DetailSection title="Presenters" rows={presenterRows(eventApp)} />
               </>
@@ -171,7 +179,7 @@ export default async function ReviewEventPage({
             )}
             <div className="rounded-lg border border-border bg-white p-5">
               <p className="mb-1 text-[13px] font-semibold text-navy">
-                Sessions ({event.sessions.length}) — one question each
+                Sessions ({event.sessions.length}) · course info + one question each
               </p>
               <p className="mb-3 text-[11px] text-text-muted">
                 Attendees answer one question per attended session; a correct
@@ -183,6 +191,8 @@ export default async function ReviewEventPage({
               <ul className="space-y-3">
                 {event.sessions.map((s) => {
                   const q = (s.question as StoredQuestion | null) ?? {};
+                  const ci = sessionCourseInfoReadSchema.safeParse(s.courseInfo ?? {});
+                  const infoRows = ci.success ? sessionCourseInfoRows(ci.data) : [];
                   return (
                     <li key={s.id} className="rounded-md border border-border p-3 text-[12px]">
                       <p className="font-semibold text-navy">
@@ -196,6 +206,20 @@ export default async function ReviewEventPage({
                           </li>
                         ))}
                       </ol>
+                      {infoRows.length > 0 ? (
+                        <details className="mt-2 rounded-md border border-border bg-surface/50">
+                          <summary className="cursor-pointer px-3 py-2 text-[11px] font-semibold text-navy">
+                            Course information
+                          </summary>
+                          <div className="border-t border-border bg-white">
+                            <DetailRowsList rows={infoRows} />
+                          </div>
+                        </details>
+                      ) : (
+                        <p className="mt-2 text-[11px] text-text-muted">
+                          This session predates per-session course information.
+                        </p>
+                      )}
                     </li>
                   );
                 })}

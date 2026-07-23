@@ -7,9 +7,14 @@ import {
   isPerCourse,
   isInlineFullCourse,
   inlineSessionSchema,
-  inlineSessionsSchema,
+  inlineSessionsDraftSchema,
+  isInlineSessionComplete,
+  sessionCourseInfoSchema,
+  sessionCourseInfoDraftSchema,
   eventApplicationSchema,
   eventApplicationStepRoute,
+  eventStep1Schema,
+  EVENT_OUTLINE_MAX,
   isEventApplicationComplete,
   nextEventApplicationStep,
 } from "@/lib/forms/event/schemas";
@@ -49,17 +54,121 @@ describe("type predicates", () => {
   });
 });
 
+/*
+  Per-session Course Information (step1 shape with half-hour CE hours). Each
+  SELECTIVE_INLINE session carries one of these plus one MC question.
+*/
+const SESSION_INFO = {
+  courseTitle: "Intro to Sedation",
+  ceCreditHours: 1.5,
+  subjectMatter: "Scientific",
+  deliveryFormat: "LIVE In Person",
+  primaryDistributionFormat: "Live/In Person",
+  shortDescription:
+    "A focused session on minimal sedation protocols for general practice.",
+  publicProtectionStatement:
+    "Participants learn monitoring standards that keep sedated patients safe.",
+  courseObjectives:
+    "1. Select candidates\n2. Monitor sedation\n3. Manage emergencies",
+  courseOutline: "Part 1: candidate selection. Part 2: monitoring. Part 3: rescue.",
+};
+
+const MC_QUESTION = {
+  type: "MC",
+  question: "What is X?",
+  options: ["a", "b", "c", "d"],
+  correctIndex: 1,
+} as const;
+
+describe("sessionCourseInfoSchema", () => {
+  it("accepts a valid step1 slice with half-hour CE hours", () => {
+    expect(sessionCourseInfoSchema.safeParse(SESSION_INFO).success).toBe(true);
+  });
+  it("rejects a non-half-hour CE hours value", () => {
+    expect(
+      sessionCourseInfoSchema.safeParse({ ...SESSION_INFO, ceCreditHours: 1.25 })
+        .success,
+    ).toBe(false);
+  });
+  it("keeps the per-course 20k outline cap", () => {
+    expect(
+      sessionCourseInfoSchema.safeParse({
+        ...SESSION_INFO,
+        courseOutline: "x".repeat(20_001),
+      }).success,
+    ).toBe(false);
+  });
+});
+
+describe("sessionCourseInfoDraftSchema", () => {
+  it("drops empty strings instead of failing", () => {
+    const parsed = sessionCourseInfoDraftSchema.safeParse({
+      courseTitle: "T",
+      ceCreditHours: Number(""), // unfilled number input posts ""
+      subjectMatter: "",
+      deliveryFormat: "",
+      primaryDistributionFormat: "",
+      shortDescription: "",
+      publicProtectionStatement: "",
+      courseObjectives: "",
+      courseOutline: "",
+    });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.courseTitle).toBe("T");
+      expect(parsed.data.ceCreditHours).toBeUndefined();
+      expect(parsed.data.shortDescription).toBeUndefined();
+    }
+  });
+  it("still rejects over-cap values", () => {
+    expect(
+      sessionCourseInfoDraftSchema.safeParse({
+        courseOutline: "x".repeat(20_001),
+      }).success,
+    ).toBe(false);
+  });
+});
+
+describe("isInlineSessionComplete", () => {
+  it("is true when course info and question both validate", () => {
+    expect(
+      isInlineSessionComplete({ courseInfo: SESSION_INFO, question: MC_QUESTION }),
+    ).toBe(true);
+  });
+  it("is false for a null or partial courseInfo", () => {
+    expect(isInlineSessionComplete({ courseInfo: null, question: MC_QUESTION })).toBe(false);
+    expect(
+      isInlineSessionComplete({
+        courseInfo: { ...SESSION_INFO, shortDescription: "" },
+        question: MC_QUESTION,
+      }),
+    ).toBe(false);
+  });
+  it("is false when the question has a blank option", () => {
+    expect(
+      isInlineSessionComplete({
+        courseInfo: SESSION_INFO,
+        question: { ...MC_QUESTION, options: ["a", "", "c", "d"] },
+      }),
+    ).toBe(false);
+  });
+});
+
 describe("inlineSessionSchema", () => {
   const base = {
-    name: "Intro to Sedation",
-    durationHours: 1.5,
-    question: { type: "MC", question: "What is X?", options: ["a", "b", "c", "d"], correctIndex: 1 },
+    courseInfo: SESSION_INFO,
+    question: MC_QUESTION,
   };
-  it("accepts a valid 0.5-increment session", () => {
+  it("accepts a valid session (course info + one MC question)", () => {
     expect(inlineSessionSchema.safeParse(base).success).toBe(true);
   });
   it("rejects a non-half-hour duration", () => {
-    expect(inlineSessionSchema.safeParse({ ...base, durationHours: 1.25 }).success).toBe(false);
+    expect(
+      inlineSessionSchema.safeParse({
+        ...base,
+        courseInfo: { ...SESSION_INFO, ceCreditHours: 1.25 },
+      }).success,
+    ).toBe(false);
   });
   it("rejects a question without exactly 4 options", () => {
     expect(
@@ -112,6 +221,25 @@ describe("inlineSessionSchema", () => {
       inlineSessionSchema.safeParse({
         ...base,
         question: { ...base.question, question: "Why?" },
+      }).success,
+    ).toBe(false);
+  });
+});
+
+describe("eventStep1Schema (Event Outline ceiling)", () => {
+  it("accepts an outline over the per-course 20k cap up to EVENT_OUTLINE_MAX", () => {
+    expect(
+      eventStep1Schema.safeParse({
+        ...SESSION_INFO,
+        courseOutline: "x".repeat(150_000),
+      }).success,
+    ).toBe(true);
+  });
+  it("rejects an outline over EVENT_OUTLINE_MAX", () => {
+    expect(
+      eventStep1Schema.safeParse({
+        ...SESSION_INFO,
+        courseOutline: "x".repeat(EVENT_OUTLINE_MAX + 1),
       }).success,
     ).toBe(false);
   });
@@ -210,6 +338,16 @@ describe("nextEventApplicationStep / isEventApplicationComplete", () => {
     ).toBe(true);
     expect(isEventApplicationComplete({ ...COURSE_INFO, ...CREATOR })).toBe(false);
   });
+  it("accepts an Event Outline over the per-course 20k cap (regression: the course step uses eventStep1Schema)", () => {
+    expect(
+      nextEventApplicationStep({
+        ...COURSE_INFO,
+        ...CREATOR,
+        ...PRESENTERS,
+        courseOutline: "x".repeat(150_000),
+      }),
+    ).toBe(null);
+  });
 });
 
 describe("event-application reviewer read path", () => {
@@ -239,18 +377,30 @@ describe("eventApplicationStepRoute", () => {
   });
 });
 
-describe("inlineSessionsSchema", () => {
+describe("inlineSessionsDraftSchema", () => {
   const session = {
-    name: "Intro to Sedation",
-    durationHours: 1.5,
-    question: { type: "MC", question: "What is X?", options: ["a", "b", "c", "d"], correctIndex: 1 },
+    courseInfo: SESSION_INFO,
+    question: MC_QUESTION,
   };
   it("requires at least one session and caps at 20", () => {
-    expect(inlineSessionsSchema.safeParse({ sessions: [] }).success).toBe(false);
-    expect(inlineSessionsSchema.safeParse({ sessions: [session] }).success).toBe(true);
+    expect(inlineSessionsDraftSchema.safeParse({ sessions: [] }).success).toBe(false);
+    expect(inlineSessionsDraftSchema.safeParse({ sessions: [session] }).success).toBe(true);
     expect(
-      inlineSessionsSchema.safeParse({ sessions: Array.from({ length: 21 }, () => session) })
-        .success,
+      inlineSessionsDraftSchema.safeParse({
+        sessions: Array.from({ length: 21 }, () => session),
+      }).success,
     ).toBe(false);
+  });
+  it("accepts partly-filled sessions (tolerant draft save)", () => {
+    expect(
+      inlineSessionsDraftSchema.safeParse({
+        sessions: [
+          {
+            courseInfo: { courseTitle: "Only a title so far" },
+            question: { type: "MC", question: "", options: ["", "", "", ""], correctIndex: 0 },
+          },
+        ],
+      }).success,
+    ).toBe(true);
   });
 });

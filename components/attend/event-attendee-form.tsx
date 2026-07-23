@@ -288,20 +288,56 @@ export function EventAttendeeForm({
         <section className="space-y-3">
           <p className="text-sm font-medium text-slate-900">Which sessions did you attend?</p>
           {form.items.map((it) => (
-            <label key={it.id} className="flex items-start gap-2.5 rounded-md border border-slate-300 p-3 text-sm">
-              <input
-                type="checkbox"
-                checked={selectedIds.includes(it.id)}
-                onChange={(e) =>
-                  setSelectedIds((p) => (e.target.checked ? [...p, it.id] : p.filter((x) => x !== it.id)))
-                }
-                className="mt-0.5"
-              />
-              <span>
-                <span className="font-medium text-slate-900">{it.label}</span>
-                <span className="block text-xs text-slate-500">{it.sub}</span>
-              </span>
-            </label>
+            <div key={it.id} className="rounded-md border border-slate-300 p-3 text-sm">
+              <label className="flex items-start gap-2.5">
+                <input
+                  type="checkbox"
+                  checked={selectedIds.includes(it.id)}
+                  onChange={(e) =>
+                    setSelectedIds((p) => (e.target.checked ? [...p, it.id] : p.filter((x) => x !== it.id)))
+                  }
+                  className="mt-0.5"
+                />
+                <span>
+                  <span className="font-medium text-slate-900">{it.label}</span>
+                  <span className="block text-xs text-slate-500">{it.sub}</span>
+                </span>
+              </label>
+              {it.description ? (
+                <p className="mt-2 text-xs leading-relaxed text-slate-600">{it.description}</p>
+              ) : null}
+              {/* Expander lives OUTSIDE the label: a summary nested inside it
+                  would toggle the checkbox on tap. */}
+              {it.details ? (
+                <details className="mt-2">
+                  <summary className="cursor-pointer text-xs font-semibold text-slate-700">
+                    View details
+                  </summary>
+                  <div className="mt-2 space-y-2 text-xs text-slate-600">
+                    {it.details.format || it.details.category ? (
+                      <p>
+                        <span className="font-semibold">Format:</span>{" "}
+                        {[it.details.format, it.details.category].filter(Boolean).join(" · ")}
+                      </p>
+                    ) : null}
+                    {it.details.objectives ? (
+                      <div>
+                        <p className="font-semibold">Objectives</p>
+                        <p className="whitespace-pre-line">{it.details.objectives}</p>
+                      </div>
+                    ) : null}
+                    {it.details.outline ? (
+                      <div>
+                        <p className="font-semibold">Outline</p>
+                        <p className="max-h-48 overflow-y-auto whitespace-pre-line">
+                          {it.details.outline}
+                        </p>
+                      </div>
+                    ) : null}
+                  </div>
+                </details>
+              ) : null}
+            </div>
           ))}
           <FieldError messages={fieldErrors.selectedSessionIds} />
           <NavButtons onBack={() => setStep(1)} onNext={() => setStep(3)} nextDisabled={selectedIds.length === 0} />

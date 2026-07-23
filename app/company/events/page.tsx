@@ -126,7 +126,16 @@ export default async function EventsIndexPage({
                   return (
                   <tr key={event.id} className="border-b border-border last:border-b-0">
                     <td className="px-4 py-2 font-medium text-navy">
-                      {event.name || "(untitled draft)"}
+                      {event.status === "DRAFT" ? (
+                        event.name || "(untitled draft)"
+                      ) : (
+                        <Link
+                          href={`/company/events/${event.id}`}
+                          className="hover:underline"
+                        >
+                          {event.name || "(untitled)"}
+                        </Link>
+                      )}
                     </td>
                     <td className="px-4 py-2 text-text-mid">{event.eventDate || "—"}</td>
                     <td className="px-4 py-2 text-text-mid">

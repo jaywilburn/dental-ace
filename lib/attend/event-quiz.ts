@@ -3,7 +3,12 @@ import { z } from "zod";
 import { EventType, type Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { quizQuestionSchema, type QuizQuestion } from "@/lib/forms/application/schemas";
-import type { PublicQuestion, EventPublicForm } from "@/lib/attend/event-form-items";
+import { sessionCourseInfoReadSchema } from "@/lib/forms/event/schemas";
+import type {
+  PublicQuestion,
+  EventPublicForm,
+  EventFormItemDetails,
+} from "@/lib/attend/event-form-items";
 
 /*
   Event quiz assembly. The ONE place that decides which questions an event
@@ -65,6 +70,7 @@ const SELECT = {
       name: true,
       durationHours: true,
       question: true,
+      courseInfo: true,
       course: {
         select: {
           quizQuestions: true,
@@ -126,14 +132,27 @@ export function buildPublicForm(event: EventForAttend): EventPublicForm | null {
     if (event.eventType === EventType.SELECTIVE_INLINE) {
       const items = event.sessions.map((s) => {
         const q = inlineQuestion(s);
-        return q
-          ? {
-              id: s.id,
-              label: s.name ?? "Session",
-              sub: `${s.durationHours ? Number(s.durationHours).toFixed(1) : "?"} hrs`,
-              question: strip(q),
-            }
-          : null;
+        if (!q) return null;
+        // Per-session course info helps attendees pick sessions. Only the
+        // displayed fields ship to the client; answers stay stripped. Null
+        // courseInfo (sessions saved before July 2026) renders as before.
+        const ci = sessionCourseInfoReadSchema.safeParse(s.courseInfo ?? {});
+        const info = ci.success ? ci.data : {};
+        const details: EventFormItemDetails = {
+          objectives: info.courseObjectives,
+          outline: info.courseOutline,
+          category: info.subjectMatter,
+          format: info.deliveryFormat,
+        };
+        const hasDetails = Object.values(details).some(Boolean);
+        return {
+          id: s.id,
+          label: s.name ?? "Session",
+          sub: `${s.durationHours ? Number(s.durationHours).toFixed(1) : "?"} hrs`,
+          question: strip(q),
+          ...(info.shortDescription ? { description: info.shortDescription } : {}),
+          ...(hasDetails ? { details } : {}),
+        };
       });
       return items.some((i) => i === null)
         ? null

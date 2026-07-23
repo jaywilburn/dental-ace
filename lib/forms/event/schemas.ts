@@ -1,6 +1,9 @@
 import { z } from "zod";
 import { EventType } from "@prisma/client";
 import {
+  CATEGORIES,
+  COURSE_FORMATS,
+  DELIVERY_FORMATS,
   orgStepSchema,
   step1Schema,
   step2Schema,
@@ -122,22 +125,104 @@ export const eventQuizSchema = z.object({
     }),
 });
 
-// Opt 3 (SELECTIVE_INLINE): inline sessions, each with a title, CE hours (0.5
-// increments), and ONE multiple-choice question (exactly 4 non-empty options +
-// a correct index; mcQuestionSchema mirrors the standard MC question shape in
-// lib/forms/application/schemas.ts). A correct answer earns that session's
-// hours on the certificate; a wrong answer drops the session.
-export const inlineSessionSchema = z.object({
-  name: z.string().min(2).max(200),
-  durationHours: z.number().min(0.5).max(40).refine(halfHour, {
-    message: "Duration must be in 0.5 increments",
+/*
+  Opt 3 (SELECTIVE_INLINE): each inline session carries its own full Course
+  Information section (the application step1 shape; July 2026 client request)
+  plus ONE multiple-choice question (mcQuestionSchema mirrors the standard MC
+  question shape in lib/forms/application/schemas.ts). A correct answer earns
+  that session's hours on the certificate; a wrong answer drops the session.
+  EventSession.name/durationHours are mirrored from courseTitle/ceCreditHours
+  at save time so downstream consumers (quiz assembly, scoring, certificates,
+  totalHours) keep reading them unchanged.
+*/
+export const sessionCourseInfoSchema = step1Schema.extend({
+  // Tighter than step1: certificates sum these per session.
+  ceCreditHours: z.number().min(0.5).max(40).refine(halfHour, {
+    message: "CE hours must be in 0.5 increments",
   }),
+});
+export type SessionCourseInfo = z.infer<typeof sessionCourseInfoSchema>;
+
+/*
+  Tolerant DRAFT variants: saving the sessions step never loses typed work to
+  one missing field. Empty/absent values are dropped; present values keep only
+  their max caps. Minimums and enums are enforced at submit
+  (isInlineSessionComplete), mirroring the event-level app's `.partial()`
+  storage + strict submit gate.
+*/
+const emptyToUndef = (v: unknown) =>
+  typeof v === "string" && v.trim() === "" ? undefined : v;
+const numberOrUndef = (v: unknown) => {
+  const n = typeof v === "number" ? v : Number(v);
+  return Number.isFinite(n) && n > 0 ? n : undefined;
+};
+
+export const sessionCourseInfoDraftSchema = z.object({
+  courseTitle: z.preprocess(emptyToUndef, z.string().max(200).optional()),
+  ceCreditHours: z.preprocess(numberOrUndef, z.number().max(40).optional()),
+  subjectMatter: z.preprocess(emptyToUndef, z.enum(CATEGORIES).optional()),
+  deliveryFormat: z.preprocess(emptyToUndef, z.enum(COURSE_FORMATS).optional()),
+  primaryDistributionFormat: z.preprocess(
+    emptyToUndef,
+    z.enum(DELIVERY_FORMATS).optional(),
+  ),
+  shortDescription: z.preprocess(emptyToUndef, z.string().max(1500).optional()),
+  publicProtectionStatement: z.preprocess(
+    emptyToUndef,
+    z.string().max(2000).optional(),
+  ),
+  courseObjectives: z.preprocess(emptyToUndef, z.string().max(2000).optional()),
+  courseOutline: z.preprocess(emptyToUndef, z.string().max(20_000).optional()),
+});
+
+export const mcQuestionDraftSchema = z.object({
+  type: z.literal("MC"),
+  question: z.string().max(500),
+  options: z.array(z.string().max(200)).length(4),
+  correctIndex: z.number().int().min(0).max(3),
+});
+
+export const inlineSessionSchema = z.object({
+  courseInfo: sessionCourseInfoSchema,
   question: mcQuestionSchema,
 });
 
-export const inlineSessionsSchema = z.object({
-  sessions: z.array(inlineSessionSchema).min(1).max(20),
+export const inlineSessionDraftSchema = z.object({
+  courseInfo: sessionCourseInfoDraftSchema,
+  question: mcQuestionDraftSchema,
 });
+
+export const inlineSessionsDraftSchema = z.object({
+  sessions: z.array(inlineSessionDraftSchema).min(1).max(20),
+});
+
+// Tolerant READ of persisted courseInfo: a stored row must never become
+// unviewable (mirrors applicationDataReadSchema's philosophy).
+export const sessionCourseInfoReadSchema = z
+  .object({
+    courseTitle: z.string().optional(),
+    ceCreditHours: z.number().optional(),
+    subjectMatter: z.string().optional(),
+    deliveryFormat: z.string().optional(),
+    primaryDistributionFormat: z.string().optional(),
+    shortDescription: z.string().optional(),
+    publicProtectionStatement: z.string().optional(),
+    courseObjectives: z.string().optional(),
+    courseOutline: z.string().optional(),
+  })
+  .passthrough();
+export type SessionCourseInfoRead = z.infer<typeof sessionCourseInfoReadSchema>;
+
+/** Submit-gate completeness for one stored inline session row. */
+export function isInlineSessionComplete(s: {
+  courseInfo: unknown;
+  question: unknown;
+}): boolean {
+  return (
+    sessionCourseInfoSchema.safeParse(s.courseInfo).success &&
+    mcQuestionSchema.safeParse(s.question).success
+  );
+}
 
 // Opt 2/4: attach existing approved courses by id.
 export const attachedCoursesSchema = z.object({
@@ -154,7 +239,22 @@ export const attachedCoursesSchema = z.object({
   half of the application is replaced by the per-session questions on
   event_sessions.
 */
-export const eventApplicationSchema = step1Schema
+/*
+  Event-level outline cap. The event-level application's outline describes the
+  WHOLE event ("Event Outline" in the UI) and often concatenates every
+  session's outline, so it gets a high safety ceiling instead of the per-course
+  20k cap. Regular course applications and per-session course info keep 20k.
+*/
+export const EVENT_OUTLINE_MAX = 200_000;
+
+export const eventStep1Schema = step1Schema.extend({
+  courseOutline: z
+    .string()
+    .min(1, "Event outline is required")
+    .max(EVENT_OUTLINE_MAX),
+});
+
+export const eventApplicationSchema = eventStep1Schema
   .merge(step2Schema)
   .merge(step3Schema);
 
@@ -177,7 +277,7 @@ export function eventApplicationStepRoute(step: EventApplicationStep): string {
 export function nextEventApplicationStep(
   raw: unknown,
 ): EventApplicationStep | null {
-  if (!step1Schema.safeParse(raw).success) return "course";
+  if (!eventStep1Schema.safeParse(raw).success) return "course";
   if (!step2Schema.safeParse(raw).success) return "creator";
   if (!step3Schema.safeParse(raw).success) return "presenters";
   return null;
@@ -205,4 +305,5 @@ export const eventDataSchema = orgStepSchema
 
 export type EventData = z.infer<typeof eventDataSchema>;
 export type InlineSession = z.infer<typeof inlineSessionSchema>;
+export type InlineSessionDraft = z.infer<typeof inlineSessionDraftSchema>;
 export type McQuestion = z.infer<typeof mcQuestionSchema>;

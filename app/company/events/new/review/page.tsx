@@ -63,7 +63,11 @@ export default async function EventReviewPage({
     ? nextEventApplicationStep(eventApp)
     : null;
   const allComplete = lightweightInline
-    ? appStep === null && inlineSessions.length > 0 // rows validated at save
+    ? appStep === null &&
+      inlineSessions.length > 0 &&
+      // Sessions save tolerantly, so each one's course info + question must
+      // pass the strict schemas here (mirrors the submitEvent gate).
+      inlineSessions.every((s) => s.complete)
     : sessionApps.length > 0 && sessionApps.every((s) => s.complete);
   const creditCost = eventOnly ? sessionCount : 0;
   const inlineHours = lightweightInline
@@ -188,12 +192,17 @@ export default async function EventReviewPage({
         {lightweightInline ? (
           <div className="rounded-lg border border-border bg-white p-5">
             <p className="mb-2 text-[13px] font-semibold text-navy">
-              Sessions ({sessionCount}) — one question each
+              Sessions ({sessionCount}) · course info + one question each
             </p>
             <ul className="space-y-1 text-[12px] text-text-mid">
               {inlineSessions.map((s) => (
                 <li key={s.id} className="flex justify-between gap-4">
-                  <span>{s.name ?? "(untitled session)"}</span>
+                  <span>
+                    {s.name ?? "(untitled session)"}
+                    {!s.complete ? (
+                      <span className="ml-2 font-semibold text-orange-600">⚠ incomplete</span>
+                    ) : null}
+                  </span>
                   <span className="tabular-nums text-text-muted">
                     {s.durationHours != null ? `${s.durationHours.toFixed(1)} hrs` : "—"}
                   </span>

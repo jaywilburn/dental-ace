@@ -5,7 +5,7 @@ import { FormErrorBanner, FormNav } from "@/components/application-form/form-con
 import { CourseFields } from "@/components/application-form/steps/course-fields";
 import { requireDentalAce } from "@/lib/auth/session";
 import { ensureEventDraft, getEventDraft, saveEventCourseInfo } from "@/lib/events/event-actions";
-import { isEventOnly } from "@/lib/forms/event/schemas";
+import { EVENT_OUTLINE_MAX, isEventOnly } from "@/lib/forms/event/schemas";
 
 /*
   Event wizard (SELECTIVE_INLINE), Step 3 — Course Information. The event-level
@@ -40,11 +40,17 @@ export default async function EventCourseInfoPage({
         This event is accredited as a single application, so the course
         information below is entered once and covers every session. Enter the
         full event&apos;s total CE Credit Hours here; certificates use the sum
-        of the per-session hours you list after the presenter details.
+        of the per-session hours you list after the presenter details. The
+        Event Outline covers the whole event and has no practical length limit;
+        each session also gets its own course information at the Sessions step.
       </div>
       <form action={saveEventCourseInfo} className="space-y-5">
         <input type="hidden" name="eventId" value={eventId} />
-        <CourseFields draft={app} />
+        <CourseFields
+          draft={app}
+          outlineLabel="Event Outline"
+          outlineMaxLength={EVENT_OUTLINE_MAX}
+        />
         <FormNav
           back={{ href: "/company/events/new/qualifiers", label: "Back" }}
           nextLabel="Next: Creator"

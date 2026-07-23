@@ -10,7 +10,6 @@ import { prisma } from "@/lib/prisma";
 import { rateLimit } from "@/lib/rate-limit";
 import {
   orgStepSchema,
-  step1Schema,
   step2Schema,
   step3Schema,
 } from "@/lib/forms/application/schemas";
@@ -18,7 +17,9 @@ import {
   eventDetailsSchema,
   qualifierSchema,
   eventQuizSchema,
-  inlineSessionsSchema,
+  eventStep1Schema,
+  inlineSessionsDraftSchema,
+  isInlineSessionComplete,
   mcQuestionSchema,
   attachedCoursesSchema,
   deriveEventType,
@@ -27,7 +28,7 @@ import {
   isInlineFullCourse,
   nextEventApplicationStep,
   type EventData,
-  type InlineSession,
+  type InlineSessionDraft,
 } from "@/lib/forms/event/schemas";
 import {
   applicationDataSchema,
@@ -115,6 +116,13 @@ export type EventDraft = {
     // Inline MC question (SELECTIVE_INLINE lightweight sessions); parse with
     // mcQuestionSchema at the call site. Null for course-backed sessions.
     question: unknown;
+    // Per-session Course Information (step1 shape); parse with
+    // sessionCourseInfoReadSchema at the call site. Null for course-backed
+    // sessions and rows saved before July 2026.
+    courseInfo: unknown;
+    // Course info + question both pass their strict schemas (submit gate).
+    // Course-backed sessions report true (their info lives on the course).
+    complete: boolean;
   }>;
   // Inline event-scoped session applications (event-only full-course path).
   sessionApplications: Array<{
@@ -146,6 +154,7 @@ export async function getEventDraft(eventId: string): Promise<EventDraft | null>
           durationHours: true,
           position: true,
           question: true,
+          courseInfo: true,
         },
       },
       sessionApplications: {
@@ -165,6 +174,7 @@ export async function getEventDraft(eventId: string): Promise<EventDraft | null>
     sessions: row.sessions.map((s) => ({
       ...s,
       durationHours: s.durationHours ? Number(s.durationHours) : null,
+      complete: s.courseId !== null || isInlineSessionComplete(s),
     })),
     sessionApplications: row.sessionApplications.map((a) => {
       const data = (a.applicationData as Record<string, unknown> | null) ?? {};
@@ -354,7 +364,9 @@ export async function saveEventCourseInfo(formData: FormData) {
   if (!eventId) throw new Error("Missing eventId");
   await mergeEventApplicationStep(
     eventId,
-    step1Schema,
+    // Event-level variant: the outline field is the "Event Outline" and gets
+    // the high EVENT_OUTLINE_MAX ceiling instead of the per-course 20k cap.
+    eventStep1Schema,
     courseInfoRawFromForm(formData),
     eventApplicationStepRoute("course"),
   );
@@ -444,11 +456,12 @@ export async function saveInlineSessions(formData: FormData) {
   if (!eventId) throw new Error("Missing eventId");
   const companyId = await customerCompanyId();
 
-  // Fields: s{i}_name, s{i}_duration, s{i}_question, s{i}_option_{0..3}, s{i}_correct.
+  // Fields per session: s{i}_courseTitle ... s{i}_courseOutline (the Course
+  // Information group, mapped by courseInfoRawFromForm with the s{i}_ prefix)
+  // plus s{i}_question, s{i}_option_{0..3}, s{i}_correct.
   const count = Number(formData.get("sessionCount") ?? 0);
   const sessions = Array.from({ length: count }, (_, i) => ({
-    name: String(formData.get(`s${i}_name`) ?? ""),
-    durationHours: Number(formData.get(`s${i}_duration`) ?? 0),
+    courseInfo: courseInfoRawFromForm(formData, `s${i}_`),
     question: {
       type: "MC" as const,
       question: String(formData.get(`s${i}_question`) ?? ""),
@@ -459,7 +472,10 @@ export async function saveInlineSessions(formData: FormData) {
     },
   }));
 
-  const parsed = inlineSessionsSchema.safeParse({ sessions });
+  // Tolerant draft save: blank fields drop out, only max caps enforced here.
+  // The strict per-session gate runs at submit (isInlineSessionComplete), so
+  // one missing field never loses the rest of a typed-out session.
+  const parsed = inlineSessionsDraftSchema.safeParse({ sessions });
   if (!parsed.success) {
     const issue = parsed.error.issues[0];
     const detail = issue
@@ -467,10 +483,16 @@ export async function saveInlineSessions(formData: FormData) {
       : "Please check each session.";
     redirect(`${ROUTES.sessions}?error=validation&detail=${encodeURIComponent(detail)}`);
   }
-  const valid: InlineSession[] = parsed.data.sessions;
-  const total = valid.reduce((sum, s) => sum + s.durationHours, 0);
+  const valid: InlineSessionDraft[] = parsed.data.sessions;
+  const total = valid.reduce(
+    (sum, s) => sum + (s.courseInfo.ceCreditHours ?? 0),
+    0,
+  );
+  const allComplete = valid.every((s) => isInlineSessionComplete(s));
 
-  // Replace the event's inline sessions; recompute totalHours.
+  // Replace the event's inline sessions; recompute totalHours. name and
+  // durationHours mirror courseTitle/ceCreditHours so downstream consumers
+  // (quiz assembly, scoring, certificates) keep reading them unchanged.
   await prisma.$transaction(async (tx) => {
     const owned = await tx.event.findFirst({
       where: { id: eventId, companyId, status: "DRAFT" },
@@ -488,9 +510,13 @@ export async function saveInlineSessions(formData: FormData) {
         eventId,
         courseId: null,
         position,
-        name: s.name,
-        durationHours: new Prisma.Decimal(s.durationHours),
+        name: s.courseInfo.courseTitle ?? null,
+        durationHours:
+          s.courseInfo.ceCreditHours != null
+            ? new Prisma.Decimal(s.courseInfo.ceCreditHours)
+            : null,
         question: s.question as unknown as Prisma.InputJsonValue,
+        courseInfo: s.courseInfo as Prisma.InputJsonValue,
       })),
     });
     await tx.event.update({
@@ -498,7 +524,8 @@ export async function saveInlineSessions(formData: FormData) {
       data: { totalHours: new Prisma.Decimal(total) },
     });
   });
-  redirect(ROUTES.review);
+  if (allComplete) redirect(ROUTES.review);
+  redirect(`${ROUTES.sessions}?saved=1`);
 }
 
 export async function saveAttachedCourses(formData: FormData) {
@@ -575,6 +602,7 @@ export async function submitEvent(formData: FormData) {
           name: true,
           durationHours: true,
           question: true,
+          courseInfo: true,
         },
       },
       sessionApplications: {
@@ -633,6 +661,18 @@ export async function submitEvent(formData: FormData) {
       redirect(
         `${ROUTES.sessions}?error=validation&detail=${encodeURIComponent(
           "One of your sessions is incomplete. Check each session's title, hours, and question.",
+        )}`,
+      );
+    }
+    // Drafts save tolerantly, so the strict per-session gate runs here: every
+    // session's Course Information and question must fully validate. Keep this
+    // separate from wellFormed above; they guard different corruption modes
+    // (mirrored columns vs source JSON).
+    const infoComplete = inline.every((s) => isInlineSessionComplete(s));
+    if (!infoComplete) {
+      redirect(
+        `${ROUTES.sessions}?error=validation&detail=${encodeURIComponent(
+          "Each session needs its full course information before you can submit.",
         )}`,
       );
     }
