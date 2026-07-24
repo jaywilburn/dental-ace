@@ -101,9 +101,14 @@ DentalACE One is **one platform**; features are gated by **per-user entitlements
 - **Stripe Connect** — AADB is the master account, CE Exchange is the connected recipient. Phase 1 split is a fixed 75/25 (CE Exchange / AADB) automated via transfers.
 
 ### Events (multi-session Live Event)
-- **Event Setup** is reachable from `/company/events` only when at least one approved course has `combinedCert=true` + `submitSessionsSeparately=true` on its `application_data`.
-- An event holds N approved courses via `event_sessions`. The event itself has an `attendee_link_token` for the combined certificate.
-- **The combined-certificate PDF render is Weeks 5-6 work**, not Weeks 3-4. Weeks 3-4 only persists the event + sessions and reserves the URL.
+- **Created at `/company/events/new`** (no eligibility gate; the events list always offers "+ New Event"). Two qualifier answers — coverage (`FULL`/`SELECTIVE`) + reuse (`EVENT_ONLY`/`PER_COURSE`) — derive one of four `EventType`s via `deriveEventType` (`lib/forms/event/schemas.ts`):
+  - `FULL_EVENT_QUIZ` (Opt 1): full attendance, event-level accreditation. Each session is a full course application captured inline (`sessions/[sessionAppId]/…` sub-wizard = real `CourseApplication` rows), plus a 5-question event quiz.
+  - `FULL_PER_COURSE` (Opt 2): full attendance; attaches existing approved courses to the event.
+  - `SELECTIVE_INLINE` (Opt 3): selective attendance, event-level accreditation. Each session is a full course application stored **inline** in `event_sessions.course_info` (JSONB) via the per-session mini-wizard (`inline-sessions/[sessionId]/{course,creator,presenters,question}`), plus one MC question in `event_sessions.question`. **No `CourseApplication` rows.** (Before July 2026 this collected an event-level application once; that was replaced by per-session full applications at the client's request. `eventData.eventApplication` + `eventStep1Schema`/`EVENT_OUTLINE_MAX` remain read-only for the two legacy approved events.)
+  - `SELECTIVE_PER_COURSE` (Opt 4): selective attendance; attaches existing approved courses.
+- **Billing:** event-only types (`FULL_EVENT_QUIZ`, `SELECTIVE_INLINE`) charge one application credit per session at submit (company-row lock); per-course types are free (their courses were already paid).
+- **Model detection keys on data shape, not the enum:** pending `CourseApplication` session rows present ⇒ full-course; absent on a `SELECTIVE_INLINE` event ⇒ lightweight inline. `approveEvent`, the attendee flow, and both detail pages branch on this, so **never create `CourseApplication` rows for `SELECTIVE_INLINE`** (a stale row would misclassify the event).
+- An event holds its sessions via `event_sessions` and carries an `attendee_link_token` for the combined certificate at `/attend/event/[token]`. The combined-certificate PDF renderer lives at `lib/pdf/event-certificate.ts`; the public attendee form only ever exposes each session's step1 slice (objectives/outline/format), never creator/presenter data or answers.
 
 ### UI
 - **ShadCN + Tailwind, always heavily customized.** Default ShadCN look is never shipped. Theme matches the navy/gold AADB brand from the prototypes.

@@ -6,11 +6,7 @@ import { FormNav } from "@/components/application-form/form-controls";
 import { requireDentalAce } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { ensureEventDraft, getEventDraft, submitEvent } from "@/lib/events/event-actions";
-import {
-  eventApplicationStepRoute,
-  isInlineFullCourse,
-  nextEventApplicationStep,
-} from "@/lib/forms/event/schemas";
+import { isInlineFullCourse } from "@/lib/forms/event/schemas";
 
 const TYPE_LABEL: Record<EventType, string> = {
   FULL_EVENT_QUIZ: "Full attendance · sessions accredited as courses (not reused)",
@@ -20,12 +16,11 @@ const TYPE_LABEL: Record<EventType, string> = {
 };
 
 /*
-  Event wizard, final step — Review & Submit (step 4 of 4, or 7 of 7 for
-  SELECTIVE_INLINE, whose flow adds the event-level Course Info -> Creator ->
-  Presenters steps). Event-only types bill one application credit per session:
-  FULL_EVENT_QUIZ per inline session application (each is a full course
-  application), SELECTIVE_INLINE per lightweight Session/Question/Answer row.
-  Per-course types remain free (their courses were already paid).
+  Event wizard, final step — Review & Submit (step 4 of 4). Event-only types
+  bill one application credit per session: both FULL_EVENT_QUIZ and
+  SELECTIVE_INLINE capture each session as a full course application (the former
+  as a CourseApplication row, the latter inline on event_sessions). Per-course
+  types remain free (their courses were already paid).
 */
 export default async function EventReviewPage({
   searchParams,
@@ -56,18 +51,11 @@ export default async function EventReviewPage({
     ? draft.sessions.filter((s) => s.courseId === null)
     : [];
   const sessionCount = lightweightInline ? inlineSessions.length : sessionApps.length;
-  // SELECTIVE_INLINE also requires the event-level application (Course Info +
-  // Creator + Presenters) to be complete; appStep is its first unfinished step.
-  const eventApp = lightweightInline ? draft.data.eventApplication : undefined;
-  const appStep = lightweightInline
-    ? nextEventApplicationStep(eventApp)
-    : null;
+  // Each session's full application + question must pass the strict schemas
+  // here (mirrors the submitEvent gate); draft.sessions[].complete already
+  // runs isInlineSessionComplete.
   const allComplete = lightweightInline
-    ? appStep === null &&
-      inlineSessions.length > 0 &&
-      // Sessions save tolerantly, so each one's course info + question must
-      // pass the strict schemas here (mirrors the submitEvent gate).
-      inlineSessions.every((s) => s.complete)
+    ? inlineSessions.length > 0 && inlineSessions.every((s) => s.complete)
     : sessionApps.length > 0 && sessionApps.every((s) => s.complete);
   const creditCost = eventOnly ? sessionCount : 0;
   const inlineHours = lightweightInline
@@ -88,11 +76,7 @@ export default async function EventReviewPage({
     <>
       <PageHeader
         title="New Event"
-        subtitle={
-          lightweightInline
-            ? "Step 7 of 7 — Review & Submit"
-            : "Step 4 of 4 — Review & Submit"
-        }
+        subtitle="Step 4 of 4 — Review & Submit"
       />
       {error === "rate_limited" ? (
         <div className="mb-4 rounded-md border border-red-300 bg-red-50 px-4 py-2.5 text-[12px] text-red-700">
@@ -123,76 +107,8 @@ export default async function EventReviewPage({
 
         {lightweightInline ? (
           <div className="rounded-lg border border-border bg-white p-5">
-            <div className="mb-2 flex items-center justify-between gap-4">
-              <p className="text-[13px] font-semibold text-navy">Course Information</p>
-              <Link
-                href={eventApplicationStepRoute("course")}
-                className="text-[11px] font-semibold text-ace-dark underline"
-              >
-                Edit
-              </Link>
-            </div>
-            <dl className="space-y-1.5 text-[12px]">
-              <div className="flex justify-between gap-4">
-                <dt className="text-text-muted">Course title</dt>
-                <dd className="text-right font-medium text-navy">{eventApp?.courseTitle ?? "—"}</dd>
-              </div>
-              <div className="flex justify-between gap-4">
-                <dt className="text-text-muted">Stated CE hours</dt>
-                <dd className="font-medium text-navy">
-                  {eventApp?.ceCreditHours != null ? eventApp.ceCreditHours.toFixed(1) : "—"}
-                </dd>
-              </div>
-              <div className="flex justify-between gap-4">
-                <dt className="text-text-muted">Subject</dt>
-                <dd className="text-right font-medium text-navy">{eventApp?.subjectMatter ?? "—"}</dd>
-              </div>
-              <div className="flex justify-between gap-4">
-                <dt className="text-text-muted">Format</dt>
-                <dd className="text-right font-medium text-navy">{eventApp?.deliveryFormat ?? "—"}</dd>
-              </div>
-              <div className="flex justify-between gap-4">
-                <dt className="text-text-muted">Creator</dt>
-                <dd className="text-right font-medium text-navy">
-                  {eventApp?.creatorName
-                    ? `${eventApp.creatorName}${eventApp.credentials ? `, ${eventApp.credentials}` : ""}`
-                    : "—"}{" "}
-                  <Link
-                    href={eventApplicationStepRoute("creator")}
-                    className="font-semibold text-ace-dark underline"
-                  >
-                    Edit
-                  </Link>
-                </dd>
-              </div>
-              <div className="flex justify-between gap-4">
-                <dt className="text-text-muted">Presenter</dt>
-                <dd className="text-right font-medium text-navy">
-                  {eventApp?.presenters?.[0]?.name ?? "—"}{" "}
-                  <Link
-                    href={eventApplicationStepRoute("presenters")}
-                    className="font-semibold text-ace-dark underline"
-                  >
-                    Edit
-                  </Link>
-                </dd>
-              </div>
-            </dl>
-            {eventApp?.ceCreditHours != null &&
-            inlineHours > 0 &&
-            eventApp.ceCreditHours !== inlineHours ? (
-              <p className="mt-2 text-[11px] text-text-muted text-pretty">
-                Note: certificates use the session total ({inlineHours.toFixed(1)} hours),
-                not the stated CE hours above.
-              </p>
-            ) : null}
-          </div>
-        ) : null}
-
-        {lightweightInline ? (
-          <div className="rounded-lg border border-border bg-white p-5">
             <p className="mb-2 text-[13px] font-semibold text-navy">
-              Sessions ({sessionCount}) · course info + one question each
+              Sessions ({sessionCount}) · full application + one question each
             </p>
             <ul className="space-y-1 text-[12px] text-text-mid">
               {inlineSessions.map((s) => (
@@ -253,26 +169,12 @@ export default async function EventReviewPage({
 
         {eventOnly && !allComplete ? (
           <div className="rounded-md border border-orange-300 bg-orange-50 p-3 text-[12px] text-orange-700">
-            {appStep ? (
-              <>
-                Finish the course information steps before submitting.{" "}
-                <Link
-                  href={eventApplicationStepRoute(appStep)}
-                  className="font-semibold underline"
-                >
-                  Continue where you left off
-                </Link>
-              </>
-            ) : (
-              <>
-                {sessionCount === 0
-                  ? "Add at least one session before submitting."
-                  : "Every session must be complete before you can submit."}{" "}
-                <Link href={backHref} className="font-semibold underline">
-                  Back to sessions
-                </Link>
-              </>
-            )}
+            {sessionCount === 0
+              ? "Add at least one session before submitting."
+              : "Every session must be complete before you can submit."}{" "}
+            <Link href={backHref} className="font-semibold underline">
+              Back to sessions
+            </Link>
           </div>
         ) : (
           <form action={submitEvent}>

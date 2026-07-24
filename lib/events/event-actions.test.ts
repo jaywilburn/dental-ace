@@ -1,12 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 /*
-  submitEvent completeness gate for SELECTIVE_INLINE events: alongside the
-  at-least-one-session requirement, the event-level application content
-  (Course Information + Creator + Presenters under eventData.eventApplication)
-  must validate in full before the event flips DRAFT -> PENDING. An incomplete
-  application redirects into its first unfinished step and must never reach the
-  credit-charging transaction.
+  submitEvent completeness gate for SELECTIVE_INLINE events. Each session now
+  carries its OWN full application (Course Info + Creator + Presenters) plus one
+  MC question, all on event_sessions; there is no event-level application. The
+  event flips DRAFT -> PENDING only when at least one session exists and every
+  session's full application + question validate. Crucially the flow creates NO
+  CourseApplication rows (approveEvent keys the lightweight-vs-full-course model
+  on pending session applications existing), and bills one credit per session.
 */
 
 const { getCurrentUser, prismaMock, txMock, redirectMock, sendEmail } = vi.hoisted(() => {
@@ -16,7 +17,7 @@ const { getCurrentUser, prismaMock, txMock, redirectMock, sendEmail } = vi.hoist
       findUniqueOrThrow: vi.fn(),
       update: vi.fn(),
     },
-    courseApplication: { deleteMany: vi.fn() },
+    courseApplication: { deleteMany: vi.fn(), create: vi.fn() },
     event: { updateMany: vi.fn() },
   };
   return {
@@ -53,20 +54,7 @@ vi.mock("@/lib/reviewer/notify", () => ({
 
 import { submitEvent } from "@/lib/events/event-actions";
 
-// Complete event-level application (valid step1 + step2 + step3 slices).
-const EVENT_APPLICATION = {
-  courseTitle: "Implant Dentistry Update",
-  ceCreditHours: 3,
-  subjectMatter: "Scientific",
-  deliveryFormat: "LIVE In Person",
-  primaryDistributionFormat: "Live/In Person",
-  shortDescription:
-    "A concise overview of modern implant workflows for the general practitioner.",
-  publicProtectionStatement:
-    "Participants learn safer implant placement protocols that protect patients.",
-  courseObjectives:
-    "1. Plan implant cases\n2. Place implants safely\n3. Manage complications",
-  courseOutline: "Hour 1: planning. Hour 2: placement. Hour 3: complications.",
+const CREATOR_SLICE = {
   creatorName: "Dr. Jane Doe",
   credentials: "DDS",
   currentPosition: "Program Director",
@@ -78,6 +66,9 @@ const EVENT_APPLICATION = {
   educationPart1: "UT Austin, DDS, 2001",
   educationPart4: "N/A",
   creatorExperience: "20 years placing implants in private practice.",
+};
+
+const PRESENTERS_SLICE = {
   presenters: [
     {
       name: "Dr. Jane Doe",
@@ -97,7 +88,7 @@ const MC_QUESTION = {
   correctIndex: 0,
 };
 
-// Valid per-session Course Information (step1 shape, half-hour CE hours).
+// Valid FULL per-session application (Course Info + Creator + Presenters).
 function sessionInfo(title: string, hours: number) {
   return {
     courseTitle: title,
@@ -111,6 +102,8 @@ function sessionInfo(title: string, hours: number) {
       "Participants learn monitoring standards that keep patients safe.",
     courseObjectives: "1. Learn A\n2. Apply B\n3. Manage C",
     courseOutline: "Part 1: overview. Part 2: practice. Part 3: review.",
+    ...CREATOR_SLICE,
+    ...PRESENTERS_SLICE,
   };
 }
 
@@ -123,7 +116,6 @@ function draftEvent(overrides: Record<string, unknown> = {}) {
     totalHours: null,
     eventData: {
       organizationName: "Texas Dental Association",
-      eventApplication: EVENT_APPLICATION,
     },
     company: { name: "Texas Dental Association" },
     sessions: [
@@ -164,35 +156,7 @@ beforeEach(() => {
 });
 
 describe("submitEvent — SELECTIVE_INLINE completeness gate", () => {
-  it("blocks submit and redirects to the course step when the event application is missing", async () => {
-    prismaMock.event.findFirst.mockResolvedValue(
-      draftEvent({ eventData: { organizationName: "Texas Dental Association" } }),
-    );
-    await expect(submitEvent(submitForm())).rejects.toThrow(
-      /NEXT_REDIRECT:\/company\/events\/new\/course\?error=validation/,
-    );
-    expect(prismaMock.$transaction).not.toHaveBeenCalled();
-  });
-
-  it("redirects into the first unfinished step when a later slice is incomplete", async () => {
-    const partial = Object.fromEntries(
-      Object.entries(EVENT_APPLICATION).filter(([k]) => k !== "creatorName"),
-    );
-    prismaMock.event.findFirst.mockResolvedValue(
-      draftEvent({
-        eventData: {
-          organizationName: "Texas Dental Association",
-          eventApplication: partial,
-        },
-      }),
-    );
-    await expect(submitEvent(submitForm())).rejects.toThrow(
-      /NEXT_REDIRECT:\/company\/events\/new\/creator\?error=validation/,
-    );
-    expect(prismaMock.$transaction).not.toHaveBeenCalled();
-  });
-
-  it("still requires at least one session even when the application is complete", async () => {
+  it("requires at least one session", async () => {
     prismaMock.event.findFirst.mockResolvedValue(draftEvent({ sessions: [] }));
     await expect(submitEvent(submitForm())).rejects.toThrow(
       /NEXT_REDIRECT:\/company\/events\/new\/sessions\?error=validation/,
@@ -200,10 +164,40 @@ describe("submitEvent — SELECTIVE_INLINE completeness gate", () => {
     expect(prismaMock.$transaction).not.toHaveBeenCalled();
   });
 
-  it("blocks submit when a session has no course info (saved before the strict gate)", async () => {
+  it("blocks submit when a session has no course info", async () => {
     const base = draftEvent();
     const sessions = (base.sessions as Array<Record<string, unknown>>).map((s, i) =>
       i === 1 ? { ...s, courseInfo: null } : s,
+    );
+    prismaMock.event.findFirst.mockResolvedValue({ ...base, sessions });
+    await expect(submitEvent(submitForm())).rejects.toThrow(
+      /NEXT_REDIRECT:\/company\/events\/new\/sessions\?error=validation/,
+    );
+    expect(prismaMock.$transaction).not.toHaveBeenCalled();
+  });
+
+  it("blocks submit when a session carries only the course-info slice (creator/presenters missing)", async () => {
+    const base = draftEvent();
+    const sessions = (base.sessions as Array<Record<string, unknown>>).map((s, i) =>
+      i === 0
+        ? {
+            ...s,
+            // step1-only course info: no creator or presenters yet.
+            courseInfo: {
+              courseTitle: "Session A",
+              ceCreditHours: 1.5,
+              subjectMatter: "Scientific",
+              deliveryFormat: "LIVE In Person",
+              primaryDistributionFormat: "Live/In Person",
+              shortDescription:
+                "A focused session on modern clinical protocols for general practice.",
+              publicProtectionStatement:
+                "Participants learn monitoring standards that keep patients safe.",
+              courseObjectives: "1. Learn A\n2. Apply B\n3. Manage C",
+              courseOutline: "Part 1: overview. Part 2: practice. Part 3: review.",
+            },
+          }
+        : s,
     );
     prismaMock.event.findFirst.mockResolvedValue({ ...base, sessions });
     await expect(submitEvent(submitForm())).rejects.toThrow(
@@ -226,25 +220,7 @@ describe("submitEvent — SELECTIVE_INLINE completeness gate", () => {
     expect(prismaMock.$transaction).not.toHaveBeenCalled();
   });
 
-  it("accepts an Event Outline far over the per-course 20k cap", async () => {
-    prismaMock.event.findFirst.mockResolvedValue(
-      draftEvent({
-        eventData: {
-          organizationName: "Texas Dental Association",
-          eventApplication: {
-            ...EVENT_APPLICATION,
-            courseOutline: "x".repeat(100_000),
-          },
-        },
-      }),
-    );
-    await expect(submitEvent(submitForm())).rejects.toThrow(
-      /NEXT_REDIRECT:\/company\/events\?just=submitted/,
-    );
-    expect(prismaMock.$transaction).toHaveBeenCalledTimes(1);
-  });
-
-  it("moves the event to PENDING (one credit per session) when application + sessions are complete", async () => {
+  it("moves the event to PENDING (one credit per session) when every session is complete", async () => {
     prismaMock.event.findFirst.mockResolvedValue(draftEvent());
     await expect(submitEvent(submitForm())).rejects.toThrow(
       /NEXT_REDIRECT:\/company\/events\?just=submitted/,
@@ -260,5 +236,13 @@ describe("submitEvent — SELECTIVE_INLINE completeness gate", () => {
         data: expect.objectContaining({ status: "PENDING" }),
       }),
     );
+  });
+
+  it("creates NO CourseApplication rows (keeps the lightweight-inline model discriminator)", async () => {
+    prismaMock.event.findFirst.mockResolvedValue(draftEvent());
+    await expect(submitEvent(submitForm())).rejects.toThrow(
+      /NEXT_REDIRECT:\/company\/events\?just=submitted/,
+    );
+    expect(txMock.courseApplication.create).not.toHaveBeenCalled();
   });
 });

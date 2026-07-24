@@ -229,22 +229,15 @@ export default async function CompanyEventDetailPage({
             ) : null}
           </div>
 
-          {event.eventType === "SELECTIVE_INLINE" ? (
-            eventApp ? (
-              <>
-                <DetailSection
-                  title="Course Information"
-                  rows={courseInfoRows(eventApp, { outlineLabel: "Event Outline" })}
-                />
-                <DetailSection title="Course Creator" rows={creatorRows(eventApp)} />
-                <DetailSection title="Presenters" rows={presenterRows(eventApp)} />
-              </>
-            ) : (
-              <div className="rounded-md border border-border bg-surface px-4 py-3 text-[12px] text-text-muted">
-                This event predates the event-level course information step. Its
-                sessions are on the Courses tab.
-              </div>
-            )
+          {event.eventType === "SELECTIVE_INLINE" && eventApp ? (
+            <>
+              <DetailSection
+                title="Course Information"
+                rows={courseInfoRows(eventApp, { outlineLabel: "Event Outline" })}
+              />
+              <DetailSection title="Course Creator" rows={creatorRows(eventApp)} />
+              <DetailSection title="Presenters" rows={presenterRows(eventApp)} />
+            </>
           ) : null}
         </div>
       ) : null}
@@ -304,8 +297,19 @@ export default async function CompanyEventDetailPage({
               <ul className="space-y-3">
                 {inlineSessions.map((s) => {
                   const q = (s.question as StoredQuestion | null) ?? {};
-                  const ci = sessionCourseInfoReadSchema.safeParse(s.courseInfo ?? {});
-                  const infoRows = ci.success ? sessionCourseInfoRows(ci.data) : [];
+                  // New sessions carry the full front-half application; parse it
+                  // as such, else fall back to the legacy step1-only slice.
+                  const full = applicationDataReadSchema
+                    .omit({ quiz: true })
+                    .safeParse(s.courseInfo ?? {});
+                  const fullData: ApplicationDataRead | null = full.success
+                    ? { ...full.data, quiz: [] }
+                    : null;
+                  const legacy = fullData
+                    ? null
+                    : sessionCourseInfoReadSchema.safeParse(s.courseInfo ?? {});
+                  const legacyRows =
+                    legacy && legacy.success ? sessionCourseInfoRows(legacy.data) : [];
                   return (
                     <li key={s.id} className="rounded-md border border-border p-3 text-[12px]">
                       <p className="font-semibold text-navy">
@@ -314,9 +318,15 @@ export default async function CompanyEventDetailPage({
                           · {s.durationHours ? Number(s.durationHours).toFixed(1) : "?"} hrs
                         </span>
                       </p>
-                      {infoRows.length > 0 ? (
+                      {fullData ? (
+                        <div className="mt-2 space-y-4">
+                          <DetailSection title="Course Information" rows={courseInfoRows(fullData)} />
+                          <DetailSection title="Course Creator" rows={creatorRows(fullData)} />
+                          <DetailSection title="Presenters" rows={presenterRows(fullData)} />
+                        </div>
+                      ) : legacyRows.length > 0 ? (
                         <div className="mt-2 rounded-md border border-border bg-surface/30">
-                          <DetailRowsList rows={infoRows} />
+                          <DetailRowsList rows={legacyRows} />
                         </div>
                       ) : (
                         <p className="mt-2 text-[11px] text-text-muted">

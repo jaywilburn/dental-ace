@@ -1,9 +1,6 @@
 import { z } from "zod";
 import { EventType } from "@prisma/client";
 import {
-  CATEGORIES,
-  COURSE_FORMATS,
-  DELIVERY_FORMATS,
   orgStepSchema,
   step1Schema,
   step2Schema,
@@ -144,56 +141,25 @@ export const sessionCourseInfoSchema = step1Schema.extend({
 export type SessionCourseInfo = z.infer<typeof sessionCourseInfoSchema>;
 
 /*
-  Tolerant DRAFT variants: saving the sessions step never loses typed work to
-  one missing field. Empty/absent values are dropped; present values keep only
-  their max caps. Minimums and enums are enforced at submit
-  (isInlineSessionComplete), mirroring the event-level app's `.partial()`
-  storage + strict submit gate.
+  Full per-session application (July 2026 client request): each SELECTIVE_INLINE
+  session now carries the whole front-half of a course application, Course
+  Information + Course Creator + Presenters, stored MERGED in
+  event_sessions.course_info. The quiz half is replaced by ONE MC question in
+  event_sessions.question. The three slices are captured through a per-session
+  mini-wizard (app/company/events/new/inline-sessions/[sessionId]/...), each
+  saved strictly with its own step schema (sessionCourseInfoSchema /
+  step2Schema / step3Schema); this merged schema is the submit-gate
+  completeness check (isInlineSessionComplete below). Outline stays at the
+  per-course 20k cap (via step1Schema); there is no event-wide outline.
 */
-const emptyToUndef = (v: unknown) =>
-  typeof v === "string" && v.trim() === "" ? undefined : v;
-const numberOrUndef = (v: unknown) => {
-  const n = typeof v === "number" ? v : Number(v);
-  return Number.isFinite(n) && n > 0 ? n : undefined;
-};
-
-export const sessionCourseInfoDraftSchema = z.object({
-  courseTitle: z.preprocess(emptyToUndef, z.string().max(200).optional()),
-  ceCreditHours: z.preprocess(numberOrUndef, z.number().max(40).optional()),
-  subjectMatter: z.preprocess(emptyToUndef, z.enum(CATEGORIES).optional()),
-  deliveryFormat: z.preprocess(emptyToUndef, z.enum(COURSE_FORMATS).optional()),
-  primaryDistributionFormat: z.preprocess(
-    emptyToUndef,
-    z.enum(DELIVERY_FORMATS).optional(),
-  ),
-  shortDescription: z.preprocess(emptyToUndef, z.string().max(1500).optional()),
-  publicProtectionStatement: z.preprocess(
-    emptyToUndef,
-    z.string().max(2000).optional(),
-  ),
-  courseObjectives: z.preprocess(emptyToUndef, z.string().max(2000).optional()),
-  courseOutline: z.preprocess(emptyToUndef, z.string().max(20_000).optional()),
-});
-
-export const mcQuestionDraftSchema = z.object({
-  type: z.literal("MC"),
-  question: z.string().max(500),
-  options: z.array(z.string().max(200)).length(4),
-  correctIndex: z.number().int().min(0).max(3),
-});
+export const sessionApplicationSchema = sessionCourseInfoSchema
+  .merge(step2Schema)
+  .merge(step3Schema);
+export type SessionApplicationData = z.infer<typeof sessionApplicationSchema>;
 
 export const inlineSessionSchema = z.object({
-  courseInfo: sessionCourseInfoSchema,
+  courseInfo: sessionApplicationSchema,
   question: mcQuestionSchema,
-});
-
-export const inlineSessionDraftSchema = z.object({
-  courseInfo: sessionCourseInfoDraftSchema,
-  question: mcQuestionDraftSchema,
-});
-
-export const inlineSessionsDraftSchema = z.object({
-  sessions: z.array(inlineSessionDraftSchema).min(1).max(20),
 });
 
 // Tolerant READ of persisted courseInfo: a stored row must never become
@@ -213,13 +179,19 @@ export const sessionCourseInfoReadSchema = z
   .passthrough();
 export type SessionCourseInfoRead = z.infer<typeof sessionCourseInfoReadSchema>;
 
-/** Submit-gate completeness for one stored inline session row. */
+/**
+ * Submit-gate completeness for one stored inline session row. A complete
+ * session carries the full front-half application (Course Info + Creator +
+ * Presenters) plus its one MC question. Sessions saved before July 2026 hold
+ * only the step1 course-info slice and correctly read incomplete until their
+ * creator + presenters are added.
+ */
 export function isInlineSessionComplete(s: {
   courseInfo: unknown;
   question: unknown;
 }): boolean {
   return (
-    sessionCourseInfoSchema.safeParse(s.courseInfo).success &&
+    sessionApplicationSchema.safeParse(s.courseInfo).success &&
     mcQuestionSchema.safeParse(s.question).success
   );
 }
@@ -230,20 +202,17 @@ export const attachedCoursesSchema = z.object({
 });
 
 /*
-  Opt 3 (SELECTIVE_INLINE) event-level application content: the front half of a
-  course application (Course Information + Creator + Presenters), entered ONCE
-  for the whole event before the Session/Question/Answer grid. Stored under
-  eventData.eventApplication, NOT as an event-level CourseApplication row —
-  approveEvent keys the accreditation model on whether pending session
-  applications exist, and an event-level row would trip that branch. The quiz
-  half of the application is replaced by the per-session questions on
-  event_sessions.
-*/
-/*
-  Event-level outline cap. The event-level application's outline describes the
-  WHOLE event ("Event Outline" in the UI) and often concatenates every
-  session's outline, so it gets a high safety ceiling instead of the per-course
-  20k cap. Regular course applications and per-session course info keep 20k.
+  LEGACY READ ONLY (event-level application content). Until July 2026,
+  SELECTIVE_INLINE events captured the front half of a course application
+  (Course Information + Creator + Presenters) ONCE for the whole event, stored
+  under eventData.eventApplication, with an "Event Outline" that could
+  concatenate every session's outline (hence the high ceiling). New events no
+  longer collect this — each session now carries its own full application (see
+  sessionApplicationSchema) — but two approved production events and any older
+  drafts still hold it, so these schemas remain to keep those records readable
+  and to type eventData.eventApplication. Never an event-level CourseApplication
+  row: approveEvent keys the accreditation model on whether pending session
+  applications exist.
 */
 export const EVENT_OUTLINE_MAX = 200_000;
 
@@ -260,34 +229,6 @@ export const eventApplicationSchema = eventStep1Schema
 
 export type EventApplicationData = z.infer<typeof eventApplicationSchema>;
 
-/** Event-application step slugs; each is also its wizard route segment. */
-export type EventApplicationStep = "course" | "creator" | "presenters";
-
-/** Route for a SELECTIVE_INLINE event-application step page. */
-export function eventApplicationStepRoute(step: EventApplicationStep): string {
-  return `/company/events/new/${step}`;
-}
-
-/**
- * First unfinished event-application step for a SELECTIVE_INLINE draft, or
- * null when Course Information + Creator + Presenters are all complete. The
- * step schemas ignore unknown keys, so each slice is checked against the same
- * merged eventApplication object.
- */
-export function nextEventApplicationStep(
-  raw: unknown,
-): EventApplicationStep | null {
-  if (!eventStep1Schema.safeParse(raw).success) return "course";
-  if (!step2Schema.safeParse(raw).success) return "creator";
-  if (!step3Schema.safeParse(raw).success) return "presenters";
-  return null;
-}
-
-/** All three event-application steps valid (SELECTIVE_INLINE submit gate). */
-export function isEventApplicationComplete(raw: unknown): boolean {
-  return nextEventApplicationStep(raw) === null;
-}
-
 // Persisted in Event.eventData. Qualifier answers + (Opt 1) the event quiz live
 // here; sessions/attached courses live in event_sessions; hours on Event.totalHours.
 export const eventDataSchema = orgStepSchema
@@ -297,13 +238,11 @@ export const eventDataSchema = orgStepSchema
   .extend({
     // Opt 1 only.
     quiz: eventQuizSchema.shape.quiz.optional(),
-    // Opt 3 only: event-level Course Info + Creator + Presenters. Partial while
-    // the wizard is in progress; validated in full at submit
-    // (isEventApplicationComplete).
+    // Legacy read only (see eventApplicationSchema): older SELECTIVE_INLINE
+    // events stored their event-level Course Info + Creator + Presenters here.
     eventApplication: eventApplicationSchema.partial().optional(),
   });
 
 export type EventData = z.infer<typeof eventDataSchema>;
 export type InlineSession = z.infer<typeof inlineSessionSchema>;
-export type InlineSessionDraft = z.infer<typeof inlineSessionDraftSchema>;
 export type McQuestion = z.infer<typeof mcQuestionSchema>;
