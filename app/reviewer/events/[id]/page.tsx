@@ -171,12 +171,7 @@ export default async function ReviewEventPage({
                 <DetailSection title="Course Creator" rows={creatorRows(eventApp)} />
                 <DetailSection title="Presenters" rows={presenterRows(eventApp)} />
               </>
-            ) : (
-              <div className="rounded-md border border-border bg-surface px-4 py-3 text-[12px] text-text-muted">
-                This event predates the event-level course information step, so
-                only its sessions are shown.
-              </div>
-            )}
+            ) : null}
             <div className="rounded-lg border border-border bg-white p-5">
               <p className="mb-1 text-[13px] font-semibold text-navy">
                 Sessions ({event.sessions.length}) · course info + one question each
@@ -191,8 +186,19 @@ export default async function ReviewEventPage({
               <ul className="space-y-3">
                 {event.sessions.map((s) => {
                   const q = (s.question as StoredQuestion | null) ?? {};
-                  const ci = sessionCourseInfoReadSchema.safeParse(s.courseInfo ?? {});
-                  const infoRows = ci.success ? sessionCourseInfoRows(ci.data) : [];
+                  // New sessions carry the full front-half application; parse it
+                  // as such, else fall back to the legacy step1-only slice.
+                  const full = applicationDataReadSchema
+                    .omit({ quiz: true })
+                    .safeParse(s.courseInfo ?? {});
+                  const fullData: ApplicationDataRead | null = full.success
+                    ? { ...full.data, quiz: [] }
+                    : null;
+                  const legacy = fullData
+                    ? null
+                    : sessionCourseInfoReadSchema.safeParse(s.courseInfo ?? {});
+                  const legacyRows =
+                    legacy && legacy.success ? sessionCourseInfoRows(legacy.data) : [];
                   return (
                     <li key={s.id} className="rounded-md border border-border p-3 text-[12px]">
                       <p className="font-semibold text-navy">
@@ -206,13 +212,24 @@ export default async function ReviewEventPage({
                           </li>
                         ))}
                       </ol>
-                      {infoRows.length > 0 ? (
+                      {fullData ? (
+                        <details className="mt-2 rounded-md border border-border bg-surface/50">
+                          <summary className="cursor-pointer px-3 py-2 text-[11px] font-semibold text-navy">
+                            Full course application
+                          </summary>
+                          <div className="space-y-4 border-t border-border bg-white p-3">
+                            <DetailSection title="Course Information" rows={courseInfoRows(fullData)} />
+                            <DetailSection title="Course Creator" rows={creatorRows(fullData)} />
+                            <DetailSection title="Presenters" rows={presenterRows(fullData)} />
+                          </div>
+                        </details>
+                      ) : legacyRows.length > 0 ? (
                         <details className="mt-2 rounded-md border border-border bg-surface/50">
                           <summary className="cursor-pointer px-3 py-2 text-[11px] font-semibold text-navy">
                             Course information
                           </summary>
                           <div className="border-t border-border bg-white">
-                            <DetailRowsList rows={infoRows} />
+                            <DetailRowsList rows={legacyRows} />
                           </div>
                         </details>
                       ) : (

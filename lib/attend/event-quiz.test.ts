@@ -181,4 +181,66 @@ describe("buildPublicForm — SELECTIVE_INLINE (lightweight inline sessions)", (
     // The public payload never carries the protection statement or raw info blob.
     expect(item).not.toHaveProperty("courseInfo");
   });
+
+  it("a full per-session application (course info + creator + presenters) yields the same public item, without leaking creator/presenter data", () => {
+    // July 2026: course_info became a SUPERSET (the whole front-half
+    // application). The attendee form still reads only the step1 slice, so the
+    // item is identical and creator/presenter fields never reach the client.
+    const event = baseEvent({
+      eventType: EventType.SELECTIVE_INLINE,
+      sessions: [
+        {
+          id: "s1",
+          position: 0,
+          name: "Session A",
+          durationHours: 1.5,
+          question: mc(0, "About A?"),
+          course: null,
+          courseInfo: {
+            courseTitle: "Session A",
+            ceCreditHours: 1.5,
+            subjectMatter: "Scientific",
+            deliveryFormat: "LIVE In Person",
+            primaryDistributionFormat: "Live/In Person",
+            shortDescription: "A focused session on sedation protocols.",
+            publicProtectionStatement: "Keeps sedated patients safe.",
+            courseObjectives: "1. Learn A\n2. Apply B",
+            courseOutline: "Part 1: overview. Part 2: practice.",
+            // Creator + presenters now live alongside the step1 slice.
+            creatorName: "Dr. Jane Doe",
+            credentials: "DDS",
+            currentPosition: "Program Director",
+            detailedBioHtml: "<p>Two decades of sedation education.</p>",
+            creatorEmail: "jane@example.com",
+            presenters: [
+              {
+                name: "Dr. Jane Doe",
+                role: "Primary Presenter",
+                commercialDisclosure: "None",
+                experience: "20 years",
+                training: "4 hours",
+                bio: "Program Director",
+              },
+            ],
+          },
+        },
+      ],
+    });
+    const form = buildPublicForm(event);
+    if (!form || form.mode !== "selective") throw new Error("expected selective form");
+    const item = form.items[0];
+    expect(item.description).toBe("A focused session on sedation protocols.");
+    expect(item.details).toEqual({
+      objectives: "1. Learn A\n2. Apply B",
+      outline: "Part 1: overview. Part 2: practice.",
+      category: "Scientific",
+      format: "LIVE In Person",
+    });
+    // No creator/presenter/answer data leaks into the public payload.
+    expect(item.question).not.toHaveProperty("correctIndex");
+    expect(item).not.toHaveProperty("creatorName");
+    expect(item).not.toHaveProperty("presenters");
+    expect(item).not.toHaveProperty("courseInfo");
+    expect(JSON.stringify(item)).not.toContain("Jane Doe");
+  });
 });
