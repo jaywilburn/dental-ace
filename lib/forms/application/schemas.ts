@@ -207,6 +207,12 @@ export const applicationDataSchema = orgStepSchema
 */
 export const applicationDataReadSchema = applicationDataSchema
   .extend({
+    // Read tolerantly: FULL_EVENT_QUIZ event sessions carry a SINGLE MC question
+    // (July 2026), so the quiz is a variable-length array (1 for event sessions,
+    // 5 for standalone courses) with no fixed TF/MC positions on read. Stays a
+    // required array so QuizPreviewCard can map it; the event-level eventApplication
+    // read omits it entirely.
+    quiz: z.array(quizQuestionSchema),
     subjectMatter: z.string(),
     deliveryFormat: z.string(),
     // Removed from the form 2026-06; applications saved before then still

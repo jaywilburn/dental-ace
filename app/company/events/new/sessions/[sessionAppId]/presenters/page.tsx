@@ -31,7 +31,7 @@ export default async function SessionPresentersPage({
         <PresentersFields draft={app.data} />
         <FormNav
           back={{ href: `/company/events/new/sessions/${sessionAppId}/creator`, label: "Back" }}
-          nextLabel="Next: Quiz Builder"
+          nextLabel="Next: Question"
         />
       </form>
     </>

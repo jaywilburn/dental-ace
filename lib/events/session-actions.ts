@@ -9,9 +9,12 @@ import {
   step1Schema,
   step2Schema,
   step3Schema,
-  step4Schema,
   orgStepSchema,
 } from "@/lib/forms/application/schemas";
+import {
+  mcQuestionSchema,
+  eventSessionQuizStepSchema,
+} from "@/lib/forms/event/schemas";
 import { mergeApplicationStep } from "@/lib/forms/application/merge-step";
 import {
   sanitizeRichText,
@@ -255,33 +258,30 @@ export async function saveSessionQuiz(formData: FormData) {
   if (!sessionAppId) throw new Error("Missing sessionAppId");
   const companyId = await customerCompanyId();
 
-  const quiz = [
-    {
-      type: "TF" as const,
-      question: String(formData.get("q1_question") ?? ""),
-      correctAnswer: (formData.get("q1_correct") === "True" ? "True" : "False") as
-        | "True"
-        | "False",
-    },
-    {
-      type: "TF" as const,
-      question: String(formData.get("q2_question") ?? ""),
-      correctAnswer: (formData.get("q2_correct") === "True" ? "True" : "False") as
-        | "True"
-        | "False",
-    },
-    ...[2, 3, 4].map((i) => ({
-      type: "MC" as const,
-      question: String(formData.get(`q${i + 1}_question`) ?? ""),
-      options: [0, 1, 2, 3].map((j) => String(formData.get(`q${i + 1}_option_${j}`) ?? "")),
-      correctIndex: Number(formData.get(`q${i + 1}_correct`) ?? 0),
-    })),
-  ];
+  // One MC question per session (July 2026): it becomes the single question the
+  // attendee answers for this session (course.quizQuestions -> firstCourseMc).
+  // Stored as a 1-element quiz array so downstream reads are unchanged.
+  const question = {
+    type: "MC" as const,
+    question: String(formData.get("question") ?? ""),
+    options: [0, 1, 2, 3].map((j) => String(formData.get(`option_${j}`) ?? "")),
+    correctIndex: Number(formData.get("correctIndex") ?? 0),
+  };
+  const result = mcQuestionSchema.safeParse(question);
+  if (!result.success) {
+    const issue = result.error.issues[0];
+    const detail = issue
+      ? `${String(issue.path[0] ?? "Question")}: ${issue.message}`.slice(0, 200)
+      : "Please complete the question and all four answers.";
+    redirect(
+      `${sessionStep(sessionAppId, "quiz")}?error=validation&detail=${encodeURIComponent(detail)}`,
+    );
+  }
   await mergeApplicationStep(
     sessionAppId,
     companyId,
-    step4Schema,
-    { quiz },
+    eventSessionQuizStepSchema,
+    { quiz: [result.data] },
     sessionStep(sessionAppId, "quiz"),
   );
   // Last step: back to the sessions list to add another or review.

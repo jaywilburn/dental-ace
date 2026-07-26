@@ -7,10 +7,16 @@ import { quizQuestionSchema } from "@/lib/forms/application/schemas";
 
 /*
   Approved courses history for the REVIEWER role. Lists every accredited
-  course with cert-issued count, quiz status, and review attribution. A course
-  whose quiz_questions does not hold exactly 5 valid questions (all legacy-
-  migrated courses started this way) has an unavailable attendee link; admins
-  get a link to the post-approval quiz editor to fix it.
+  course with cert-issued count, quiz status, and review attribution. A
+  STANDALONE course whose quiz_questions does not hold exactly 5 valid questions
+  (all legacy-migrated courses started this way) has an unavailable attendee
+  link; admins get a link to the post-approval quiz editor to fix it.
+
+  Event-session courses (FULL_EVENT_QUIZ, eventId set) are different: they carry
+  a single MC question authored through the event and are attended via the event
+  link, so they show as "Event session" (linking to the event) rather than the
+  standalone 5-question status, and are never routed to the standalone quiz
+  editor.
 */
 
 const quizArraySchema = z.array(quizQuestionSchema).length(5);
@@ -78,23 +84,32 @@ export default async function ReviewerApprovedPage() {
                         {c.certsIssuedCount}
                       </td>
                       <td className="px-4 py-2">
-                        <span className="flex items-center gap-2 whitespace-nowrap">
-                          {hasQuiz ? (
-                            <span className="text-text-muted">5 questions</span>
-                          ) : (
-                            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-700">
-                              Missing
-                            </span>
-                          )}
-                          {isAdmin ? (
-                            <Link
-                              href={`/admin/courses/${c.id}/quiz`}
-                              className="text-ace-dark underline"
-                            >
-                              {hasQuiz ? "Edit" : "Add quiz"}
-                            </Link>
-                          ) : null}
-                        </span>
+                        {c.eventId ? (
+                          <Link
+                            href={`/reviewer/events/${c.eventId}`}
+                            className="whitespace-nowrap text-ace-dark underline"
+                          >
+                            Event session
+                          </Link>
+                        ) : (
+                          <span className="flex items-center gap-2 whitespace-nowrap">
+                            {hasQuiz ? (
+                              <span className="text-text-muted">5 questions</span>
+                            ) : (
+                              <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-700">
+                                Missing
+                              </span>
+                            )}
+                            {isAdmin ? (
+                              <Link
+                                href={`/admin/courses/${c.id}/quiz`}
+                                className="text-ace-dark underline"
+                              >
+                                {hasQuiz ? "Edit" : "Add quiz"}
+                              </Link>
+                            ) : null}
+                          </span>
+                        )}
                       </td>
                       <td className="px-4 py-2 text-text-muted">
                         {c.application.reviewedBy?.email ?? "—"}

@@ -5,6 +5,7 @@ import {
   step1Schema,
   step2Schema,
   step3Schema,
+  quizQuestionSchema,
 } from "@/lib/forms/application/schemas";
 
 /*
@@ -200,6 +201,37 @@ export function isInlineSessionComplete(s: {
 export const attachedCoursesSchema = z.object({
   courseIds: z.array(z.string().uuid()).min(1).max(20),
 });
+
+/*
+  FULL_EVENT_QUIZ (Opt 1) session quiz — July 2026 client request. Each session
+  is a full course application, but its quiz is ONE multiple-choice question,
+  matching the attendee form (which surfaces a single question per session)
+  instead of the standalone 5-question quiz. Stored as a 1-element array in
+  applicationData.quiz so the accredited course's quizQuestions and the attendee
+  flow's firstCourseMc read it unchanged. saveSessionQuiz validates+persists the
+  single question via eventSessionQuizStepSchema; eventSessionApplicationSchema
+  is the submit/completeness gate and stays tolerant of legacy 5-question event
+  sessions (>= 1 question, at least one MC) so older data still validates.
+*/
+export const eventSessionQuizStepSchema = z.object({
+  quiz: z.array(quizQuestionSchema).length(1),
+});
+
+export const eventSessionApplicationSchema = orgStepSchema
+  .merge(step1Schema)
+  .merge(step2Schema)
+  .merge(step3Schema)
+  .extend({
+    quiz: z
+      .array(quizQuestionSchema)
+      .min(1)
+      .refine((q) => q.some((x) => x.type === "MC"), {
+        message: "Each session needs one multiple-choice question",
+      }),
+  });
+export type EventSessionApplicationData = z.infer<
+  typeof eventSessionApplicationSchema
+>;
 
 /*
   LEGACY READ ONLY (event-level application content). Until July 2026,

@@ -42,6 +42,7 @@ export default async function AdminCourseQuizPage({
       expiresAt: true,
       quizQuestions: true,
       attendeeLinkToken: true,
+      eventId: true,
       company: { select: { name: true } },
       application: { select: { courseTitle: true, ceHours: true } },
     },
@@ -51,6 +52,33 @@ export default async function AdminCourseQuizPage({
   const saved = quizArraySchema.safeParse(course.quizQuestions);
   const title = course.application.courseTitle ?? `Course ${course.courseIdNumber}`;
   const dateFmt = { month: "short", day: "numeric", year: "numeric" } as const;
+
+  // Event-session courses (FULL_EVENT_QUIZ) carry a single MC question authored
+  // through the event, not a standalone 5-question quiz. This legacy-course
+  // editor validates + saves exactly 5 questions, so it must refuse event
+  // sessions (a save here would overwrite the single question with five).
+  if (course.eventId) {
+    return (
+      <>
+        <PageHeader
+          title="Certificate Quiz"
+          subtitle={`${course.courseIdNumber} · ${title}`}
+          action={
+            <Link
+              href="/reviewer/approved"
+              className="rounded-md border border-border bg-white px-3.5 py-2 text-[12px] font-semibold text-navy hover:bg-surface"
+            >
+              Back to Approved Courses
+            </Link>
+          }
+        />
+        <div className="rounded-md border border-border bg-surface px-4 py-3 text-[13px] text-text-muted">
+          This course is a session of an event. Its attendee question is set when
+          the event is created and is not edited here.
+        </div>
+      </>
+    );
+  }
 
   return (
     <>

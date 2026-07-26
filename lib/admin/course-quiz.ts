@@ -43,11 +43,21 @@ export async function saveCourseQuiz(formData: FormData) {
 
   const course = await prisma.accreditedCourse.findUnique({
     where: { id: courseId },
-    select: { courseIdNumber: true },
+    select: { courseIdNumber: true, eventId: true },
   });
   if (!course) {
     redirect(
       `${editorPath(courseId)}?error=${encodeURIComponent("That course no longer exists.")}`,
+    );
+  }
+  // Event-session courses (FULL_EVENT_QUIZ) carry a single MC question authored
+  // through the event; this 5-question editor must never overwrite it, even via
+  // a direct POST.
+  if (course.eventId) {
+    redirect(
+      `${editorPath(courseId)}?error=${encodeURIComponent(
+        "This is an event session; its question is managed through the event.",
+      )}`,
     );
   }
 

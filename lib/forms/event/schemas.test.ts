@@ -10,6 +10,7 @@ import {
   isInlineSessionComplete,
   sessionCourseInfoSchema,
   sessionApplicationSchema,
+  eventSessionApplicationSchema,
   eventApplicationSchema,
   eventStep1Schema,
   EVENT_OUTLINE_MAX,
@@ -105,6 +106,27 @@ const MC_QUESTION = {
   options: ["a", "b", "c", "d"],
   correctIndex: 1,
 } as const;
+
+const ORG = {
+  organizationName: "Texas Dental Association",
+  organizationAddress: "Austin, TX 78701",
+  adminName: "Jane Admin",
+  adminEmail: "admin@example.com",
+  adminPhone: "555-000-1111",
+};
+
+// FULL_EVENT_QUIZ session application: org (inherited from the event) + the
+// full front-half application + a ONE-question MC quiz.
+const FULL_EVENT_SESSION = { ...ORG, ...FULL_SESSION, quiz: [MC_QUESTION] };
+
+// Legacy 5-question quiz (2 TF + 3 MC), still valid to keep old data working.
+const LEGACY_FIVE_Q_QUIZ = [
+  { type: "TF", question: "A true/false question here?", correctAnswer: "True" },
+  { type: "TF", question: "Another true/false question?", correctAnswer: "False" },
+  MC_QUESTION,
+  { ...MC_QUESTION, question: "A second multiple-choice question?" },
+  { ...MC_QUESTION, question: "A third multiple-choice question?" },
+];
 
 describe("sessionCourseInfoSchema", () => {
   it("accepts a valid step1 slice with half-hour CE hours", () => {
@@ -319,5 +341,42 @@ describe("event-application reviewer read path", () => {
     expect(
       applicationDataReadSchema.omit({ quiz: true }).safeParse(SESSION_INFO).success,
     ).toBe(false);
+  });
+});
+
+describe("eventSessionApplicationSchema (FULL_EVENT_QUIZ, single MC question)", () => {
+  it("accepts a full session with a one-question MC quiz", () => {
+    expect(eventSessionApplicationSchema.safeParse(FULL_EVENT_SESSION).success).toBe(true);
+  });
+  it("still accepts a legacy 5-question quiz (tolerant of old event sessions)", () => {
+    expect(
+      eventSessionApplicationSchema.safeParse({
+        ...FULL_EVENT_SESSION,
+        quiz: LEGACY_FIVE_Q_QUIZ,
+      }).success,
+    ).toBe(true);
+  });
+  it("rejects an empty quiz", () => {
+    expect(
+      eventSessionApplicationSchema.safeParse({ ...FULL_EVENT_SESSION, quiz: [] }).success,
+    ).toBe(false);
+  });
+  it("rejects a quiz with no multiple-choice question", () => {
+    expect(
+      eventSessionApplicationSchema.safeParse({
+        ...FULL_EVENT_SESSION,
+        quiz: [{ type: "TF", question: "Only a true/false question?", correctAnswer: "True" }],
+      }).success,
+    ).toBe(false);
+  });
+  it("rejects when the front-half application is incomplete (missing creator)", () => {
+    const { creatorName: _omit, ...rest } = FULL_EVENT_SESSION;
+    void _omit;
+    expect(eventSessionApplicationSchema.safeParse(rest).success).toBe(false);
+  });
+  it("reads via applicationDataReadSchema with the loosened (variable-length) quiz", () => {
+    // The reviewer/company detail pages + approveEvent parse event sessions with
+    // applicationDataReadSchema; a one-question quiz must stay readable.
+    expect(applicationDataReadSchema.safeParse(FULL_EVENT_SESSION).success).toBe(true);
   });
 });
