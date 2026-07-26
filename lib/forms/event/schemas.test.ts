@@ -391,4 +391,24 @@ describe("eventSessionApplicationSchema (FULL_EVENT_QUIZ, single MC question)", 
       }).success,
     ).toBe(true);
   });
+  it("keeps the write gate's quiz floor on the read path (approveEvent can't accredit an empty/no-MC quiz)", () => {
+    // A legacy 5-question quiz still reads fine...
+    expect(
+      eventSessionApplicationReadSchema.safeParse({
+        ...FULL_EVENT_SESSION,
+        quiz: LEGACY_FIVE_Q_QUIZ,
+      }).success,
+    ).toBe(true);
+    // ...but an empty quiz, or a quiz with no MC, is rejected at read/approval.
+    expect(
+      eventSessionApplicationReadSchema.safeParse({ ...FULL_EVENT_SESSION, quiz: [] })
+        .success,
+    ).toBe(false);
+    expect(
+      eventSessionApplicationReadSchema.safeParse({
+        ...FULL_EVENT_SESSION,
+        quiz: [{ type: "TF", question: "Only a true/false question?", correctAnswer: "True" }],
+      }).success,
+    ).toBe(false);
+  });
 });

@@ -218,32 +218,41 @@ export const eventSessionQuizStepSchema = z.object({
   quiz: z.array(quizQuestionSchema).length(1),
 });
 
+/*
+  Quiz floor for an event session: at least one question with at least one MC
+  (the attendee answers a single MC per session, resolved via firstCourseMc).
+  SHARED by the write gate and the read schema so they can't diverge, so
+  approveEvent can never accredit an empty / no-MC quiz (this is the
+  approval-time safety net that the strict standalone quiz shape used to provide
+  before events read with a variable-length quiz).
+*/
+const eventSessionQuizField = z
+  .array(quizQuestionSchema)
+  .min(1)
+  .refine((q) => q.some((x) => x.type === "MC"), {
+    message: "Each session needs one multiple-choice question",
+  });
+
 export const eventSessionApplicationSchema = orgStepSchema
   .merge(step1Schema)
   .merge(step2Schema)
   .merge(step3Schema)
-  .extend({
-    quiz: z
-      .array(quizQuestionSchema)
-      .min(1)
-      .refine((q) => q.some((x) => x.type === "MC"), {
-        message: "Each session needs one multiple-choice question",
-      }),
-  });
+  .extend({ quiz: eventSessionQuizField });
 export type EventSessionApplicationData = z.infer<
   typeof eventSessionApplicationSchema
 >;
 
 /*
   READ variant for FULL_EVENT_QUIZ session applications. Identical to
-  applicationDataReadSchema but with the quiz loosened to a variable-length
-  array, because event sessions carry a single MC question. The shared
-  applicationDataReadSchema stays strict (exactly 5, TF/TF/MC/MC/MC) so
-  STANDALONE course approval keeps its 5-question gate; only the event
-  detail pages + approveEvent parse session applications with this variant.
+  applicationDataReadSchema but with the quiz using the same variable-length
+  floor as the write gate (>= 1 question, >= 1 MC), because event sessions carry
+  a single MC question. The shared applicationDataReadSchema stays strict
+  (exactly 5, TF/TF/MC/MC/MC) so STANDALONE course approval keeps its 5-question
+  gate; only the event detail pages + approveEvent parse session applications
+  with this variant.
 */
 export const eventSessionApplicationReadSchema = applicationDataReadSchema.extend(
-  { quiz: z.array(quizQuestionSchema) },
+  { quiz: eventSessionQuizField },
 );
 
 /*
