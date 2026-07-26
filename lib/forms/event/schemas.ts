@@ -6,6 +6,7 @@ import {
   step2Schema,
   step3Schema,
   quizQuestionSchema,
+  applicationDataReadSchema,
 } from "@/lib/forms/application/schemas";
 
 /*
@@ -232,6 +233,18 @@ export const eventSessionApplicationSchema = orgStepSchema
 export type EventSessionApplicationData = z.infer<
   typeof eventSessionApplicationSchema
 >;
+
+/*
+  READ variant for FULL_EVENT_QUIZ session applications. Identical to
+  applicationDataReadSchema but with the quiz loosened to a variable-length
+  array, because event sessions carry a single MC question. The shared
+  applicationDataReadSchema stays strict (exactly 5, TF/TF/MC/MC/MC) so
+  STANDALONE course approval keeps its 5-question gate; only the event
+  detail pages + approveEvent parse session applications with this variant.
+*/
+export const eventSessionApplicationReadSchema = applicationDataReadSchema.extend(
+  { quiz: z.array(quizQuestionSchema) },
+);
 
 /*
   LEGACY READ ONLY (event-level application content). Until July 2026,

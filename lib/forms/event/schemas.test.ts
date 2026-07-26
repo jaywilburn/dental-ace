@@ -11,6 +11,7 @@ import {
   sessionCourseInfoSchema,
   sessionApplicationSchema,
   eventSessionApplicationSchema,
+  eventSessionApplicationReadSchema,
   eventApplicationSchema,
   eventStep1Schema,
   EVENT_OUTLINE_MAX,
@@ -374,9 +375,20 @@ describe("eventSessionApplicationSchema (FULL_EVENT_QUIZ, single MC question)", 
     void _omit;
     expect(eventSessionApplicationSchema.safeParse(rest).success).toBe(false);
   });
-  it("reads via applicationDataReadSchema with the loosened (variable-length) quiz", () => {
-    // The reviewer/company detail pages + approveEvent parse event sessions with
-    // applicationDataReadSchema; a one-question quiz must stay readable.
-    expect(applicationDataReadSchema.safeParse(FULL_EVENT_SESSION).success).toBe(true);
+  it("reads via eventSessionApplicationReadSchema (variable-length quiz), while the shared read schema stays strict-5", () => {
+    // Event detail pages + approveEvent parse session applications with the
+    // event read schema, so a one-question quiz stays readable there...
+    expect(
+      eventSessionApplicationReadSchema.safeParse(FULL_EVENT_SESSION).success,
+    ).toBe(true);
+    // ...but the SHARED applicationDataReadSchema stays strict (exactly 5,
+    // TF/TF/MC/MC/MC), so standalone course approval keeps its 5-question gate.
+    expect(applicationDataReadSchema.safeParse(FULL_EVENT_SESSION).success).toBe(false);
+    expect(
+      applicationDataReadSchema.safeParse({
+        ...FULL_EVENT_SESSION,
+        quiz: LEGACY_FIVE_Q_QUIZ,
+      }).success,
+    ).toBe(true);
   });
 });
