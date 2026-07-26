@@ -8,6 +8,7 @@ import { requireStaff } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { recordAdminAction } from "@/lib/admin/audit";
 import { parseQuizForm } from "@/lib/forms/application/quiz-form";
+import { quizQuestionSchema } from "@/lib/forms/application/schemas";
 
 /*
   Admin-only post-approval quiz editor. Legacy-migrated courses landed with
@@ -24,6 +25,10 @@ import { parseQuizForm } from "@/lib/forms/application/quiz-form";
 */
 
 const courseIdSchema = z.string().uuid();
+
+// A stored quiz that is a full 5-question set (standalone-editable). Event
+// courses whose quiz is NOT this shape are single-MC FULL_EVENT_QUIZ sessions.
+const storedQuizSchema = z.array(quizQuestionSchema).length(5);
 
 function editorPath(courseId: string): string {
   return `/admin/courses/${courseId}/quiz`;
@@ -43,17 +48,21 @@ export async function saveCourseQuiz(formData: FormData) {
 
   const course = await prisma.accreditedCourse.findUnique({
     where: { id: courseId },
-    select: { courseIdNumber: true, eventId: true },
+    select: { courseIdNumber: true, eventId: true, quizQuestions: true },
   });
   if (!course) {
     redirect(
       `${editorPath(courseId)}?error=${encodeURIComponent("That course no longer exists.")}`,
     );
   }
-  // Event-session courses (FULL_EVENT_QUIZ) carry a single MC question authored
-  // through the event; this 5-question editor must never overwrite it, even via
-  // a direct POST.
-  if (course.eventId) {
+  // Event courses with a SINGLE MC question (FULL_EVENT_QUIZ) author it through
+  // the event; this 5-question editor must never overwrite it, even via a direct
+  // POST. Event courses that already hold a full 5-question quiz (legacy
+  // full-course events) stay editable, so gate on quiz shape, not eventId alone.
+  if (
+    course.eventId &&
+    !storedQuizSchema.safeParse(course.quizQuestions).success
+  ) {
     redirect(
       `${editorPath(courseId)}?error=${encodeURIComponent(
         "This is an event session; its question is managed through the event.",

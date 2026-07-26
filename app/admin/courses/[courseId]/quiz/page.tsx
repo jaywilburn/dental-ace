@@ -53,11 +53,13 @@ export default async function AdminCourseQuizPage({
   const title = course.application.courseTitle ?? `Course ${course.courseIdNumber}`;
   const dateFmt = { month: "short", day: "numeric", year: "numeric" } as const;
 
-  // Event-session courses (FULL_EVENT_QUIZ) carry a single MC question authored
-  // through the event, not a standalone 5-question quiz. This legacy-course
-  // editor validates + saves exactly 5 questions, so it must refuse event
-  // sessions (a save here would overwrite the single question with five).
-  if (course.eventId) {
+  // Event courses with a SINGLE MC question (FULL_EVENT_QUIZ) author it through
+  // the event, not this standalone 5-question editor, so refuse them (a save
+  // here would overwrite the single question with five). Event courses that hold
+  // a full 5-question quiz (legacy full-course events, incl. pre-July-2026
+  // SELECTIVE_INLINE) stay editable — the discriminator is quiz shape
+  // (!saved.success), not eventId alone.
+  if (course.eventId && !saved.success) {
     return (
       <>
         <PageHeader
