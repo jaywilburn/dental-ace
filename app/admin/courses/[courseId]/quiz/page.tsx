@@ -42,6 +42,7 @@ export default async function AdminCourseQuizPage({
       expiresAt: true,
       quizQuestions: true,
       attendeeLinkToken: true,
+      eventId: true,
       company: { select: { name: true } },
       application: { select: { courseTitle: true, ceHours: true } },
     },
@@ -51,6 +52,35 @@ export default async function AdminCourseQuizPage({
   const saved = quizArraySchema.safeParse(course.quizQuestions);
   const title = course.application.courseTitle ?? `Course ${course.courseIdNumber}`;
   const dateFmt = { month: "short", day: "numeric", year: "numeric" } as const;
+
+  // Event courses with a SINGLE MC question (FULL_EVENT_QUIZ) author it through
+  // the event, not this standalone 5-question editor, so refuse them (a save
+  // here would overwrite the single question with five). Event courses that hold
+  // a full 5-question quiz (legacy full-course events, incl. pre-July-2026
+  // SELECTIVE_INLINE) stay editable — the discriminator is quiz shape
+  // (!saved.success), not eventId alone.
+  if (course.eventId && !saved.success) {
+    return (
+      <>
+        <PageHeader
+          title="Certificate Quiz"
+          subtitle={`${course.courseIdNumber} · ${title}`}
+          action={
+            <Link
+              href="/reviewer/approved"
+              className="rounded-md border border-border bg-white px-3.5 py-2 text-[12px] font-semibold text-navy hover:bg-surface"
+            >
+              Back to Approved Courses
+            </Link>
+          }
+        />
+        <div className="rounded-md border border-border bg-surface px-4 py-3 text-[13px] text-text-muted">
+          This course is a session of an event. Its attendee question is set when
+          the event is created and is not edited here.
+        </div>
+      </>
+    );
+  }
 
   return (
     <>

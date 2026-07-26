@@ -5,7 +5,10 @@ import { PageHeader } from "@/components/portal-shell";
 import { requireDentalAce } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { eventAssetUrls } from "@/lib/events/event-assets";
-import { sessionCourseInfoReadSchema } from "@/lib/forms/event/schemas";
+import {
+  sessionCourseInfoReadSchema,
+  eventSessionApplicationReadSchema,
+} from "@/lib/forms/event/schemas";
 import {
   applicationDataReadSchema,
   type ApplicationDataRead,
@@ -115,7 +118,9 @@ export default async function CompanyEventDetailPage({
   // course applications (FULL_EVENT_QUIZ, plus SELECTIVE_INLINE events from
   // before July 2026). Keyed on data shape, matching the reviewer page.
   const sessionApps = event.sessionApplications.map((a) => {
-    const parsed = applicationDataReadSchema.safeParse(a.applicationData);
+    // Event sessions carry a single MC question, so parse with the event read
+    // schema (variable-length quiz); the shared read schema stays strict-5.
+    const parsed = eventSessionApplicationReadSchema.safeParse(a.applicationData);
     return { id: a.id, position: a.sessionPosition ?? 0, parsed };
   });
   const showSessionApps = sessionApps.length > 0;

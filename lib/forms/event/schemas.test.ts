@@ -10,6 +10,8 @@ import {
   isInlineSessionComplete,
   sessionCourseInfoSchema,
   sessionApplicationSchema,
+  eventSessionApplicationSchema,
+  eventSessionApplicationReadSchema,
   eventApplicationSchema,
   eventStep1Schema,
   EVENT_OUTLINE_MAX,
@@ -105,6 +107,27 @@ const MC_QUESTION = {
   options: ["a", "b", "c", "d"],
   correctIndex: 1,
 } as const;
+
+const ORG = {
+  organizationName: "Texas Dental Association",
+  organizationAddress: "Austin, TX 78701",
+  adminName: "Jane Admin",
+  adminEmail: "admin@example.com",
+  adminPhone: "555-000-1111",
+};
+
+// FULL_EVENT_QUIZ session application: org (inherited from the event) + the
+// full front-half application + a ONE-question MC quiz.
+const FULL_EVENT_SESSION = { ...ORG, ...FULL_SESSION, quiz: [MC_QUESTION] };
+
+// Legacy 5-question quiz (2 TF + 3 MC), still valid to keep old data working.
+const LEGACY_FIVE_Q_QUIZ = [
+  { type: "TF", question: "A true/false question here?", correctAnswer: "True" },
+  { type: "TF", question: "Another true/false question?", correctAnswer: "False" },
+  MC_QUESTION,
+  { ...MC_QUESTION, question: "A second multiple-choice question?" },
+  { ...MC_QUESTION, question: "A third multiple-choice question?" },
+];
 
 describe("sessionCourseInfoSchema", () => {
   it("accepts a valid step1 slice with half-hour CE hours", () => {
@@ -318,6 +341,74 @@ describe("event-application reviewer read path", () => {
   it("does not parse a step1-only slice (fallback to sessionCourseInfoRows)", () => {
     expect(
       applicationDataReadSchema.omit({ quiz: true }).safeParse(SESSION_INFO).success,
+    ).toBe(false);
+  });
+});
+
+describe("eventSessionApplicationSchema (FULL_EVENT_QUIZ, single MC question)", () => {
+  it("accepts a full session with a one-question MC quiz", () => {
+    expect(eventSessionApplicationSchema.safeParse(FULL_EVENT_SESSION).success).toBe(true);
+  });
+  it("still accepts a legacy 5-question quiz (tolerant of old event sessions)", () => {
+    expect(
+      eventSessionApplicationSchema.safeParse({
+        ...FULL_EVENT_SESSION,
+        quiz: LEGACY_FIVE_Q_QUIZ,
+      }).success,
+    ).toBe(true);
+  });
+  it("rejects an empty quiz", () => {
+    expect(
+      eventSessionApplicationSchema.safeParse({ ...FULL_EVENT_SESSION, quiz: [] }).success,
+    ).toBe(false);
+  });
+  it("rejects a quiz with no multiple-choice question", () => {
+    expect(
+      eventSessionApplicationSchema.safeParse({
+        ...FULL_EVENT_SESSION,
+        quiz: [{ type: "TF", question: "Only a true/false question?", correctAnswer: "True" }],
+      }).success,
+    ).toBe(false);
+  });
+  it("rejects when the front-half application is incomplete (missing creator)", () => {
+    const { creatorName: _omit, ...rest } = FULL_EVENT_SESSION;
+    void _omit;
+    expect(eventSessionApplicationSchema.safeParse(rest).success).toBe(false);
+  });
+  it("reads via eventSessionApplicationReadSchema (variable-length quiz), while the shared read schema stays strict-5", () => {
+    // Event detail pages + approveEvent parse session applications with the
+    // event read schema, so a one-question quiz stays readable there...
+    expect(
+      eventSessionApplicationReadSchema.safeParse(FULL_EVENT_SESSION).success,
+    ).toBe(true);
+    // ...but the SHARED applicationDataReadSchema stays strict (exactly 5,
+    // TF/TF/MC/MC/MC), so standalone course approval keeps its 5-question gate.
+    expect(applicationDataReadSchema.safeParse(FULL_EVENT_SESSION).success).toBe(false);
+    expect(
+      applicationDataReadSchema.safeParse({
+        ...FULL_EVENT_SESSION,
+        quiz: LEGACY_FIVE_Q_QUIZ,
+      }).success,
+    ).toBe(true);
+  });
+  it("keeps the write gate's quiz floor on the read path (approveEvent can't accredit an empty/no-MC quiz)", () => {
+    // A legacy 5-question quiz still reads fine...
+    expect(
+      eventSessionApplicationReadSchema.safeParse({
+        ...FULL_EVENT_SESSION,
+        quiz: LEGACY_FIVE_Q_QUIZ,
+      }).success,
+    ).toBe(true);
+    // ...but an empty quiz, or a quiz with no MC, is rejected at read/approval.
+    expect(
+      eventSessionApplicationReadSchema.safeParse({ ...FULL_EVENT_SESSION, quiz: [] })
+        .success,
+    ).toBe(false);
+    expect(
+      eventSessionApplicationReadSchema.safeParse({
+        ...FULL_EVENT_SESSION,
+        quiz: [{ type: "TF", question: "Only a true/false question?", correctAnswer: "True" }],
+      }).success,
     ).toBe(false);
   });
 });

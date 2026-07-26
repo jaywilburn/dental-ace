@@ -19,12 +19,10 @@ import {
   deriveEventType,
   isEventOnly,
   isInlineFullCourse,
+  eventSessionApplicationSchema,
   type EventData,
+  type EventSessionApplicationData,
 } from "@/lib/forms/event/schemas";
-import {
-  applicationDataSchema,
-  type ApplicationData,
-} from "@/lib/forms/application/schemas";
 import { sendEmail } from "@/lib/email/send";
 import ApplicationSubmittedEmail from "@/emails/application-submitted";
 import {
@@ -166,8 +164,9 @@ export async function getEventDraft(eventId: string): Promise<EventDraft | null>
             : "Untitled session",
         ceHours:
           typeof data.ceCreditHours === "number" ? data.ceCreditHours : null,
-        // Complete = the full application validates (org inherited + all steps).
-        complete: applicationDataSchema.safeParse(data).success,
+        // Complete = the full event-session application validates (org inherited
+        // + course info + creator + presenters + one MC question).
+        complete: eventSessionApplicationSchema.safeParse(data).success,
       };
     }),
   };
@@ -540,7 +539,7 @@ export async function submitEvent(formData: FormData) {
     // Validate each session's full application; on the first miss, jump into it.
     const parsedSessions = apps.map((a) => ({
       id: a.id,
-      parsed: applicationDataSchema.safeParse(a.applicationData),
+      parsed: eventSessionApplicationSchema.safeParse(a.applicationData),
     }));
     const bad = parsedSessions.find((s) => !s.parsed.success);
     if (bad) {
@@ -552,7 +551,7 @@ export async function submitEvent(formData: FormData) {
     }
     const sessions = parsedSessions.map((s) => ({
       id: s.id,
-      data: (s.parsed as { success: true; data: ApplicationData }).data,
+      data: (s.parsed as { success: true; data: EventSessionApplicationData }).data,
     }));
     const n = sessions.length;
     const totalHours = sessions.reduce((sum, s) => sum + s.data.ceCreditHours, 0);

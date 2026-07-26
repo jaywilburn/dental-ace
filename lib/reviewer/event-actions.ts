@@ -13,8 +13,10 @@ import { sendEmail } from "@/lib/email/send";
 import ApplicationApprovedEmail from "@/emails/application-approved";
 import ApplicationRejectedEmail from "@/emails/application-rejected";
 import { formatEventId, nextSeqFromLast } from "@/lib/reviewer/event-id";
-import { applicationDataReadSchema } from "@/lib/forms/application/schemas";
-import { isEventOnly } from "@/lib/forms/event/schemas";
+import {
+  isEventOnly,
+  eventSessionApplicationReadSchema,
+} from "@/lib/forms/event/schemas";
 import { accreditApplicationTx, renderCourseAssets } from "@/lib/reviewer/accredit";
 import { getLetterSignatory } from "@/lib/admin/letter-settings";
 
@@ -93,7 +95,7 @@ export async function approveEvent(formData: FormData) {
   // course. Parse every session's application up front (tolerant read schema).
   const sessions = fullCourseModel
     ? event.sessionApplications.map((a) => {
-        const parsed = applicationDataReadSchema.safeParse(a.applicationData);
+        const parsed = eventSessionApplicationReadSchema.safeParse(a.applicationData);
         if (!parsed.success) {
           throw new Error(`Session ${a.id} application data invalid`);
         }

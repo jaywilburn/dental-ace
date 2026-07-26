@@ -5,6 +5,8 @@ import {
   step1Schema,
   step2Schema,
   step3Schema,
+  quizQuestionSchema,
+  applicationDataReadSchema,
 } from "@/lib/forms/application/schemas";
 
 /*
@@ -200,6 +202,58 @@ export function isInlineSessionComplete(s: {
 export const attachedCoursesSchema = z.object({
   courseIds: z.array(z.string().uuid()).min(1).max(20),
 });
+
+/*
+  FULL_EVENT_QUIZ (Opt 1) session quiz — July 2026 client request. Each session
+  is a full course application, but its quiz is ONE multiple-choice question,
+  matching the attendee form (which surfaces a single question per session)
+  instead of the standalone 5-question quiz. Stored as a 1-element array in
+  applicationData.quiz so the accredited course's quizQuestions and the attendee
+  flow's firstCourseMc read it unchanged. saveSessionQuiz validates+persists the
+  single question via eventSessionQuizStepSchema; eventSessionApplicationSchema
+  is the submit/completeness gate and stays tolerant of legacy 5-question event
+  sessions (>= 1 question, at least one MC) so older data still validates.
+*/
+export const eventSessionQuizStepSchema = z.object({
+  quiz: z.array(quizQuestionSchema).length(1),
+});
+
+/*
+  Quiz floor for an event session: at least one question with at least one MC
+  (the attendee answers a single MC per session, resolved via firstCourseMc).
+  SHARED by the write gate and the read schema so they can't diverge, so
+  approveEvent can never accredit an empty / no-MC quiz (this is the
+  approval-time safety net that the strict standalone quiz shape used to provide
+  before events read with a variable-length quiz).
+*/
+const eventSessionQuizField = z
+  .array(quizQuestionSchema)
+  .min(1)
+  .refine((q) => q.some((x) => x.type === "MC"), {
+    message: "Each session needs one multiple-choice question",
+  });
+
+export const eventSessionApplicationSchema = orgStepSchema
+  .merge(step1Schema)
+  .merge(step2Schema)
+  .merge(step3Schema)
+  .extend({ quiz: eventSessionQuizField });
+export type EventSessionApplicationData = z.infer<
+  typeof eventSessionApplicationSchema
+>;
+
+/*
+  READ variant for FULL_EVENT_QUIZ session applications. Identical to
+  applicationDataReadSchema but with the quiz using the same variable-length
+  floor as the write gate (>= 1 question, >= 1 MC), because event sessions carry
+  a single MC question. The shared applicationDataReadSchema stays strict
+  (exactly 5, TF/TF/MC/MC/MC) so STANDALONE course approval keeps its 5-question
+  gate; only the event detail pages + approveEvent parse session applications
+  with this variant.
+*/
+export const eventSessionApplicationReadSchema = applicationDataReadSchema.extend(
+  { quiz: eventSessionQuizField },
+);
 
 /*
   LEGACY READ ONLY (event-level application content). Until July 2026,

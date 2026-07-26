@@ -23,7 +23,7 @@ import { isEventOnly } from "@/lib/forms/event/schemas";
     full application (course info, creator, presenters) + one MC question are
     captured in a per-session mini-wizard (inline-sessions/[sessionId]/...).
   - FULL_EVENT_QUIZ (Opt 1): each session is a full course application captured
-    inline (sessions/[sessionAppId]/...), plus a 5-question quiz.
+    inline (sessions/[sessionAppId]/...), plus one multiple-choice question.
 
   Both bill one application credit per session at submit.
 */
@@ -164,10 +164,10 @@ export default async function EventSessionsPage({
       <div className="mb-4 rounded-md border border-ver bg-ver-bg p-3 text-[12px] text-ver-dark text-pretty">
         Because you are not reusing these sessions as standalone courses, each one
         is accredited as its own course. Add every session below and complete its
-        full application (course info, creator, presenters, and a 5-question
-        quiz). Attendees complete every session and their certificate shows the
-        full event hours. Submitting the event uses one application credit per
-        session.
+        full application (course info, creator, presenters, and one multiple
+        choice question). Attendees answer one question per session and their
+        certificate shows the full event hours. Submitting the event uses one
+        application credit per session.
       </div>
 
       <div className="space-y-3">

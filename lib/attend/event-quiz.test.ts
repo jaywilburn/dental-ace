@@ -244,3 +244,51 @@ describe("buildPublicForm — SELECTIVE_INLINE (lightweight inline sessions)", (
     expect(JSON.stringify(item)).not.toContain("Jane Doe");
   });
 });
+
+// FULL_EVENT_QUIZ under the July 2026 single-question model: each session's
+// accredited course stores a 1-element MC quiz. The attendee answers one
+// question per session (full coverage), unchanged by the quiz being length 1.
+function singleMcCourseSession(id: string, title: string, hours: number, correctIndex: number) {
+  return {
+    id,
+    position: 0,
+    name: null,
+    durationHours: null,
+    question: null,
+    course: {
+      quizQuestions: [mc(correctIndex, `${title}?`)],
+      application: { courseTitle: title, ceHours: hours },
+    },
+  };
+}
+
+describe("FULL_EVENT_QUIZ (course-backed, single MC per session)", () => {
+  function fullEvent(): EventForAttend {
+    return baseEvent({
+      eventType: EventType.FULL_EVENT_QUIZ,
+      sessions: [
+        singleMcCourseSession("c1", "Session One", 1, 0),
+        singleMcCourseSession("c2", "Session Two", 2.5, 3),
+      ],
+    });
+  }
+
+  it("buildPublicForm asks one MC per session, in order, answers stripped", () => {
+    const form = buildPublicForm(fullEvent());
+    if (!form || form.mode !== "full") throw new Error("expected full form");
+    expect(form.questions.map((q) => q.question)).toEqual(["Session One?", "Session Two?"]);
+    for (const q of form.questions) {
+      expect(q).not.toHaveProperty("correctIndex");
+      expect(q).not.toHaveProperty("correctAnswer");
+    }
+  });
+
+  it("assembleForSubmit takes each session's single MC, with the full event hours", () => {
+    const a = assembleForSubmit(fullEvent(), []);
+    expect(a).not.toBeNull();
+    expect(a!.questions.map((q) => q.question)).toEqual(["Session One?", "Session Two?"]);
+    expect(a!.perSessionCredit).toBe(false);
+    expect(a!.passPct).toBe(0.7);
+    expect(a!.hours).toBe(10); // baseEvent totalHours
+  });
+});

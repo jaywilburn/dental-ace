@@ -7,6 +7,7 @@ import { approveEvent, rejectEvent } from "@/lib/reviewer/event-actions";
 import {
   isEventOnly,
   sessionCourseInfoReadSchema,
+  eventSessionApplicationReadSchema,
 } from "@/lib/forms/event/schemas";
 import {
   applicationDataReadSchema,
@@ -81,7 +82,9 @@ export default async function ReviewEventPage({
 
   // Full-course model: parse each session's full application for display.
   const sessionApps = event.sessionApplications.map((a) => {
-    const parsed = applicationDataReadSchema.safeParse(a.applicationData);
+    // Event sessions carry a single MC question, so parse with the event read
+    // schema (variable-length quiz); the shared read schema stays strict-5.
+    const parsed = eventSessionApplicationReadSchema.safeParse(a.applicationData);
     return { id: a.id, position: a.sessionPosition ?? 0, parsed };
   });
   const showSessionApps = eventOnly && sessionApps.length > 0;
