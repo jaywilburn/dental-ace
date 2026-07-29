@@ -1,11 +1,16 @@
 import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/portal-shell";
 import {
-  FormErrorBanner,
   FormInput,
   FormLabel,
   FormNav,
 } from "@/components/application-form/form-controls";
+import {
+  StepErrors,
+  FieldError,
+} from "@/components/application-form/field-errors";
+import { deriveStepErrors } from "@/lib/forms/field-errors";
+import { mcQuestionSchema } from "@/lib/forms/event/schemas";
 import { requireDentalAce } from "@/lib/auth/session";
 import { getInlineSession } from "@/lib/events/inline-session-data";
 import { saveInlineSessionQuestion } from "@/lib/events/inline-session-actions";
@@ -21,11 +26,11 @@ export default async function InlineSessionQuestionPage({
   searchParams,
 }: {
   params: Promise<{ sessionId: string }>;
-  searchParams: Promise<{ error?: string; detail?: string }>;
+  searchParams: Promise<{ error?: string }>;
 }) {
   await requireDentalAce();
   const { sessionId } = await params;
-  const { error, detail } = await searchParams;
+  const { error } = await searchParams;
   const session = await getInlineSession(sessionId);
   if (!session) redirect("/company/events/new/sessions");
   if (!session.data.presenters?.length) {
@@ -39,10 +44,17 @@ export default async function InlineSessionQuestionPage({
   const options = q.options ?? ["", "", "", ""];
   const correctIndex = q.correctIndex ?? 0;
 
+  // Re-derived from the question the failing action echoed back, so option_N
+  // errors land on the right box.
+  const errors =
+    error === "validation"
+      ? deriveStepErrors(mcQuestionSchema, { type: "MC", question: q.question ?? "", options, correctIndex })
+      : {};
+
   return (
     <>
       <PageHeader title="Event Session" subtitle="Step 4 of 4 — Question" />
-      {error === "validation" ? <FormErrorBanner detail={detail} /> : null}
+      <StepErrors error={error} errors={errors} />
       <form action={saveInlineSessionQuestion} className="space-y-5">
         <input type="hidden" name="sessionId" value={session.id} />
         <div className="space-y-4 rounded-lg border border-border bg-white p-5">
@@ -54,12 +66,15 @@ export default async function InlineSessionQuestionPage({
               Question (multiple choice)
             </FormLabel>
             <FormInput
+              id="question"
               name="question"
               defaultValue={q.question ?? ""}
               required
               minLength={5}
               maxLength={500}
+              aria-invalid={errors.question ? true : undefined}
             />
+            <FieldError messages={errors.question} />
           </div>
           <div>
             <span className="mb-1.5 block text-[11px] font-semibold text-text-mid">
@@ -82,6 +97,7 @@ export default async function InlineSessionQuestionPage({
                   />
                   <input
                     type="text"
+                    id={`option_${j}`}
                     name={`option_${j}`}
                     defaultValue={options[j] ?? ""}
                     placeholder={`Option ${j + 1}`}
@@ -92,6 +108,10 @@ export default async function InlineSessionQuestionPage({
                   />
                 </label>
               ))}
+              {[0, 1, 2, 3].map((j) => (
+                <FieldError key={`err${j}`} messages={errors[`option_${j}`]} />
+              ))}
+              <FieldError messages={errors.options} />
             </div>
           </div>
         </div>

@@ -2,6 +2,21 @@
 
 import { useRef, useState } from "react";
 import { cn } from "@/lib/utils";
+import {
+  DETAILED_BIO_PLAIN_MAX,
+  DETAILED_BIO_HTML_MAX,
+} from "@/lib/forms/application/bio-limits";
+
+/** Visible length of a stored HTML bio, for seeding the counter before the DOM
+ *  exists. Approximates the server's richTextPlainLength (which uses
+ *  sanitize-html, unavailable in the browser); once the user types, innerText
+ *  takes over and is exact. */
+function plainTextLength(html: string): number {
+  return html
+    .replace(/<[^>]*>/g, "")
+    .replace(/&nbsp;/g, " ")
+    .trim().length;
+}
 
 /*
   Minimal mobile-friendly rich text editor for the detailed bio (Step 2).
@@ -13,6 +28,13 @@ import { cn } from "@/lib/utils";
 
   44px touch targets and 16px body text (prevents iOS focus-zoom) keep it
   usable on phones.
+
+  PASTES ARE FORCED TO PLAIN TEXT. Word and Google Docs paste <span
+  style="mso-..."> soup and base64 data: images, which used to spend the whole
+  20,000-character HTML budget on markup the provider could not see, producing a
+  "too long" rejection on a visibly short bio. sanitize-html strips that
+  server-side, but only AFTER it has already blown the cap. Stripping at the
+  paste is the only place that fixes the cause.
 */
 
 const COMMANDS = [
@@ -27,15 +49,30 @@ export function RichTextEditor({
   name,
   defaultHtml = "",
   placeholder,
+  maxPlainLength = DETAILED_BIO_PLAIN_MAX,
+  maxHtmlLength = DETAILED_BIO_HTML_MAX,
+  invalid,
 }: {
   /** Form field name the HTML posts under. */
   name: string;
   /** Initial HTML; must already be sanitized by the caller. */
   defaultHtml?: string;
   placeholder?: string;
+  /** Visible-character ceiling, matching step2WriteSchema. */
+  maxPlainLength?: number;
+  /** Raw HTML ceiling, matching step2Schema. Only used to warn. */
+  maxHtmlLength?: number;
+  invalid?: boolean;
 }) {
   const editorRef = useRef<HTMLDivElement>(null);
   const [html, setHtml] = useState(defaultHtml);
+  const [plainLength, setPlainLength] = useState(() => plainTextLength(defaultHtml));
+
+  function sync() {
+    const el = editorRef.current;
+    setHtml(el?.innerHTML ?? "");
+    setPlainLength(el?.innerText.trim().length ?? 0);
+  }
 
   function exec(cmd: string) {
     editorRef.current?.focus();
@@ -43,13 +80,23 @@ export function RichTextEditor({
     // toggle inline formatting, and it works in every current browser
     // including iOS Safari.
     document.execCommand(cmd);
-    setHtml(editorRef.current?.innerHTML ?? "");
+    sync();
   }
 
-  const isEmpty = html.replace(/<[^>]*>/g, "").trim().length === 0;
+  const isEmpty = plainLength === 0;
+  const overPlain = plainLength > maxPlainLength;
+  const nearPlain = plainLength >= maxPlainLength * 0.9;
+  const heavyMarkup = html.length > maxHtmlLength * 0.9;
 
   return (
-    <div className="rounded-md border border-border bg-white focus-within:border-ace focus-within:ring-2 focus-within:ring-ace/30">
+    <div
+      className={cn(
+        "rounded-md border bg-white focus-within:ring-2",
+        invalid || overPlain
+          ? "border-red-400 focus-within:border-red-500 focus-within:ring-red-300/40"
+          : "border-border focus-within:border-ace focus-within:ring-ace/30",
+      )}
+    >
       <div className="flex flex-wrap gap-1 border-b border-border bg-surface p-1.5">
         {COMMANDS.map((c) => (
           <button
@@ -86,10 +133,44 @@ export function RichTextEditor({
           aria-multiline="true"
           aria-label="Detailed bio"
           suppressContentEditableWarning
-          onInput={() => setHtml(editorRef.current?.innerHTML ?? "")}
+          aria-invalid={invalid || overPlain || undefined}
+          aria-describedby={`${name}-count`}
+          onInput={sync}
+          onPaste={(e) => {
+            // Insert the clipboard's PLAIN text, dropping the source's markup
+            // and any embedded base64 images. See the note at the top of the
+            // file: this is what keeps the HTML cap meaningful.
+            e.preventDefault();
+            const text = e.clipboardData.getData("text/plain");
+            document.execCommand("insertText", false, text);
+            sync();
+          }}
           className="min-h-40 px-3 py-3 text-[16px] leading-relaxed text-navy outline-none [&_li]:ml-5 [&_ol]:list-decimal [&_ul]:list-disc"
           dangerouslySetInnerHTML={{ __html: defaultHtml }}
         />
+      </div>
+      <div
+        id={`${name}-count`}
+        aria-live="polite"
+        className="border-t border-border px-3 py-1.5 text-right text-[10px] tabular-nums"
+      >
+        <span
+          className={
+            overPlain
+              ? "text-red-600"
+              : nearPlain
+                ? "text-orange-600"
+                : "text-text-muted"
+          }
+        >
+          {plainLength.toLocaleString()} / {maxPlainLength.toLocaleString()} characters
+        </span>
+        {heavyMarkup ? (
+          <span className="ml-2 block text-orange-600">
+            Formatting is using a lot of space. Paste as plain text to keep the
+            bio under the limit.
+          </span>
+        ) : null}
       </div>
       <input type="hidden" name={name} value={html} />
     </div>

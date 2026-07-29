@@ -61,11 +61,11 @@ export default async function EventQualifiersPage({
           <div className="space-y-2 text-[13px] text-text-mid">
             <label className="flex items-start gap-2.5 rounded-md border border-border p-3">
               <input type="radio" name="reuse" value="EVENT_ONLY" defaultChecked={reuse !== "PER_COURSE"} className="mt-0.5" />
-              <span><strong className="text-navy">Only this time.</strong> The event is accredited as a single application (you list the sessions inside it).</span>
+              <span><strong className="text-navy">Only this time.</strong> The event is accredited as a single application (you list the sessions inside it) and uses one application credit.</span>
             </label>
             <label className="flex items-start gap-2.5 rounded-md border border-border p-3">
               <input type="radio" name="reuse" value="PER_COURSE" defaultChecked={reuse === "PER_COURSE"} className="mt-0.5" />
-              <span><strong className="text-navy">Reoffered individually later.</strong> Each session is accredited as its own course and attached to the event.</span>
+              <span><strong className="text-navy">Reoffered individually later.</strong> Each session is accredited as its own course and attached to the event, so the event itself uses no credits.</span>
             </label>
           </div>
         </fieldset>

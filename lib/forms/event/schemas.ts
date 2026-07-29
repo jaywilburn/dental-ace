@@ -49,13 +49,31 @@ export function isEventOnly(type: EventType): boolean {
   );
 }
 
+/**
+ * Application credits consumed when this event is submitted.
+ *
+ * Event-only types are accredited as ONE application no matter how many
+ * sessions they list, so they cost exactly one credit. Per-course types cost
+ * nothing (their courses were already paid for individually).
+ *
+ * Consumed by BOTH submitEvent and the review page so the amount charged and
+ * the amount quoted to the customer can never drift apart. Between 2026-06-30
+ * and 2026-07-29 submit charged one credit per session while the qualifier
+ * screen promised "accredited as a single application"; that mismatch billed an
+ * 8-session event 8 credits for a single Event ID.
+ */
+export function eventCreditCost(type: EventType): number {
+  return isEventOnly(type) ? 1 : 0;
+}
+
 /*
   Inline full-course path: each session is captured as a full CourseApplication
   inside the Event wizard and accredited as an event-scoped course. Since
   2026-07-21 this is FULL_EVENT_QUIZ only; SELECTIVE_INLINE reverted to the
   lightweight path (one event application whose sessions are Session/Question/
   Answer rows on event_sessions, one MC question each). Both event-only types
-  still bill one application credit per session at submit. Reviewer-side code
+  bill one application credit for the whole event at submit, no matter how many
+  sessions they list (see eventCreditCost). Reviewer-side code
   keys on data shape (pending session applications present or not) so
   SELECTIVE_INLINE events submitted under the full-course model keep working.
 */
@@ -81,8 +99,14 @@ export function isPerCourse(type: EventType): boolean {
 
 // Step: event details (name + free-form dates). Org/contact reuses orgStepSchema.
 export const eventDetailsSchema = z.object({
-  name: z.string().min(3).max(200),
-  eventDate: z.string().min(3).max(120),
+  name: z
+    .string()
+    .min(3, "Enter an event name.")
+    .max(200, "Keep the event name under 200 characters."),
+  eventDate: z
+    .string()
+    .min(3, "Enter the event date(s).")
+    .max(120, "Keep the event dates under 120 characters."),
 });
 
 // Step: the two qualifier answers.
@@ -94,8 +118,18 @@ export const qualifierSchema = z.object({
 // One multiple-choice question (Opt 3 inline sessions, and the event quiz MCs).
 export const mcQuestionSchema = z.object({
   type: z.literal("MC"),
-  question: z.string().min(5).max(500),
-  options: z.array(z.string().min(1).max(200)).length(4),
+  question: z
+    .string()
+    .min(5, "Write a question of at least 5 characters.")
+    .max(500, "Keep the question under 500 characters."),
+  options: z
+    .array(
+      z
+        .string()
+        .min(1, "Every answer option needs text.")
+        .max(200, "Keep each answer under 200 characters."),
+    )
+    .length(4),
   correctIndex: z.number().int().min(0).max(3),
 });
 
@@ -136,9 +170,13 @@ export const eventQuizSchema = z.object({
 */
 export const sessionCourseInfoSchema = step1Schema.extend({
   // Tighter than step1: certificates sum these per session.
-  ceCreditHours: z.number().min(0.5).max(40).refine(halfHour, {
-    message: "CE hours must be in 0.5 increments",
-  }),
+  ceCreditHours: z
+    .number()
+    .min(0.5, "Enter at least 0.5 CE hours for this session.")
+    .max(40, "Enter no more than 40 CE hours for one session.")
+    .refine(halfHour, {
+      message: "CE hours must be in 0.5 increments",
+    }),
 });
 export type SessionCourseInfo = z.infer<typeof sessionCourseInfoSchema>;
 
@@ -200,7 +238,10 @@ export function isInlineSessionComplete(s: {
 
 // Opt 2/4: attach existing approved courses by id.
 export const attachedCoursesSchema = z.object({
-  courseIds: z.array(z.string().uuid()).min(1).max(20),
+  courseIds: z
+    .array(z.string().uuid())
+    .min(1, "Select at least one approved course.")
+    .max(20, "You can attach up to 20 courses."),
 });
 
 /*

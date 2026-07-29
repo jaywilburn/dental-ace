@@ -1,7 +1,10 @@
 import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/portal-shell";
 import { ApplicationStepBar } from "@/components/application-form/step-bar";
-import { FormErrorBanner, FormNav } from "@/components/application-form/form-controls";
+import { FormNav } from "@/components/application-form/form-controls";
+import { StepErrors } from "@/components/application-form/field-errors";
+import { deriveStepErrors } from "@/lib/forms/field-errors";
+import { step1Schema } from "@/lib/forms/application/schemas";
 import { CourseFields } from "@/components/application-form/steps/course-fields";
 import { requireApplicationCredits } from "@/lib/company/credit-guards";
 import { ensureDraft, getDraftData, saveStep1 } from "@/lib/forms/application/actions";
@@ -13,14 +16,18 @@ import { ensureDraft, getDraftData, saveStep1 } from "@/lib/forms/application/ac
 export default async function ApplicationCourseInfoPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; detail?: string }>;
+  searchParams: Promise<{ error?: string }>;
 }) {
   const { credits: totalCredits } = await requireApplicationCredits();
-  const { error, detail } = await searchParams;
+  const { error } = await searchParams;
   const applicationId = await ensureDraft();
   const draft = await getDraftData(applicationId);
   if (!draft.organizationName) redirect("/company/applications/new");
 
+  // Errors are re-derived from the draft the failing action just echoed back,
+  // so they always line up with what is rendered below. Nothing is stored or
+  // passed through the URL, and a stale ?error= over a fixed draft yields none.
+  const errors = error === "validation" ? deriveStepErrors(step1Schema, draft) : {};
   return (
     <>
       <PageHeader
@@ -33,10 +40,10 @@ export default async function ApplicationCourseInfoPage({
         }
       />
       <ApplicationStepBar currentStep={2} />
-      {error === "validation" ? <FormErrorBanner detail={detail} /> : null}
+      <StepErrors error={error} errors={errors} />
       <form action={saveStep1} className="space-y-5">
         <input type="hidden" name="applicationId" value={applicationId} />
-        <CourseFields draft={draft} />
+        <CourseFields draft={draft} errors={errors} />
         <FormNav
           back={{ href: "/company/applications/new", label: "Back" }}
           nextLabel="Next: Course Creator"

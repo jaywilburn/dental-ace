@@ -3,6 +3,7 @@ import { EventType } from "@prisma/client";
 import {
   deriveEventType,
   isEventOnly,
+  eventCreditCost,
   isSelective,
   isPerCourse,
   isInlineFullCourse,
@@ -410,5 +411,29 @@ describe("eventSessionApplicationSchema (FULL_EVENT_QUIZ, single MC question)", 
         quiz: [{ type: "TF", question: "Only a true/false question?", correctAnswer: "True" }],
       }).success,
     ).toBe(false);
+  });
+});
+
+/*
+  Event billing. Regression guard for the 2026-06-30 -> 2026-07-29 defect where
+  submitEvent charged one credit PER SESSION while the qualifier screen promised
+  "accredited as a single application", billing an 8-session event 8 credits for
+  a single Event ID.
+*/
+describe("eventCreditCost", () => {
+  it("charges one credit for event-only types", () => {
+    expect(eventCreditCost(EventType.FULL_EVENT_QUIZ)).toBe(1);
+    expect(eventCreditCost(EventType.SELECTIVE_INLINE)).toBe(1);
+  });
+
+  it("charges nothing for per-course types (their courses were already paid)", () => {
+    expect(eventCreditCost(EventType.FULL_PER_COURSE)).toBe(0);
+    expect(eventCreditCost(EventType.SELECTIVE_PER_COURSE)).toBe(0);
+  });
+
+  it("agrees with isEventOnly for every event type", () => {
+    for (const type of Object.values(EventType)) {
+      expect(eventCreditCost(type)).toBe(isEventOnly(type) ? 1 : 0);
+    }
   });
 });

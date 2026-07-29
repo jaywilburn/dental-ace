@@ -12,13 +12,19 @@ import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import {
   orgStepSchema,
   step1Schema,
-  step2Schema,
   step3Schema,
   step4Schema,
   applicationDataSchema,
   type ApplicationData,
   type FileRef,
 } from "@/lib/forms/application/schemas";
+import { step2WriteSchema } from "@/lib/forms/application/write-schemas";
+import {
+  orgRawFromForm,
+  courseInfoRawFromForm,
+  creatorRawFromForm,
+  presentersRawFromForm,
+} from "@/lib/forms/application/form-mapping";
 import {
   uploadMetaSchema,
   validateUpload,
@@ -26,10 +32,7 @@ import {
   buildAttachmentPath,
   type AttachmentField,
 } from "@/lib/forms/application/upload-schema";
-import {
-  sanitizeRichText,
-  richTextPlainLength,
-} from "@/lib/forms/application/rich-text";
+import { sanitizeRichText } from "@/lib/forms/application/rich-text";
 import { quizFromFormData } from "@/lib/forms/application/quiz-form";
 import { mergeApplicationStep } from "@/lib/forms/application/merge-step";
 import { sendEmail } from "@/lib/email/send";
@@ -122,14 +125,7 @@ export async function saveOrgStep(formData: FormData) {
   const applicationId = String(formData.get("applicationId") ?? "");
   if (!applicationId) throw new Error("Missing applicationId");
 
-  const raw = {
-    organizationName: String(formData.get("organizationName") ?? ""),
-    organizationAddress: String(formData.get("organizationAddress") ?? ""),
-    adminName: String(formData.get("adminName") ?? ""),
-    adminEmail: String(formData.get("adminEmail") ?? ""),
-    adminPhone: String(formData.get("adminPhone") ?? ""),
-  };
-  await mergeStep(applicationId, orgStepSchema, raw, STEP_ROUTES[0]);
+  await mergeStep(applicationId, orgStepSchema, orgRawFromForm(formData), STEP_ROUTES[0]);
   redirect(STEP_ROUTES[1]);
 }
 
@@ -137,54 +133,28 @@ export async function saveStep1(formData: FormData) {
   const applicationId = String(formData.get("applicationId") ?? "");
   if (!applicationId) throw new Error("Missing applicationId");
 
-  const raw = {
-    courseTitle: String(formData.get("courseTitle") ?? ""),
-    ceCreditHours: Number(formData.get("ceCreditHours") ?? 0),
-    subjectMatter: String(formData.get("subjectMatter") ?? ""),
-    deliveryFormat: String(formData.get("deliveryFormat") ?? ""),
-    primaryDistributionFormat: String(formData.get("primaryDistributionFormat") ?? ""),
-    shortDescription: String(formData.get("shortDescription") ?? ""),
-    publicProtectionStatement: String(formData.get("publicProtectionStatement") ?? ""),
-    courseObjectives: String(formData.get("courseObjectives") ?? ""),
-    courseOutline: String(formData.get("courseOutline") ?? ""),
-  };
-  await mergeStep(applicationId, step1Schema, raw, STEP_ROUTES[1]);
+  await mergeStep(applicationId, step1Schema, courseInfoRawFromForm(formData), STEP_ROUTES[1]);
   redirect(STEP_ROUTES[2]);
 }
 
 export async function saveStep2(formData: FormData) {
   const applicationId = String(formData.get("applicationId") ?? "");
   if (!applicationId) throw new Error("Missing applicationId");
-  // The rich-text bio is sanitized before validation or storage; the visible
-  // text (tags stripped) must meet the same 20-character floor the old
-  // plain-text bio had.
+
+  // Sanitize before validation or storage, so the draft echo can never persist
+  // raw pasted markup. The visible-text floor and ceiling live in
+  // step2WriteSchema; they used to be an ad-hoc pre-check here that redirected
+  // BEFORE the merge helper ran, which bypassed the echo and blanked all 13
+  // creator fields.
   const detailedBioHtml = sanitizeRichText(
     String(formData.get("detailedBioHtml") ?? ""),
   );
-  if (richTextPlainLength(detailedBioHtml) < 20) {
-    redirect(
-      `${STEP_ROUTES[2]}?error=validation&detail=${encodeURIComponent(
-        "Detailed bio: please write at least 20 characters.",
-      )}`,
-    );
-  }
-
-  const raw = {
-    creatorName: String(formData.get("creatorName") ?? ""),
-    credentials: String(formData.get("credentials") ?? ""),
-    currentPosition: String(formData.get("currentPosition") ?? ""),
-    detailedBioHtml,
-    creatorEmail: String(formData.get("creatorEmail") ?? ""),
-    creatorPhone: String(formData.get("creatorPhone") ?? ""),
-    creatorAddress: String(formData.get("creatorAddress") ?? ""),
-    highestDegree: String(formData.get("highestDegree") ?? ""),
-    educationPart1: String(formData.get("educationPart1") ?? ""),
-    educationPart2: String(formData.get("educationPart2") ?? "") || undefined,
-    educationPart3: String(formData.get("educationPart3") ?? "") || undefined,
-    educationPart4: String(formData.get("educationPart4") ?? "") || "N/A",
-    creatorExperience: String(formData.get("creatorExperience") ?? ""),
-  };
-  await mergeStep(applicationId, step2Schema, raw, STEP_ROUTES[2]);
+  await mergeStep(
+    applicationId,
+    step2WriteSchema,
+    creatorRawFromForm(formData, detailedBioHtml),
+    STEP_ROUTES[2],
+  );
   redirect(STEP_ROUTES[3]);
 }
 
@@ -192,19 +162,14 @@ export async function saveStep3(formData: FormData) {
   const applicationId = String(formData.get("applicationId") ?? "");
   if (!applicationId) throw new Error("Missing applicationId");
 
-  // We expect form fields named presenter_<idx>_<field>. For simplicity Phase 1
-  // ships a single primary presenter; multi-presenter UI lands later.
-  const presenters = [
-    {
-      name: String(formData.get("presenter_0_name") ?? ""),
-      role: String(formData.get("presenter_0_role") ?? "Primary Presenter"),
-      commercialDisclosure: String(formData.get("presenter_0_commercialDisclosure") ?? ""),
-      experience: String(formData.get("presenter_0_experience") ?? ""),
-      training: String(formData.get("presenter_0_training") ?? ""),
-      bio: String(formData.get("presenter_0_bio") ?? ""),
-    },
-  ];
-  await mergeStep(applicationId, step3Schema, { presenters }, STEP_ROUTES[3]);
+  // Fields are named presenter_<idx>_<field>. Phase 1 ships a single primary
+  // presenter; multi-presenter UI lands later.
+  await mergeStep(
+    applicationId,
+    step3Schema,
+    presentersRawFromForm(formData),
+    STEP_ROUTES[3],
+  );
   redirect(STEP_ROUTES[4]);
 }
 
@@ -245,11 +210,10 @@ export async function submitApplication(formData: FormData) {
   // Full revalidation: every step's required fields must be present.
   const fullParse = applicationDataSchema.safeParse(draft.applicationData);
   if (!fullParse.success) {
-    redirect(
-      `${STEP_ROUTES[0]}?error=validation&detail=${encodeURIComponent(
-        "Some required fields are missing or incomplete. Walk through each step and re-save.",
-      )}`,
-    );
+    // "incomplete", not "validation": the failure is across the whole
+    // application, so the step we land on would re-derive its own schema and
+    // correctly find nothing wrong. StepErrors renders a fixed message for this.
+    redirect(`${STEP_ROUTES[0]}?error=incomplete`);
   }
   const fullData = fullParse.data;
 
