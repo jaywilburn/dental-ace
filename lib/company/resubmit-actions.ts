@@ -6,6 +6,7 @@ import { Prisma } from "@prisma/client";
 import { getCurrentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { stripLegacyStubKeys } from "@/lib/forms/application/legacy";
+import { canRevise, revisePatch } from "@/lib/company/resubmit-rules";
 
 /*
   Provider-side "revise and resubmit" for a rejected submission.
@@ -49,22 +50,16 @@ export async function reviseEvent(formData: FormData): Promise<void> {
     select: { id: true, status: true, eventType: true },
   });
   if (!event) redirect("/company/events?error=revise_not_found");
-  if (event.status !== "REJECTED") {
+  if (!canRevise(event.status)) {
     redirect("/company/events?error=revise_not_allowed");
   }
 
   await prisma.$transaction(async (tx) => {
     const updated = await tx.event.updateMany({
       where: { id: eventId, companyId, status: "REJECTED" },
-      data: {
-        status: "DRAFT",
-        // Clear the decision: it no longer stands, and leaving the attribution
-        // would show a stale reviewer on the next pass. reviewerNotes is KEPT
-        // so the provider can see what to fix while editing, and
-        // creditChargedAt is never cleared, which is what keeps this free.
-        reviewedAt: null,
-        reviewedById: null,
-      },
+      // reviewerNotes, submittedAt and creditChargedAt are deliberately
+      // untouched; see revisePatch.
+      data: revisePatch(),
     });
     if (updated.count !== 1) throw new Error("Event status changed during revise");
 
@@ -101,7 +96,7 @@ export async function resubmitApplication(formData: FormData): Promise<void> {
     },
   });
   if (!app) redirect("/company/courses?error=revise_not_found");
-  if (app.status !== "REJECTED") {
+  if (!canRevise(app.status)) {
     redirect("/company/courses?error=revise_not_allowed");
   }
 

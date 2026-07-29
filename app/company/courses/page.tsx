@@ -15,6 +15,13 @@ const RENEW_ERRORS: Record<string, string> = {
   already_renewed: "That course has already been renewed.",
   renewal_in_progress: "A renewal for that course is already in progress.",
   renew_failed: "Could not start the renewal. Please try again.",
+  // Revise-and-resubmit (lib/company/resubmit-actions.ts).
+  revise_not_found: "That application could not be found.",
+  revise_not_allowed:
+    "Only a rejected application can be revised. This one is not rejected.",
+  revise_in_progress:
+    "You already have a revision of that application in progress. Finish it from the wizard.",
+  revise_failed: "Could not start the revision. Please try again.",
 };
 
 /*

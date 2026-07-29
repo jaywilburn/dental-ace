@@ -62,11 +62,11 @@ export default async function ReviewEventPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ error?: string; expand?: string }>;
+  searchParams: Promise<{ error?: string; expand?: string; ok?: string }>;
 }) {
   await requireStaff("REVIEWER");
   const { id } = await params;
-  const { error, expand } = await searchParams;
+  const { error, expand, ok } = await searchParams;
   const expanded = expand !== "collapsed";
 
   const event = await prisma.event.findUnique({
@@ -150,6 +150,17 @@ export default async function ReviewEventPage({
           </Link>
         }
       />
+
+      {ok === "reopened" ? (
+        <div
+          role="status"
+          className="mb-4 rounded-md border border-green-300 bg-green-50 px-4 py-2.5 text-[12px] text-green-800"
+        >
+          This event is back in the review queue. The provider has been told it
+          is under review again, and the original rejection reason is kept below
+          for context.
+        </div>
+      ) : null}
 
       <div className="space-y-4">
         <div className="rounded-lg border border-border bg-white p-5 text-[12px]">

@@ -35,11 +35,11 @@ export default async function ReviewerApplicationPage({
   searchParams,
 }: {
   params: Promise<{ applicationId: string }>;
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; ok?: string }>;
 }) {
   await requireStaff("REVIEWER");
   const { applicationId } = await params;
-  const { error } = await searchParams;
+  const { error, ok } = await searchParams;
 
   const app = await prisma.courseApplication.findUnique({
     where: { id: applicationId },
@@ -132,6 +132,16 @@ export default async function ReviewerApplicationPage({
           </Link>
         }
       />
+
+      {ok === "reopened" ? (
+        <div
+          role="status"
+          className="mb-4 rounded-md border border-green-300 bg-green-50 px-4 py-2.5 text-[12px] text-green-800"
+        >
+          This application is back in the review queue and the provider has been
+          notified.
+        </div>
+      ) : null}
 
       <div className="grid gap-5 lg:grid-cols-[2fr_1fr]">
         <div className="space-y-5">

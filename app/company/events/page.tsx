@@ -26,13 +26,28 @@ const TYPE_SHORT: Record<EventType, string> = {
   SELECTIVE_PER_COURSE: "Selective · reused",
 };
 
+/* Every ?error= this page can be redirected to, from ensureEventDraft and
+   lib/company/resubmit-actions.ts. Without these the redirects were silent:
+   the provider landed here with a query param and no explanation, which is the
+   same dead end the attendee form had. */
+const EVENT_ERRORS: Record<string, string> = {
+  draft_not_found:
+    "That event draft could not be opened. It may already have been submitted, or it belongs to another company.",
+  multiple_drafts:
+    "You have more than one event in progress. Open the one you want from the list below.",
+  revise_not_found: "That event could not be found.",
+  revise_not_allowed:
+    "Only a rejected event can be revised. This one is not rejected.",
+  revise_failed: "Could not start the revision. Please try again.",
+};
+
 export default async function EventsIndexPage({
   searchParams,
 }: {
-  searchParams: Promise<{ just?: string }>;
+  searchParams: Promise<{ just?: string; error?: string }>;
 }) {
   const user = await requireDentalAce();
-  const { just } = await searchParams;
+  const { just, error } = await searchParams;
 
   const company = user.companyId
     ? await prisma.company.findUnique({ where: { id: user.companyId }, select: { name: true } })
@@ -90,6 +105,15 @@ export default async function EventsIndexPage({
       {just === "submitted" ? (
         <div className="mb-4 rounded-md border border-emerald-400 bg-emerald-50 px-4 py-2.5 text-[13px] text-emerald-700">
           ✓ Event submitted for review.
+        </div>
+      ) : null}
+
+      {error ? (
+        <div
+          role="alert"
+          className="mb-4 rounded-md border border-red-300 bg-red-50 px-4 py-2.5 text-[12px] text-red-700"
+        >
+          {EVENT_ERRORS[error] ?? "Something went wrong. Please try again."}
         </div>
       ) : null}
 
