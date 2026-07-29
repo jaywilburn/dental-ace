@@ -15,7 +15,16 @@ import {
   bounce credit-less companies to the Buy App Credits page.
 */
 
-export async function requireApplicationCredits(): Promise<{
+export async function requireApplicationCredits(opts?: {
+  /**
+   * The draft being edited. When that application's credit is already settled
+   * (a revision after a review decision), the balance check is skipped: the
+   * resubmit is free, so a company at zero credits must still be able to open
+   * the wizard. Without this, "revise and resubmit" would bounce the provider
+   * to the buy page and the free-resubmit policy would be unreachable.
+   */
+  applicationId?: string;
+}): Promise<{
   user: SessionUser;
   credits: CompanyCredits;
 }> {
@@ -26,8 +35,20 @@ export async function requireApplicationCredits(): Promise<{
     where: { id: user.companyId },
     select: { applicationCredits: true },
   });
-  if (!credits || !hasAvailableCredits(credits)) {
-    redirect("/company/buy/credits?need=credits");
+  if (!credits) redirect("/company/buy/credits?need=credits");
+
+  if (!hasAvailableCredits(credits)) {
+    const settled = opts?.applicationId
+      ? await prisma.courseApplication.findFirst({
+          where: {
+            id: opts.applicationId,
+            companyId: user.companyId,
+            creditChargedAt: { not: null },
+          },
+          select: { id: true },
+        })
+      : null;
+    if (!settled) redirect("/company/buy/credits?need=credits");
   }
   return { user, credits };
 }

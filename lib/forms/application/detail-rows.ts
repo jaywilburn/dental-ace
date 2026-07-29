@@ -17,7 +17,22 @@ export type DetailRow = {
   html?: boolean;
 };
 
-export function organizationRows(data: ApplicationDataRead): DetailRow[] {
+/**
+ * The org/contact slice, as a structural type rather than the full
+ * ApplicationDataRead. Events keep these fields on `Event.eventData`, not in an
+ * application blob, so the reviewer event page can feed the same builder
+ * without inventing a fake application. ApplicationDataRead is assignable to
+ * this, so every existing caller keeps working unchanged.
+ */
+export type OrganizationFields = {
+  organizationName?: string;
+  organizationAddress?: string;
+  adminName?: string;
+  adminEmail?: string;
+  adminPhone?: string;
+};
+
+export function organizationRows(data: OrganizationFields): DetailRow[] {
   return [
     ...(data.organizationName ? [{ label: "Organization", value: data.organizationName, full: true }] : []),
     ...(data.organizationAddress ? [{ label: "Address", value: data.organizationAddress, full: true }] : []),

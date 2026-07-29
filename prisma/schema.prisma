@@ -223,6 +223,11 @@ enum AdminAuditAction {
   LETTER_SETTINGS_UPDATED
   COMPANY_RENAMED
   COURSE_QUIZ_UPDATED
+  // A reviewer or admin reversed a REJECTED decision, putting the item back in
+  // the queue. Written by lib/reviewer/reopen-actions.ts with targetUserId null
+  // (the subject is an event/application, not a user); details carries the
+  // entity, its id, and the decision that was reversed.
+  REVIEW_REOPENED
 }
 
 model AdminAuditLog {
@@ -340,6 +345,19 @@ model CourseApplication {
   renewalOfCourseId String?           @map("renewal_of_course_id") @db.Uuid
   renewalOfCourse   AccreditedCourse? @relation("CourseRenewals", fields: [renewalOfCourseId], references: [id])
 
+  // Set the first time this application's credit is taken. submitApplication
+  // charges iff null, so revising after a decision is free (client decision
+  // 2026-07-29). A resubmit clone copies it from its parent, which is what
+  // makes the revision free; a RENEWAL clone deliberately leaves it null,
+  // because a renewal is a new accreditation and is charged.
+  creditChargedAt   DateTime?         @map("credit_charged_at")
+
+  // When set, this application is a revision of a rejected one. Mirrors
+  // renewalOfCourseId, and gates against starting two revisions at once.
+  resubmitOfId      String?            @map("resubmit_of_id") @db.Uuid
+  resubmitOf        CourseApplication? @relation("ApplicationResubmits", fields: [resubmitOfId], references: [id])
+  resubmissions     CourseApplication[] @relation("ApplicationResubmits")
+
   // When set, this is an inline, event-scoped session application captured in the
   // Event wizard (event-only full-course path). It is NOT a reusable standalone
   // course: excluded from /company/courses, the event attach picker, the standalone
@@ -352,6 +370,7 @@ model CourseApplication {
   @@index([companyId, status])
   @@index([status, submittedAt])
   @@index([renewalOfCourseId])
+  @@index([resubmitOfId])
   @@index([eventId])
   @@map("course_applications")
 }
@@ -428,6 +447,10 @@ model Event {
   reviewedBy        User?             @relation("EventReviewedBy", fields: [reviewedById], references: [id])
   reviewedAt        DateTime?         @map("reviewed_at")
   reviewerNotes     String?           @map("reviewer_notes")
+  // Set the first time this event's application credit is taken. submitEvent
+  // charges iff this is null, so revising after a decision is free (client
+  // decision 2026-07-29). Never cleared, including by a staff reopen.
+  creditChargedAt   DateTime?         @map("credit_charged_at")
   certsIssuedCount  Int               @default(0) @map("certs_issued_count")
   createdAt         DateTime          @default(now()) @map("created_at")
 

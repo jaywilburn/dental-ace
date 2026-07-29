@@ -35,6 +35,12 @@ import { normalizeFormText } from "@/lib/forms/normalize";
 
 const SESSIONS_LIST = "/company/events/new/sessions";
 
+/** The sessions list for a specific event. A revised event is reachable only by
+ *  explicit id, so returning to the bare list would open a different draft. */
+function sessionsList(eventId: string): string {
+  return `${SESSIONS_LIST}?eventId=${eventId}`;
+}
+
 /** Per-session sub-wizard step routes, keyed by the session application id. */
 function sessionStep(sessionAppId: string, step: "course" | "creator" | "presenters" | "quiz") {
   return `${SESSIONS_LIST}/${sessionAppId}/${step}`;
@@ -130,7 +136,7 @@ export async function removeSessionApplication(formData: FormData) {
   });
 
   revalidatePath(SESSIONS_LIST);
-  redirect(SESSIONS_LIST);
+  redirect(sessionsList(eventId));
 }
 
 /** Persist a new ordering of the event's session applications. */
@@ -159,7 +165,7 @@ export async function reorderSessionApplications(formData: FormData) {
   });
 
   revalidatePath(SESSIONS_LIST);
-  redirect(SESSIONS_LIST);
+  redirect(sessionsList(eventId));
 }
 
 // --- Per-session step savers (reuse the standalone wizard's schemas) ---

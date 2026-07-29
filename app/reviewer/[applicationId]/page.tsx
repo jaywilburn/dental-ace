@@ -21,6 +21,7 @@ import {
   QuizPreviewCard,
 } from "@/components/application-form/detail-section";
 import { approveApplication, rejectApplication } from "@/lib/reviewer/actions";
+import { reopenApplication } from "@/lib/reviewer/reopen-actions";
 
 /*
   Application review detail. Shows all fields read-only with approve/reject
@@ -34,11 +35,11 @@ export default async function ReviewerApplicationPage({
   searchParams,
 }: {
   params: Promise<{ applicationId: string }>;
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; ok?: string }>;
 }) {
   await requireStaff("REVIEWER");
   const { applicationId } = await params;
-  const { error } = await searchParams;
+  const { error, ok } = await searchParams;
 
   const app = await prisma.courseApplication.findUnique({
     where: { id: applicationId },
@@ -132,6 +133,16 @@ export default async function ReviewerApplicationPage({
         }
       />
 
+      {ok === "reopened" ? (
+        <div
+          role="status"
+          className="mb-4 rounded-md border border-green-300 bg-green-50 px-4 py-2.5 text-[12px] text-green-800"
+        >
+          This application is back in the review queue and the provider has been
+          notified.
+        </div>
+      ) : null}
+
       <div className="grid gap-5 lg:grid-cols-[2fr_1fr]">
         <div className="space-y-5">
           <DetailSection title="Organization & Contact" rows={organizationRows(data)} />
@@ -215,6 +226,29 @@ export default async function ReviewerApplicationPage({
               <p className="mb-1 font-semibold text-navy">
                 Already {app.status.toLowerCase()}
               </p>
+              {app.status === "REJECTED" ? (
+                <form action={reopenApplication} className="mt-3 space-y-2 border-t border-border pt-3">
+                  <input type="hidden" name="applicationId" value={app.id} />
+                  <label className="block text-[11px] font-semibold text-text-mid">
+                    Reopen for review (reason recorded in the audit log, not sent
+                    to the provider)
+                  </label>
+                  <textarea
+                    name="reason"
+                    required
+                    minLength={10}
+                    rows={2}
+                    className="w-full rounded-md border border-border px-3 py-2 text-[12px] text-navy outline-none focus:border-ace focus:ring-2 focus:ring-ace/30"
+                    placeholder="e.g. Rejected in error; the application was complete."
+                  />
+                  <button
+                    type="submit"
+                    className="rounded-md bg-navy px-4 py-2 text-[12px] font-semibold text-white transition-colors hover:bg-navy/90"
+                  >
+                    Reopen for review
+                  </button>
+                </form>
+              ) : null}
               <p className="text-text-mid">
                 Reviewed{" "}
                 {app.reviewedAt?.toLocaleDateString("en-US", {

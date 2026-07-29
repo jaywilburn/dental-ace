@@ -26,11 +26,11 @@ import { ensureEventDraft, getEventDraft, saveEventDetails } from "@/lib/events/
 export default async function EventDetailsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; eventId?: string }>;
 }) {
   const user = await requireDentalAce();
-  const { error } = await searchParams;
-  const eventId = await ensureEventDraft();
+  const { error, eventId: eventIdParam } = await searchParams;
+  const eventId = await ensureEventDraft(eventIdParam);
   const draft = await getEventDraft(eventId);
 
   const company = user.companyId

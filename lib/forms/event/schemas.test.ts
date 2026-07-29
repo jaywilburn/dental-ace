@@ -4,6 +4,7 @@ import {
   deriveEventType,
   isEventOnly,
   eventCreditCost,
+  eventOrgFields,
   isSelective,
   isPerCourse,
   isInlineFullCourse,
@@ -435,5 +436,65 @@ describe("eventCreditCost", () => {
     for (const type of Object.values(EventType)) {
       expect(eventCreditCost(type)).toBe(isEventOnly(type) ? 1 : 0);
     }
+  });
+});
+
+/*
+  Org/contact extraction for the read-only event detail views. A reviewer
+  rejected a complete event on 2026-07-29 asking "Where is the information
+  about the company?" because these fields were never rendered.
+*/
+describe("eventOrgFields", () => {
+  const FULL = {
+    organizationName: "Smile Together",
+    organizationAddress: "1211 W 6th Street, Suite 600-116\nAustin, TX 78703",
+    adminName: "Julia Behr",
+    adminEmail: "julia@example.com",
+    adminPhone: "512-538-4095",
+    coverage: "SELECTIVE",
+  };
+
+  it("extracts every org field and ignores unrelated keys", () => {
+    expect(eventOrgFields(FULL)).toEqual({
+      organizationName: "Smile Together",
+      organizationAddress: "1211 W 6th Street, Suite 600-116\nAustin, TX 78703",
+      adminName: "Julia Behr",
+      adminEmail: "julia@example.com",
+      adminPhone: "512-538-4095",
+    });
+  });
+
+  // The load-bearing case. orgStepSchema.partial() would run .email() and drop
+  // the whole object, blanking the section over one bad address. Drafts echo
+  // raw input back on validation failure, so half-valid org data is normal.
+  it("keeps sibling fields when the email is malformed", () => {
+    const out = eventOrgFields({ ...FULL, adminEmail: "not-an-email" });
+    expect(out.organizationName).toBe("Smile Together");
+    expect(out.adminPhone).toBe("512-538-4095");
+    expect(out.adminEmail).toBe("not-an-email");
+  });
+
+  it("omits blank and whitespace-only values rather than rendering empty rows", () => {
+    const out = eventOrgFields({ organizationName: "  ", adminName: "", adminPhone: "555" });
+    expect(out.organizationName).toBeUndefined();
+    expect(out.adminName).toBeUndefined();
+    expect(out.adminPhone).toBe("555");
+  });
+
+  it("trims surrounding whitespace", () => {
+    expect(eventOrgFields({ adminName: "  Julia Behr  " }).adminName).toBe("Julia Behr");
+  });
+
+  it("never throws on junk input", () => {
+    for (const junk of [null, undefined, "str", 5, [], { adminEmail: 42 }]) {
+      expect(() => eventOrgFields(junk)).not.toThrow();
+    }
+    expect(eventOrgFields(null)).toEqual({
+      organizationName: undefined,
+      organizationAddress: undefined,
+      adminName: undefined,
+      adminEmail: undefined,
+      adminPhone: undefined,
+    });
   });
 });

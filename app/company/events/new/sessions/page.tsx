@@ -32,11 +32,12 @@ import { prisma } from "@/lib/prisma";
 export default async function EventSessionsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; detail?: string }>;
+  searchParams: Promise<{ error?: string; detail?: string; eventId?: string }>;
 }) {
   const user = await requireDentalAce();
-  const { error, detail } = await searchParams;
-  const eventId = await ensureEventDraft();
+  const { error, detail, eventId: eventIdParam } = await searchParams;
+  const idQ = eventIdParam ? `?eventId=${eventIdParam}` : "";
+  const eventId = await ensureEventDraft(eventIdParam);
   const draft = await getEventDraft(eventId);
   if (!draft?.eventType) redirect("/company/events/new/qualifiers");
   if (!isEventOnly(draft.eventType)) {
@@ -153,14 +154,14 @@ export default async function EventSessionsPage({
 
         <div className="mt-6 flex items-center justify-between">
           <Link
-            href="/company/events/new/qualifiers"
+            href={`/company/events/new/qualifiers${idQ}`}
             className="text-[13px] font-semibold text-text-muted hover:text-navy"
           >
             ← Back
           </Link>
           {inline.length > 0 && completeCount === inline.length ? (
             <Link
-              href="/company/events/new/review"
+              href={`/company/events/new/review${idQ}`}
               className="rounded-md bg-navy px-4 py-2.5 text-[13px] font-semibold text-white transition-colors hover:bg-navy/90"
             >
               Next: Review &amp; Submit
@@ -259,14 +260,14 @@ export default async function EventSessionsPage({
 
       <div className="mt-6 flex items-center justify-between">
         <Link
-          href="/company/events/new/qualifiers"
+          href={`/company/events/new/qualifiers${idQ}`}
           className="text-[13px] font-semibold text-text-muted hover:text-navy"
         >
           ← Back
         </Link>
         {sessions.length > 0 && completeCount === sessions.length ? (
           <Link
-            href="/company/events/new/review"
+            href={`/company/events/new/review${idQ}`}
             className="rounded-md bg-navy px-4 py-2.5 text-[13px] font-semibold text-white transition-colors hover:bg-navy/90"
           >
             Next: Review &amp; Submit

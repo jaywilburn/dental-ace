@@ -1,9 +1,17 @@
 import { Section, Text } from "@react-email/components";
-import { BrandEmail, DetailGrid, emailColors } from "./_brand";
+import { BrandEmail, CtaButton, DetailGrid, emailColors } from "./_brand";
 
 /*
-  Course-rejected email sent to the company. Reviewer feedback is inline.
-  No attachments. Credit is NOT refunded (per PRD/SOW).
+  Rejection email sent to the company, for BOTH course applications and events
+  (rejectEvent reuses this template with an "Event: <name>" title).
+
+  No attachments. The original credit is not refunded, and NO new credit is
+  charged to revise and resubmit (client decision 2026-07-29, reversing the
+  PRD/SOW line this copy used to state). The gate is creditChargedAt on
+  Event / CourseApplication; see lib/company/resubmit-actions.ts.
+
+  revisionUrl is required: this template previously had no call to action at
+  all, so a provider was told to resubmit with no way to reach the thing.
 */
 
 export type ApplicationRejectedProps = {
@@ -12,6 +20,8 @@ export type ApplicationRejectedProps = {
   submittedAt: string;
   decisionAt: string;
   reviewerFeedback: string;
+  /** Deep link to the rejected item, where the Revise button lives. */
+  revisionUrl: string;
 };
 
 export default function ApplicationRejectedEmail({
@@ -20,6 +30,7 @@ export default function ApplicationRejectedEmail({
   submittedAt,
   decisionAt,
   reviewerFeedback,
+  revisionUrl,
 }: ApplicationRejectedProps) {
   return (
     <BrandEmail
@@ -88,8 +99,21 @@ export default function ApplicationRejectedEmail({
           lineHeight: 1.65,
         }}
       >
-        You may resubmit a revised application. A new application credit will be
-        required. Please contact AADB if you have questions about this decision.
+        You can revise and resubmit this at no additional cost. Your original
+        application credit still covers it, so no new credit is required. Open
+        it below to read the full reviewer feedback and start your revision.
+      </Text>
+      <CtaButton href={revisionUrl} label="Revise and Resubmit →" />
+      <Text
+        style={{
+          margin: 0,
+          fontSize: 13,
+          color: emailColors.textMid,
+          lineHeight: 1.65,
+        }}
+      >
+        If you have questions about this decision, contact us at
+        info@dentalace.org.
       </Text>
     </BrandEmail>
   );

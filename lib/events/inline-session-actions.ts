@@ -39,6 +39,12 @@ import { normalizeFormText } from "@/lib/forms/normalize";
 
 const SESSIONS_LIST = "/company/events/new/sessions";
 
+/** The sessions list for a specific event. A revised event is reachable only by
+ *  explicit id, so returning to the bare list would open a different draft. */
+function sessionsList(eventId: string): string {
+  return `${SESSIONS_LIST}?eventId=${eventId}`;
+}
+
 type InlineStep = "course" | "creator" | "presenters" | "question";
 
 function sessionStep(sessionId: string, step: InlineStep): string {
@@ -211,7 +217,7 @@ export async function removeInlineSession(formData: FormData) {
   });
 
   revalidatePath(SESSIONS_LIST);
-  redirect(SESSIONS_LIST);
+  redirect(sessionsList(eventId));
 }
 
 // --- Per-session mini-wizard step savers ---
@@ -296,6 +302,11 @@ export async function saveInlineSessionQuestion(formData: FormData) {
   // re-derive the errors instead of blanking the form.
   const echo = result.success ? null : sanitizeEcho(question);
   const value = echo ? echo.value : result.data;
+  const owned = await prisma.eventSession.findFirst({
+    where: { id: sessionId, courseId: null, event: { companyId, status: "DRAFT" } },
+    select: { eventId: true },
+  });
+  if (!owned) throw new Error("Session not found");
   const res = await prisma.eventSession.updateMany({
     where: {
       id: sessionId,
@@ -313,5 +324,5 @@ export async function saveInlineSessionQuestion(formData: FormData) {
   }
 
   revalidatePath(SESSIONS_LIST);
-  redirect(SESSIONS_LIST);
+  redirect(sessionsList(owned.eventId));
 }

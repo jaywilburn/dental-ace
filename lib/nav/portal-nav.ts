@@ -52,7 +52,7 @@ export const portalNav: Record<PortalArea, NavSection[]> = {
     {
       items: [
         { label: "Review Queue", href: "/reviewer", icon: "📋" },
-        { label: "Approved Courses", href: "/reviewer/approved", icon: "✅" },
+        { label: "Approved", href: "/reviewer/approved", icon: "✅" },
         { label: "Rejected", href: "/reviewer/rejected", icon: "❌" },
       ],
     },

@@ -20,8 +20,10 @@ import { AttachmentsCard } from "@/components/application-form/attachments-card"
 */
 export default async function ApplicationStep5Page() {
   // Redirects to /company/buy/credits when the company holds no credits.
-  const { credits: company } = await requireApplicationCredits();
+  // ensureDraft FIRST: a revision after a rejection is free, so the credit
+  // guard needs the application id to know it may skip the balance check.
   const applicationId = await ensureDraft();
+  const { credits: company } = await requireApplicationCredits({ applicationId });
   const draft = await getDraftData(applicationId);
 
   const parsed = applicationDataSchema.safeParse(draft);

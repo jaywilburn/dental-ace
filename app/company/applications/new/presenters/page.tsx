@@ -14,9 +14,11 @@ export default async function ApplicationStep3Page({
 }: {
   searchParams: Promise<{ error?: string }>;
 }) {
-  await requireApplicationCredits();
-  const { error } = await searchParams;
+  // ensureDraft FIRST: a revision after a rejection is free, so the credit
+  // guard needs the application id to know it may skip the balance check.
   const applicationId = await ensureDraft();
+  await requireApplicationCredits({ applicationId });
+  const { error } = await searchParams;
   const draft = await getDraftData(applicationId);
   if (!draft.creatorName) redirect("/company/applications/new/creator");
 

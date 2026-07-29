@@ -29,7 +29,13 @@ const { getCurrentUser, prismaMock, txMock, redirectMock, sendEmail } = vi.hoist
     getCurrentUser: vi.fn(),
     txMock,
     prismaMock: {
-      event: { findFirst: vi.fn(), create: vi.fn(), update: vi.fn(), updateMany: vi.fn() },
+      event: {
+        findFirst: vi.fn(),
+        findMany: vi.fn(),
+        create: vi.fn(),
+        update: vi.fn(),
+        updateMany: vi.fn(),
+      },
       company: { findUnique: vi.fn() },
       $transaction: vi.fn(async (fn: (tx: typeof txMock) => Promise<unknown>) => fn(txMock)),
     },
@@ -57,7 +63,7 @@ vi.mock("@/lib/reviewer/notify", () => ({
   reviewerNotificationToAddress: vi.fn(() => "reviews@dentalace.org"),
 }));
 
-import { submitEvent } from "@/lib/events/event-actions";
+import { submitEvent, ensureEventDraft } from "@/lib/events/event-actions";
 
 const CREATOR_SLICE = {
   creatorName: "Dr. Jane Doe",
@@ -379,5 +385,126 @@ describe("submitEvent — FULL_EVENT_QUIZ billing", () => {
       /NEXT_REDIRECT:\/company\/events\/new\/review\?error=credits/,
     );
     expect(prismaMock.$transaction).not.toHaveBeenCalled();
+  });
+});
+
+/*
+  Revising after a review decision is free (client decision 2026-07-29).
+  creditChargedAt is the gate: submit charges iff it is null and stamps it in
+  the same transaction as the decrement, so a revision cannot be charged twice.
+*/
+describe("submitEvent — free revision", () => {
+  it("charges nothing when the credit is already settled", async () => {
+    prismaMock.event.findFirst.mockResolvedValue(
+      draftEvent({ creditChargedAt: new Date("2026-07-28T21:23:38Z") }),
+    );
+    await expect(submitEvent(submitForm())).rejects.toThrow(
+      /NEXT_REDIRECT:\/company\/events\?just=submitted/,
+    );
+    expect(txMock.company.update).not.toHaveBeenCalled();
+  });
+
+  it("still moves a revision to PENDING", async () => {
+    prismaMock.event.findFirst.mockResolvedValue(
+      draftEvent({ creditChargedAt: new Date("2026-07-28T21:23:38Z") }),
+    );
+    await expect(submitEvent(submitForm())).rejects.toThrow(/just=submitted/);
+    expect(txMock.event.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: "PENDING" }) }),
+    );
+  });
+
+  it("lets a revision through on a ZERO balance", async () => {
+    // The whole point: a provider who spent their last credit on the original
+    // submission must be able to resubmit without buying another.
+    prismaMock.company.findUnique.mockResolvedValue({ applicationCredits: 0 });
+    txMock.company.findUniqueOrThrow.mockResolvedValue({ applicationCredits: 0 });
+    prismaMock.event.findFirst.mockResolvedValue(
+      draftEvent({ creditChargedAt: new Date("2026-07-28T21:23:38Z") }),
+    );
+    await expect(submitEvent(submitForm())).rejects.toThrow(/just=submitted/);
+    expect(txMock.company.update).not.toHaveBeenCalled();
+  });
+
+  it("charges and stamps a first submission", async () => {
+    prismaMock.event.findFirst.mockResolvedValue(draftEvent({ creditChargedAt: null }));
+    await expect(submitEvent(submitForm())).rejects.toThrow(/just=submitted/);
+    expect(txMock.company.update).toHaveBeenCalledWith({
+      where: { id: "company-1" },
+      data: { applicationCredits: { decrement: 1 } },
+    });
+    const [arg] = txMock.event.updateMany.mock.calls[0] as [
+      { data: Record<string, unknown> },
+    ];
+    expect(arg.data.creditChargedAt).toBeInstanceOf(Date);
+  });
+});
+
+/*
+  ensureEventDraft. The submittedAt: null scope on the implicit branch is the
+  anti-gaming guard: a revision is a DRAFT whose credit is already settled, so
+  if "+ New Event" could resume one, a provider could build an entirely
+  different event on a paid row and submit it for nothing.
+*/
+describe("ensureEventDraft", () => {
+  beforeEach(() => {
+    prismaMock.event.create.mockResolvedValue({ id: "new-draft" });
+  });
+
+  it("NEVER implicitly resumes a draft that has been submitted before", async () => {
+    // The guard under test. If this filter is ever dropped, a settled row
+    // becomes reusable as a free new submission.
+    prismaMock.event.findMany.mockResolvedValue([]);
+    await ensureEventDraft();
+    const [arg] = prismaMock.event.findMany.mock.calls[0] as [
+      { where: Record<string, unknown> },
+    ];
+    expect(arg.where).toMatchObject({
+      companyId: "company-1",
+      status: "DRAFT",
+      submittedAt: null,
+    });
+  });
+
+  it("creates a fresh draft when the company has none in progress", async () => {
+    prismaMock.event.findMany.mockResolvedValue([]);
+    await expect(ensureEventDraft()).resolves.toBe("new-draft");
+  });
+
+  it("resumes the single in-progress draft", async () => {
+    prismaMock.event.findMany.mockResolvedValue([{ id: "ev-existing" }]);
+    await expect(ensureEventDraft()).resolves.toBe("ev-existing");
+    expect(prismaMock.event.create).not.toHaveBeenCalled();
+  });
+
+  it("asks which one rather than silently opening the wrong draft", async () => {
+    prismaMock.event.findMany.mockResolvedValue([{ id: "ev-a" }, { id: "ev-b" }]);
+    await expect(ensureEventDraft()).rejects.toThrow(
+      /NEXT_REDIRECT:\/company\/events\?error=multiple_drafts/,
+    );
+    expect(prismaMock.event.create).not.toHaveBeenCalled();
+  });
+
+  it("opens an explicit id, which is the ONLY way to reach a revision", async () => {
+    prismaMock.event.findFirst.mockResolvedValue({ id: "ev-revised" });
+    await expect(ensureEventDraft("ev-revised")).resolves.toBe("ev-revised");
+    // Explicit lookup must still be company- and DRAFT-scoped.
+    const [arg] = prismaMock.event.findFirst.mock.calls[0] as [
+      { where: Record<string, unknown> },
+    ];
+    expect(arg.where).toMatchObject({
+      id: "ev-revised",
+      companyId: "company-1",
+      status: "DRAFT",
+    });
+    expect(prismaMock.event.findMany).not.toHaveBeenCalled();
+  });
+
+  it("refuses an id belonging to another company", async () => {
+    prismaMock.event.findFirst.mockResolvedValue(null);
+    await expect(ensureEventDraft("someone-elses-event")).rejects.toThrow(
+      /NEXT_REDIRECT:\/company\/events\?error=draft_not_found/,
+    );
+    expect(prismaMock.event.create).not.toHaveBeenCalled();
   });
 });

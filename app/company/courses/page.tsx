@@ -2,6 +2,7 @@ import Link from "next/link";
 import { PageHeader } from "@/components/portal-shell";
 import { requireDentalAce } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
+import { resubmitApplication } from "@/lib/company/resubmit-actions";
 import { courseAssetUrls } from "@/lib/courses/course-assets";
 import { startCourseRenewal } from "@/lib/company/course-renewal";
 
@@ -14,6 +15,13 @@ const RENEW_ERRORS: Record<string, string> = {
   already_renewed: "That course has already been renewed.",
   renewal_in_progress: "A renewal for that course is already in progress.",
   renew_failed: "Could not start the renewal. Please try again.",
+  // Revise-and-resubmit (lib/company/resubmit-actions.ts).
+  revise_not_found: "That application could not be found.",
+  revise_not_allowed:
+    "Only a rejected application can be revised. This one is not rejected.",
+  revise_in_progress:
+    "You already have a revision of that application in progress. Finish it from the wizard.",
+  revise_failed: "Could not start the revision. Please try again.",
 };
 
 /*
@@ -326,12 +334,25 @@ export default async function MyCoursesPage({
                       )}
                     </td>
                     <td className="px-4 py-2 text-right">
-                      <Link
-                        href={`/company/applications/${app.id}`}
-                        className="whitespace-nowrap text-ace-dark underline"
-                      >
-                        View
-                      </Link>
+                      <div className="flex flex-col items-end gap-1">
+                        <Link
+                          href={`/company/applications/${app.id}`}
+                          className="whitespace-nowrap text-ace-dark underline"
+                        >
+                          View
+                        </Link>
+                        {app.status === "REJECTED" ? (
+                          <form action={resubmitApplication}>
+                            <input type="hidden" name="applicationId" value={app.id} />
+                            <button
+                              type="submit"
+                              className="whitespace-nowrap rounded-md bg-navy px-3 py-1.5 text-[11px] font-semibold text-white transition-colors hover:bg-navy/90"
+                            >
+                              Revise and resubmit
+                            </button>
+                          </form>
+                        ) : null}
+                      </div>
                     </td>
                   </tr>
                 ))}
