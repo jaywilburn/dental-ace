@@ -3,7 +3,8 @@ import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/portal-shell";
 import { requireStaff } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
-import { grantAppCredits, adjustCertBalance } from "@/lib/admin/billing-overrides";
+import { adjustAppCredits, adjustCertBalance } from "@/lib/admin/billing-overrides";
+import { txnLabel } from "@/lib/billing/transaction-labels";
 import { renameCompany } from "@/lib/admin/company-rename";
 import { memberDisplayName, pointOfContactId } from "@/lib/admin/company-members";
 
@@ -41,7 +42,13 @@ export default async function AdminCompanyDetailPage({
       <PageHeader title={company.name} subtitle="Company overrides (append-only)" />
       {ok ? (
         <div className="mb-4 rounded-md border border-emerald-400 bg-emerald-50 px-4 py-2.5 text-[13px] text-emerald-700">
-          {ok === "renamed" ? "Company name updated." : "Override applied."}
+          {ok === "renamed"
+            ? "Company name updated."
+            : ok === "credits"
+              ? "Application credits updated."
+              : ok === "balance"
+                ? "Certificate balance updated."
+                : "Override applied."}
         </div>
       ) : null}
       {error ? (
@@ -152,22 +159,46 @@ export default async function AdminCompanyDetailPage({
         <button type="submit" className="rounded-md bg-navy px-3 py-1.5 text-[12px] font-semibold text-white">Rename</button>
       </form>
 
-      <div className="mt-5 grid gap-4 sm:grid-cols-2">
-        <form action={grantAppCredits} className="rounded-lg border border-border bg-white p-4 space-y-3">
+      <h2 className="mt-6 mb-1 text-[13px] font-semibold text-navy">Adjust balances</h2>
+      <p className="mb-3 text-[11px] text-text-muted">
+        These are two separate balances. Application credits pay to submit a course for accreditation;
+        certificates are consumed when an attendee claims one. Check the heading before you apply.
+      </p>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <form action={adjustAppCredits} className="rounded-lg border-2 border-ace bg-white p-4 space-y-3">
           <input type="hidden" name="companyId" value={company.id} />
-          <p className="text-[12px] font-semibold text-navy">Grant application credits</p>
-          <input type="number" name="quantity" min={1} step={1} required placeholder="Quantity"
+          <div>
+            <p className="text-[12px] font-semibold text-navy">Application credits</p>
+            <p className="text-[11px] text-text-muted">
+              Currently <span className="font-semibold tabular-nums text-navy">{company.applicationCredits}</span>
+            </p>
+          </div>
+          <input type="number" name="delta" step={1} required placeholder="Delta (e.g. 5 or -5)"
             className="w-full rounded-md border border-border px-3 py-2 text-[13px]" />
-          <button type="submit" className="rounded-md bg-navy px-3 py-1.5 text-[12px] font-semibold text-white">Grant</button>
+          <p className="text-[11px] text-text-muted">
+            Negative removes credits, for reversing a grant made to the wrong balance. Never below zero.
+          </p>
+          <button type="submit" className="rounded-md bg-navy px-3 py-1.5 text-[12px] font-semibold text-white">
+            Apply to application credits
+          </button>
         </form>
 
-        <form action={adjustCertBalance} className="rounded-lg border border-border bg-white p-4 space-y-3">
+        <form action={adjustCertBalance} className="rounded-lg border-2 border-border bg-white p-4 space-y-3">
           <input type="hidden" name="companyId" value={company.id} />
-          <p className="text-[12px] font-semibold text-navy">Adjust cert balance</p>
+          <div>
+            <p className="text-[12px] font-semibold text-navy">Certificate balance</p>
+            <p className="text-[11px] text-text-muted">
+              Currently <span className="font-semibold tabular-nums text-navy">{company.certBalance}</span>
+            </p>
+          </div>
           <input type="number" name="delta" step={1} required placeholder="Delta (e.g. 100 or -10)"
             className="w-full rounded-md border border-border px-3 py-2 text-[13px]" />
-          <p className="text-[11px] text-text-muted">Negative reduces the balance (never below zero).</p>
-          <button type="submit" className="rounded-md bg-navy px-3 py-1.5 text-[12px] font-semibold text-white">Apply</button>
+          <p className="text-[11px] text-text-muted">
+            Negative reduces the balance. Never below zero.
+          </p>
+          <button type="submit" className="rounded-md bg-navy px-3 py-1.5 text-[12px] font-semibold text-white">
+            Apply to certificate balance
+          </button>
         </form>
       </div>
 
@@ -190,8 +221,10 @@ export default async function AdminCompanyDetailPage({
                 {company.billingTransactions.map((t: (typeof company.billingTransactions)[number]) => (
                   <tr key={t.id} className="border-b border-border last:border-b-0">
                     <td className="px-4 py-2 text-text-muted">{t.createdAt.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</td>
-                    <td className="px-4 py-2 text-text-mid">{t.type}</td>
-                    <td className="px-4 py-2 tabular-nums text-text-mid">{t.quantity}</td>
+                    <td className="px-4 py-2 text-text-mid">{txnLabel(t.type)}</td>
+                    <td className="px-4 py-2 tabular-nums text-text-mid">
+                      {t.quantity > 0 ? `+${t.quantity}` : t.quantity}
+                    </td>
                     <td className="px-4 py-2 tabular-nums text-text-muted">${(t.amountCents / 100).toFixed(2)}</td>
                   </tr>
                 ))}

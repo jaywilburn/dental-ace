@@ -240,7 +240,7 @@ async function main(): Promise<void> {
         await tx.billingTransaction.create({
           data: {
             companyId: company.id,
-            type: BillingTransactionType.ADMIN_OVERRIDE,
+            type: BillingTransactionType.ADMIN_OVERRIDE_CERTS,
             quantity: delta,
             amountCents: 0,
             performedById: admin!.id,

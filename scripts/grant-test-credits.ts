@@ -52,7 +52,7 @@ async function main() {
       await tx.billingTransaction.create({
         data: {
           companyId: company.id,
-          type: "ADMIN_OVERRIDE",
+          type: "ADMIN_OVERRIDE_APP_CREDITS",
           quantity: APP,
           amountCents: 0,
         },
@@ -62,7 +62,7 @@ async function main() {
       await tx.billingTransaction.create({
         data: {
           companyId: company.id,
-          type: "ADMIN_OVERRIDE",
+          type: "ADMIN_OVERRIDE_CERTS",
           quantity: CERTS,
           amountCents: 0,
         },

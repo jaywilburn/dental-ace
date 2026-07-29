@@ -38,7 +38,12 @@ enum ApplicationStatus {
 enum BillingTransactionType {
   APP_CREDIT
   CERT_BUNDLE
+  // Legacy. Records an admin adjustment without saying WHICH balance moved, so
+  // a mis-grant is invisible in the ledger. Retained only for rows written
+  // before 2026-07-29; never write it again. Use the two typed values below.
   ADMIN_OVERRIDE
+  ADMIN_OVERRIDE_APP_CREDITS
+  ADMIN_OVERRIDE_CERTS
 }
 
 // ── Phase 2 (ProTrack) enums ────────────────────────────────────────────────
