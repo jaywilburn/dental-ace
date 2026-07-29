@@ -19,6 +19,16 @@ ALTER TABLE "course_applications"
   ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- Backfill. Anything that ever left DRAFT has already settled its credit.
+--
+-- Dry-run against production 2026-07-29 (read-only SELECTs of these exact
+-- predicates): 128 applications and 4 events stamped, 132 rows total. Skipped:
+-- 7 per-course events (never charged), 6 draft events, 3 draft applications.
+-- No row resolves to NULL; 3 events and 1 application fall back to created_at
+-- (legacy-migrated rows with no submitted_at). Of the 128 applications, 126 are
+-- standalone and 2 are event-scoped session rows, which are never submitted
+-- independently, so stamping them has no billing effect. No application is
+-- currently REJECTED, so the application side of this backfill cannot change
+-- what anyone is charged.
 -- Without this every historic REJECTED row would revise for free AND every
 -- historic APPROVED row would be re-charged if it were ever reopened.
 --

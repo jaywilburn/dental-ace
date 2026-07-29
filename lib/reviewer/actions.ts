@@ -187,6 +187,9 @@ export async function rejectApplication(formData: FormData) {
           year: "numeric",
         }),
         reviewerFeedback: reason,
+        // Deep link to where the Revise and resubmit button lives. appBaseUrl,
+        // never the request Host, per the CLAUDE.md outbound-link rule.
+        revisionUrl: `${appBaseUrl()}/company/applications/${applicationId}`,
       };
       await sendEmail({
         to: customerEmail,

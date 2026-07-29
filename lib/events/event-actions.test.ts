@@ -381,3 +381,55 @@ describe("submitEvent — FULL_EVENT_QUIZ billing", () => {
     expect(prismaMock.$transaction).not.toHaveBeenCalled();
   });
 });
+
+/*
+  Revising after a review decision is free (client decision 2026-07-29).
+  creditChargedAt is the gate: submit charges iff it is null and stamps it in
+  the same transaction as the decrement, so a revision cannot be charged twice.
+*/
+describe("submitEvent — free revision", () => {
+  it("charges nothing when the credit is already settled", async () => {
+    prismaMock.event.findFirst.mockResolvedValue(
+      draftEvent({ creditChargedAt: new Date("2026-07-28T21:23:38Z") }),
+    );
+    await expect(submitEvent(submitForm())).rejects.toThrow(
+      /NEXT_REDIRECT:\/company\/events\?just=submitted/,
+    );
+    expect(txMock.company.update).not.toHaveBeenCalled();
+  });
+
+  it("still moves a revision to PENDING", async () => {
+    prismaMock.event.findFirst.mockResolvedValue(
+      draftEvent({ creditChargedAt: new Date("2026-07-28T21:23:38Z") }),
+    );
+    await expect(submitEvent(submitForm())).rejects.toThrow(/just=submitted/);
+    expect(txMock.event.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: "PENDING" }) }),
+    );
+  });
+
+  it("lets a revision through on a ZERO balance", async () => {
+    // The whole point: a provider who spent their last credit on the original
+    // submission must be able to resubmit without buying another.
+    prismaMock.company.findUnique.mockResolvedValue({ applicationCredits: 0 });
+    txMock.company.findUniqueOrThrow.mockResolvedValue({ applicationCredits: 0 });
+    prismaMock.event.findFirst.mockResolvedValue(
+      draftEvent({ creditChargedAt: new Date("2026-07-28T21:23:38Z") }),
+    );
+    await expect(submitEvent(submitForm())).rejects.toThrow(/just=submitted/);
+    expect(txMock.company.update).not.toHaveBeenCalled();
+  });
+
+  it("charges and stamps a first submission", async () => {
+    prismaMock.event.findFirst.mockResolvedValue(draftEvent({ creditChargedAt: null }));
+    await expect(submitEvent(submitForm())).rejects.toThrow(/just=submitted/);
+    expect(txMock.company.update).toHaveBeenCalledWith({
+      where: { id: "company-1" },
+      data: { applicationCredits: { decrement: 1 } },
+    });
+    const [arg] = txMock.event.updateMany.mock.calls[0] as [
+      { data: Record<string, unknown> },
+    ];
+    expect(arg.data.creditChargedAt).toBeInstanceOf(Date);
+  });
+});

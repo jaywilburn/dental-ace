@@ -21,6 +21,7 @@ import {
   QuizPreviewCard,
 } from "@/components/application-form/detail-section";
 import { approveApplication, rejectApplication } from "@/lib/reviewer/actions";
+import { reopenApplication } from "@/lib/reviewer/reopen-actions";
 
 /*
   Application review detail. Shows all fields read-only with approve/reject
@@ -215,6 +216,29 @@ export default async function ReviewerApplicationPage({
               <p className="mb-1 font-semibold text-navy">
                 Already {app.status.toLowerCase()}
               </p>
+              {app.status === "REJECTED" ? (
+                <form action={reopenApplication} className="mt-3 space-y-2 border-t border-border pt-3">
+                  <input type="hidden" name="applicationId" value={app.id} />
+                  <label className="block text-[11px] font-semibold text-text-mid">
+                    Reopen for review (reason recorded in the audit log, not sent
+                    to the provider)
+                  </label>
+                  <textarea
+                    name="reason"
+                    required
+                    minLength={10}
+                    rows={2}
+                    className="w-full rounded-md border border-border px-3 py-2 text-[12px] text-navy outline-none focus:border-ace focus:ring-2 focus:ring-ace/30"
+                    placeholder="e.g. Rejected in error; the application was complete."
+                  />
+                  <button
+                    type="submit"
+                    className="rounded-md bg-navy px-4 py-2 text-[12px] font-semibold text-white transition-colors hover:bg-navy/90"
+                  >
+                    Reopen for review
+                  </button>
+                </form>
+              ) : null}
               <p className="text-text-mid">
                 Reviewed{" "}
                 {app.reviewedAt?.toLocaleDateString("en-US", {

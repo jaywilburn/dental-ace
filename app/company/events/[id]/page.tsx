@@ -4,6 +4,7 @@ import { z } from "zod";
 import { PageHeader } from "@/components/portal-shell";
 import { requireDentalAce } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
+import { reviseEvent } from "@/lib/company/resubmit-actions";
 import { eventAssetUrls } from "@/lib/events/event-assets";
 import {
   sessionCourseInfoReadSchema,
@@ -111,7 +112,7 @@ export default async function CompanyEventDetailPage({
   });
   if (!event) notFound();
   // Drafts resume through the wizard, same as the list's Continue button.
-  if (event.status === "DRAFT") redirect("/company/events/new");
+  if (event.status === "DRAFT") redirect(`/company/events/new?eventId=${event.id}`);
 
   const data = (event.eventData as Record<string, unknown>) ?? {};
   const orgRows = organizationRows(eventOrgFields(event.eventData));
@@ -229,12 +230,44 @@ export default async function CompanyEventDetailPage({
                 <DetailSection title="Organization & Contact" rows={orgRows} />
               </div>
             ) : null}
-            {event.status === "REJECTED" && event.reviewerNotes ? (
-              <div className="mt-3 rounded-md border border-red-300 bg-red-50 p-3">
-                <p className="text-[11px] font-semibold text-red-700">Reviewer feedback</p>
-                <p className="mt-1 whitespace-pre-line text-[12px] leading-relaxed text-red-700">
+            {event.reviewerNotes ? (
+              <div
+                className={`mt-3 rounded-md border p-3 ${
+                  event.status === "REJECTED"
+                    ? "border-red-300 bg-red-50"
+                    : "border-ace/40 bg-ace-bg"
+                }`}
+              >
+                <p
+                  className={`text-[11px] font-semibold ${
+                    event.status === "REJECTED" ? "text-red-700" : "text-ace-dark"
+                  }`}
+                >
+                  Reviewer feedback
+                  {event.status === "PENDING" ? " (this event is back under review)" : ""}
+                </p>
+                <p
+                  className={`mt-1 whitespace-pre-line text-[12px] leading-relaxed ${
+                    event.status === "REJECTED" ? "text-red-700" : "text-ace-dark"
+                  }`}
+                >
                   {event.reviewerNotes}
                 </p>
+                {event.status === "REJECTED" ? (
+                  <form action={reviseEvent} className="mt-3">
+                    <input type="hidden" name="eventId" value={event.id} />
+                    <button
+                      type="submit"
+                      className="rounded-md bg-navy px-4 py-2 text-[12px] font-semibold text-white transition-colors hover:bg-navy/90"
+                    >
+                      Revise and resubmit
+                    </button>
+                    <span className="ml-2 text-[11px] text-text-muted">
+                      Your original credit still covers this, so no new credit is
+                      required.
+                    </span>
+                  </form>
+                ) : null}
               </div>
             ) : null}
           </div>

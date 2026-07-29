@@ -4,6 +4,7 @@ import { PageHeader } from "@/components/portal-shell";
 import { requireStaff } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { approveEvent, rejectEvent } from "@/lib/reviewer/event-actions";
+import { reopenEvent } from "@/lib/reviewer/reopen-actions";
 import {
   isEventOnly,
   eventOrgFields,
@@ -425,6 +426,48 @@ export default async function ReviewEventPage({
               />
               <button type="submit" className="mt-2 w-full rounded-md bg-red-700 px-4 py-2 text-[13px] font-semibold text-white hover:bg-red-800">
                 Reject event
+              </button>
+            </form>
+          </div>
+        ) : event.status === "REJECTED" ? (
+          <div className="rounded-lg border border-border bg-white p-5">
+            <p className="mb-1 text-[13px] font-semibold text-navy">
+              This event was rejected
+            </p>
+            {event.reviewerNotes ? (
+              <p className="mb-3 whitespace-pre-line text-[12px] text-text-mid">
+                Reason given: {event.reviewerNotes}
+              </p>
+            ) : null}
+            <p className="mb-3 text-[11px] text-text-muted text-pretty">
+              If the decision was wrong, put it back in the queue. The provider
+              is told it is under review again, the rejection reason is kept,
+              and no credit is charged either way.
+            </p>
+            {error === "reason_required" ? (
+              <p className="mb-2 text-[11px] font-semibold text-red-600">
+                Give a reason of at least 10 characters.
+              </p>
+            ) : null}
+            <form action={reopenEvent} className="space-y-2">
+              <input type="hidden" name="eventId" value={event.id} />
+              <label className="block text-[11px] font-semibold text-text-mid">
+                Why are you reopening this? (recorded in the audit log, not sent
+                to the provider)
+              </label>
+              <textarea
+                name="reason"
+                required
+                minLength={10}
+                rows={2}
+                className="w-full rounded-md border border-border px-3 py-2 text-[12px] text-navy outline-none focus:border-ace focus:ring-2 focus:ring-ace/30"
+                placeholder="e.g. The application was complete; the details were collapsed on the review page."
+              />
+              <button
+                type="submit"
+                className="rounded-md bg-navy px-4 py-2 text-[12px] font-semibold text-white transition-colors hover:bg-navy/90"
+              >
+                Reopen for review
               </button>
             </form>
           </div>

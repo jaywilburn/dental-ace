@@ -2,6 +2,7 @@ import Link from "next/link";
 import { PageHeader } from "@/components/portal-shell";
 import { requireDentalAce } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
+import { reviseEvent } from "@/lib/company/resubmit-actions";
 import { eventAssetUrls } from "@/lib/events/event-assets";
 import type { ApplicationStatus, EventType } from "@prisma/client";
 
@@ -152,7 +153,7 @@ export default async function EventsIndexPage({
                     <td className="px-4 py-2">
                       {event.status === "DRAFT" ? (
                         <Link
-                          href="/company/events/new"
+                          href={`/company/events/new?eventId=${event.id}`}
                           className="rounded-md border border-border bg-white px-3 py-1.5 text-[11px] font-semibold text-navy hover:bg-surface"
                         >
                           Continue
@@ -191,6 +192,27 @@ export default async function EventsIndexPage({
                           >
                             Marketing Logo
                           </a>
+                        </div>
+                      ) : event.status === "REJECTED" ? (
+                        <div className="flex flex-col items-start gap-1">
+                          <form action={reviseEvent}>
+                            <input type="hidden" name="eventId" value={event.id} />
+                            <button
+                              type="submit"
+                              className="rounded-md bg-navy px-3 py-1.5 text-[11px] font-semibold text-white transition-colors hover:bg-navy/90"
+                            >
+                              Revise and resubmit
+                            </button>
+                          </form>
+                          <span className="text-[10px] text-text-muted">
+                            No credit required
+                          </span>
+                          <Link
+                            href={`/company/events/${event.id}`}
+                            className="text-[11px] text-ace-dark underline"
+                          >
+                            View feedback
+                          </Link>
                         </div>
                       ) : event.eventIdNumber ? (
                         <span className="font-mono text-[11px] text-text-muted">{event.eventIdNumber}</span>

@@ -318,6 +318,9 @@ export async function rejectEvent(formData: FormData) {
         }),
         decisionAt: rejectedAt.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }),
         reviewerFeedback: reason,
+        // Deep link to where the Revise and resubmit button lives. appBaseUrl,
+        // never the request Host, per the CLAUDE.md outbound-link rule.
+        revisionUrl: `${appBaseUrl()}/company/events/${eventId}`,
       };
       await sendEmail({
         to: customerEmail,

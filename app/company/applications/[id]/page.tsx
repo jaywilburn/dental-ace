@@ -4,6 +4,7 @@ import { z } from "zod";
 import { PageHeader } from "@/components/portal-shell";
 import { requireDentalAce } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
+import { resubmitApplication } from "@/lib/company/resubmit-actions";
 import { applicationDataReadSchema } from "@/lib/forms/application/schemas";
 import {
   courseInfoRows,
@@ -163,6 +164,7 @@ export default async function CompanyApplicationDetailPage({
             submittedLabel={submittedLabel}
             reviewedAt={app.reviewedAt}
             reviewerNotes={app.reviewerNotes}
+            applicationId={app.id}
             courseIdNumber={app.accreditedCourse?.courseIdNumber ?? null}
           />
 
@@ -174,12 +176,14 @@ export default async function CompanyApplicationDetailPage({
 }
 
 function StatusCard({
+  applicationId,
   status,
   submittedLabel,
   reviewedAt,
   reviewerNotes,
   courseIdNumber,
 }: {
+  applicationId: string;
   status: string;
   submittedLabel: string | null;
   reviewedAt: Date | null;
@@ -243,6 +247,18 @@ function StatusCard({
           <p className="mt-1 whitespace-pre-line text-[12px] leading-relaxed text-red-700">
             {reviewerNotes ?? "No feedback was recorded for this decision."}
           </p>
+          <form action={resubmitApplication} className="mt-3">
+            <input type="hidden" name="applicationId" value={applicationId} />
+            <button
+              type="submit"
+              className="rounded-md bg-navy px-4 py-2 text-[12px] font-semibold text-white transition-colors hover:bg-navy/90"
+            >
+              Revise and resubmit
+            </button>
+            <span className="ml-2 text-[11px] text-red-700/80">
+              Your original credit still covers this, so no new credit is required.
+            </span>
+          </form>
         </div>
       ) : null}
     </div>

@@ -62,7 +62,10 @@ export default async function EventReviewPage({
     : sessionApps.length > 0 && sessionApps.every((s) => s.complete);
   // Same helper submitEvent charges with, so the quote can never drift from the
   // amount actually taken.
-  const creditCost = eventCreditCost(type);
+  // A revision reads the SAME value submitEvent charges on, so the quote here
+  // and the charge there cannot drift.
+  const isRevision = draft.creditChargedAt != null;
+  const creditCost = isRevision ? 0 : eventCreditCost(type);
   const inlineHours = lightweightInline
     ? inlineSessions.reduce((sum, s) => sum + (s.durationHours ?? 0), 0)
     : sessionApps.reduce((sum, s) => sum + (s.ceHours ?? 0), 0);
@@ -89,6 +92,13 @@ export default async function EventReviewPage({
           Too many submissions. Please wait a moment and try again.
         </div>
       ) : null}
+      {draft.reviewerNotes && isRevision ? (
+        <div className="mb-4 rounded-md border border-ace/40 bg-ace-bg p-3 text-[12px] text-ace-dark text-pretty">
+          <p className="font-semibold">Reviewer feedback on your last submission</p>
+          <p className="mt-1 whitespace-pre-line leading-relaxed">{draft.reviewerNotes}</p>
+        </div>
+      ) : null}
+
       {error === "credits" ? (
         <div className="mb-4 rounded-md border border-red-300 bg-red-50 px-4 py-2.5 text-[12px] text-red-700">
           Not enough application credits for this event. Buy more credits and try again.
@@ -169,7 +179,9 @@ export default async function EventReviewPage({
 
         <div className="rounded-md border border-ace/40 bg-ace-bg p-3 text-[12px] text-ace-dark text-pretty">
           {eventOnly
-            ? `Submitting this event uses ${creditCost} application credit for the whole event, no matter how many sessions it has. You have ${credits}. It then goes to AADB for review.`
+            ? isRevision
+              ? "This is a revision of a submission you already paid for, so no new credit is used. It goes back to AADB for review."
+              : `Submitting this event uses ${creditCost} application credit for the whole event, no matter how many sessions it has. You have ${credits}. It then goes to AADB for review.`
             : "This event attaches courses you already had accredited, so submitting it uses no credits. It then goes to AADB for review."}
         </div>
 
