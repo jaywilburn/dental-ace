@@ -28,11 +28,11 @@ const TYPE_LABEL: Record<EventType, string> = {
 export default async function EventReviewPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; eventId?: string }>;
 }) {
   const user = await requireDentalAce();
-  const { error } = await searchParams;
-  const eventId = await ensureEventDraft();
+  const { error, eventId: eventIdParam } = await searchParams;
+  const eventId = await ensureEventDraft(eventIdParam);
   const draft = await getEventDraft(eventId);
   if (!draft?.eventType) redirect("/company/events/new/qualifiers");
   const type = draft.eventType;
@@ -73,9 +73,10 @@ export default async function EventReviewPage({
         ?.applicationCredits ?? 0
     : 0;
 
+  const idQ = eventIdParam ? `?eventId=${eventIdParam}` : "";
   const backHref = eventOnly
-    ? "/company/events/new/sessions"
-    : "/company/events/new/courses";
+    ? `/company/events/new/sessions${idQ}`
+    : `/company/events/new/courses${idQ}`;
 
   return (
     <>

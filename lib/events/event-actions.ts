@@ -42,6 +42,7 @@ import {
 */
 
 const ROUTES = {
+  list: "/company/events",
   details: "/company/events/new",
   qualifiers: "/company/events/new/qualifiers",
   quiz: "/company/events/new/quiz",
@@ -66,14 +67,53 @@ function typeStepRoute(type: EventType): string {
   return ROUTES.courses; // FULL_PER_COURSE | SELECTIVE_PER_COURSE
 }
 
-export async function ensureEventDraft(): Promise<string> {
+/**
+ * Append the event id to a wizard URL so every step edits an explicit draft.
+ * ALWAYS appended last: lib/events/event-actions.test.ts asserts redirect URLs
+ * with unanchored regexes, which keep matching only while eventId is the final
+ * query parameter.
+ */
+function withEventId(route: string, eventId: string): string {
+  return `${route}${route.includes("?") ? "&" : "?"}eventId=${eventId}`;
+}
+
+/**
+ * Resolve which event draft the wizard is editing.
+ *
+ * With an explicit id (the `?eventId=` the wizard now threads through), verify
+ * the caller owns it and it is a DRAFT. Without one, fall back to the company's
+ * single in-progress draft, creating one if there is none.
+ *
+ * The `submittedAt: null` scope on the implicit branch is load-bearing. A
+ * revised event is a DRAFT whose credit is already settled, so if "+ New Event"
+ * could implicitly resume one, a provider could build an entirely different
+ * event on top of a paid row and submit it for free. A revision is reachable
+ * only by explicit id.
+ *
+ * Two implicit candidates means we cannot know which the provider meant, so
+ * send them to the list to choose rather than silently editing the wrong one.
+ */
+export async function ensureEventDraft(explicitId?: string): Promise<string> {
   const companyId = await customerCompanyId();
-  const existing = await prisma.event.findFirst({
-    where: { companyId, status: "DRAFT" },
+
+  if (explicitId) {
+    const owned = await prisma.event.findFirst({
+      where: { id: explicitId, companyId, status: "DRAFT" },
+      select: { id: true },
+    });
+    if (!owned) redirect(`${ROUTES.list}?error=draft_not_found`);
+    return owned.id;
+  }
+
+  const drafts = await prisma.event.findMany({
+    where: { companyId, status: "DRAFT", submittedAt: null },
     orderBy: { createdAt: "desc" },
     select: { id: true },
+    take: 2,
   });
-  if (existing) return existing.id;
+  if (drafts.length > 1) redirect(`${ROUTES.list}?error=multiple_drafts`);
+  if (drafts.length === 1) return drafts[0].id;
+
   const created = await prisma.event.create({
     data: { companyId, name: "", eventDate: "", status: "DRAFT" },
     select: { id: true },
@@ -88,6 +128,13 @@ export type EventDraft = {
   eventType: EventType | null;
   totalHours: number | null;
   data: Partial<EventData>;
+  /** Non-null once this event's credit has been taken. The review step reads
+   *  the SAME value submitEvent charges on, so quote and charge cannot drift. */
+  creditChargedAt: Date | null;
+  /** Non-null if this draft has been through review before (a revision). */
+  submittedAt: Date | null;
+  /** Kept through a revision so the provider can see what to fix. */
+  reviewerNotes: string | null;
   sessions: Array<{
     id: string;
     courseId: string | null;
@@ -126,6 +173,9 @@ export async function getEventDraft(eventId: string): Promise<EventDraft | null>
       eventType: true,
       totalHours: true,
       eventData: true,
+      creditChargedAt: true,
+      submittedAt: true,
+      reviewerNotes: true,
       sessions: {
         orderBy: { position: "asc" },
         select: {
@@ -152,6 +202,9 @@ export async function getEventDraft(eventId: string): Promise<EventDraft | null>
     eventType: row.eventType,
     totalHours: row.totalHours ? Number(row.totalHours) : null,
     data: (row.eventData as Partial<EventData> | null) ?? {},
+    creditChargedAt: row.creditChargedAt,
+    submittedAt: row.submittedAt,
+    reviewerNotes: row.reviewerNotes,
     sessions: row.sessions.map((s) => ({
       ...s,
       durationHours: s.durationHours ? Number(s.durationHours) : null,
@@ -358,10 +411,13 @@ export async function saveAttachedCourses(formData: FormData) {
   const parsed = attachedCoursesSchema.safeParse({ courseIds });
   if (!parsed.success) {
     redirect(
-      `${ROUTES.courses}?error=validation&detail=${encodeURIComponent(
-        "Select at least one approved course.",
-      )}`,
-    );
+        withEventId(
+          `${ROUTES.courses}?error=validation&detail=${encodeURIComponent(
+          "Select at least one approved course.",
+          )}`,
+          eventId,
+        ),
+      );
   }
 
   // Ownership: every course must belong to the caller's company.
@@ -409,7 +465,7 @@ export async function submitEvent(formData: FormData) {
     limit: 20,
     windowMs: 60 * 60 * 1000,
   });
-  if (!limited.ok) redirect(`${ROUTES.review}?error=rate_limited`);
+  if (!limited.ok) redirect(withEventId(`${ROUTES.review}?error=rate_limited`, eventId));
 
   const draft = await prisma.event.findFirst({
     where: { id: eventId, companyId, status: "DRAFT" },
@@ -452,7 +508,7 @@ export async function submitEvent(formData: FormData) {
     eventDate: draft.eventDate,
   });
   if (!detailsGate.success) {
-    redirect(`${ROUTES.details}?error=validation`);
+    redirect(withEventId(`${ROUTES.details}?error=validation`, eventId));
   }
 
   // Lightweight inline path (SELECTIVE_INLINE): the event is ONE application
@@ -463,9 +519,12 @@ export async function submitEvent(formData: FormData) {
     const inline = draft.sessions.filter((s) => s.courseId === null);
     if (inline.length === 0) {
       redirect(
-        `${ROUTES.sessions}?error=validation&detail=${encodeURIComponent(
-          "Add at least one session before submitting.",
-        )}`,
+        withEventId(
+          `${ROUTES.sessions}?error=validation&detail=${encodeURIComponent(
+            "Add at least one session before submitting.",
+          )}`,
+          eventId,
+        ),
       );
     }
     // Defense in depth: every row was validated at save, but re-check the shape
@@ -478,9 +537,12 @@ export async function submitEvent(formData: FormData) {
     );
     if (!wellFormed) {
       redirect(
-        `${ROUTES.sessions}?error=validation&detail=${encodeURIComponent(
-          "One of your sessions is incomplete. Check each session's title, hours, and question.",
-        )}`,
+        withEventId(
+          `${ROUTES.sessions}?error=validation&detail=${encodeURIComponent(
+            "One of your sessions is incomplete. Check each session's title, hours, and question.",
+          )}`,
+          eventId,
+        ),
       );
     }
     // Drafts save tolerantly, so the strict per-session gate runs here: every
@@ -490,12 +552,20 @@ export async function submitEvent(formData: FormData) {
     const infoComplete = inline.every((s) => isInlineSessionComplete(s));
     if (!infoComplete) {
       redirect(
-        `${ROUTES.sessions}?error=validation&detail=${encodeURIComponent(
-          "Each session needs its full course information before you can submit.",
-        )}`,
+        withEventId(
+          `${ROUTES.sessions}?error=validation&detail=${encodeURIComponent(
+            "Each session needs its full course information before you can submit.",
+          )}`,
+          eventId,
+        ),
       );
     }
+    // Revising after a review decision is free: the credit for this submission
+    // line was settled the first time (client decision 2026-07-29). Only stamp
+    // when the cost is non-zero, or a free per-course event could be rejected,
+    // switched to an event-only type, and resubmitted as a paid type for free.
     const cost = eventCreditCost(type);
+    const chargeable = draft.creditChargedAt == null ? cost : 0;
     const totalHours = inline.reduce(
       (sum, s) => sum + (s.durationHours ? Number(s.durationHours) : 0),
       0,
@@ -507,8 +577,8 @@ export async function submitEvent(formData: FormData) {
       where: { id: companyId },
       select: { applicationCredits: true },
     });
-    if ((bal?.applicationCredits ?? 0) < cost) {
-      redirect(`${ROUTES.review}?error=credits`);
+    if ((bal?.applicationCredits ?? 0) < chargeable) {
+      redirect(withEventId(`${ROUTES.review}?error=credits`, eventId));
     }
 
     await prisma.$transaction(async (tx) => {
@@ -519,13 +589,13 @@ export async function submitEvent(formData: FormData) {
         where: { id: companyId },
         select: { applicationCredits: true },
       });
-      if (company.applicationCredits < cost) {
+      if (company.applicationCredits < chargeable) {
         throw new Error("Not enough application credits");
       }
-      if (cost > 0) {
+      if (chargeable > 0) {
         await tx.company.update({
           where: { id: companyId },
-          data: { applicationCredits: { decrement: cost } },
+          data: { applicationCredits: { decrement: chargeable } },
         });
       }
       // Drop any stale DRAFT session applications left behind by the retired
@@ -539,6 +609,9 @@ export async function submitEvent(formData: FormData) {
           status: "PENDING",
           submittedAt,
           totalHours: new Prisma.Decimal(totalHours),
+          // Stamped in the same transaction as the decrement, so a later
+          // revision of this same event is free.
+          ...(chargeable > 0 ? { creditChargedAt: submittedAt } : {}),
         },
       });
       if (updated.count !== 1) throw new Error("Event was already submitted");
@@ -551,9 +624,12 @@ export async function submitEvent(formData: FormData) {
     const apps = draft.sessionApplications;
     if (apps.length === 0) {
       redirect(
-        `${ROUTES.sessions}?error=validation&detail=${encodeURIComponent(
-          "Add at least one session before submitting.",
-        )}`,
+        withEventId(
+          `${ROUTES.sessions}?error=validation&detail=${encodeURIComponent(
+            "Add at least one session before submitting.",
+          )}`,
+          eventId,
+        ),
       );
     }
     // Validate each session's full application; on the first miss, jump into it.
@@ -566,13 +642,18 @@ export async function submitEvent(formData: FormData) {
       // "incomplete", not "validation": the missing field may be on any of this
       // session's four steps, so the Course step we land on would re-derive
       // step1Schema and correctly find nothing wrong.
-      redirect(`${ROUTES.sessions}/${bad.id}/course?error=incomplete`);
+      redirect(withEventId(`${ROUTES.sessions}/${bad.id}/course?error=incomplete`, eventId));
     }
     const sessions = parsedSessions.map((s) => ({
       id: s.id,
       data: (s.parsed as { success: true; data: EventSessionApplicationData }).data,
     }));
+    // Revising after a review decision is free: the credit for this submission
+    // line was settled the first time (client decision 2026-07-29). Only stamp
+    // when the cost is non-zero, or a free per-course event could be rejected,
+    // switched to an event-only type, and resubmitted as a paid type for free.
     const cost = eventCreditCost(type);
+    const chargeable = draft.creditChargedAt == null ? cost : 0;
     const totalHours = sessions.reduce((sum, s) => sum + s.data.ceCreditHours, 0);
     const submittedAt = new Date();
 
@@ -581,8 +662,8 @@ export async function submitEvent(formData: FormData) {
       where: { id: companyId },
       select: { applicationCredits: true },
     });
-    if ((bal?.applicationCredits ?? 0) < cost) {
-      redirect(`${ROUTES.review}?error=credits`);
+    if ((bal?.applicationCredits ?? 0) < chargeable) {
+      redirect(withEventId(`${ROUTES.review}?error=credits`, eventId));
     }
 
     await prisma.$transaction(async (tx) => {
@@ -593,13 +674,13 @@ export async function submitEvent(formData: FormData) {
         where: { id: companyId },
         select: { applicationCredits: true },
       });
-      if (company.applicationCredits < cost) {
+      if (company.applicationCredits < chargeable) {
         throw new Error("Not enough application credits");
       }
-      if (cost > 0) {
+      if (chargeable > 0) {
         await tx.company.update({
           where: { id: companyId },
-          data: { applicationCredits: { decrement: cost } },
+          data: { applicationCredits: { decrement: chargeable } },
         });
       }
 
@@ -626,6 +707,9 @@ export async function submitEvent(formData: FormData) {
           status: "PENDING",
           submittedAt,
           totalHours: new Prisma.Decimal(totalHours),
+          // Stamped in the same transaction as the decrement, so a later
+          // revision of this same event is free.
+          ...(chargeable > 0 ? { creditChargedAt: submittedAt } : {}),
         },
       });
       if (updated.count !== 1) throw new Error("Event was already submitted");
@@ -634,9 +718,12 @@ export async function submitEvent(formData: FormData) {
     // PER_COURSE types: at least one attached course; no credit consumed.
     if (!draft.sessions.some((s) => s.courseId !== null)) {
       redirect(
-        `${ROUTES.courses}?error=validation&detail=${encodeURIComponent(
-          "Attach at least one approved course before submitting.",
-        )}`,
+        withEventId(
+          `${ROUTES.courses}?error=validation&detail=${encodeURIComponent(
+            "Attach at least one approved course before submitting.",
+          )}`,
+          eventId,
+        ),
       );
     }
     const submittedAt = new Date();

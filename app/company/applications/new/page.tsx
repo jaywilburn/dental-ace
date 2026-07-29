@@ -29,9 +29,11 @@ export default async function ApplicationOrgStepPage({
 }: {
   searchParams: Promise<{ error?: string }>;
 }) {
-  const { user, credits: totalCredits } = await requireApplicationCredits();
-  const { error } = await searchParams;
+  // ensureDraft FIRST: a revision after a rejection is free, so the credit
+  // guard needs the application id to know it may skip the balance check.
   const applicationId = await ensureDraft();
+  const { user, credits: totalCredits } = await requireApplicationCredits({ applicationId });
+  const { error } = await searchParams;
   const draft = await getDraftData(applicationId);
 
   const company = user.companyId

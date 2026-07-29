@@ -218,23 +218,32 @@ export async function submitApplication(formData: FormData) {
   const fullData = fullParse.data;
 
   const submittedAt = new Date();
+  // Revising after a review decision is free: the credit for this submission
+  // line was settled the first time (client decision 2026-07-29). A resubmit
+  // clone copies creditChargedAt from its parent; a renewal clone deliberately
+  // leaves it null, because a renewal is a new accreditation and is charged.
+  const chargeable = draft.creditChargedAt == null;
 
   // Atomic credit consumption + status transition.
   await prisma.$transaction(async (tx) => {
+    // The row lock stays unconditional even when nothing is charged: it also
+    // serializes the DRAFT -> PENDING transition below.
     await tx.$executeRaw`select id from public.companies where id = ${companyId}::uuid for update`;
 
-    const company = await tx.company.findUniqueOrThrow({
-      where: { id: companyId },
-      select: { applicationCredits: true },
-    });
-
-    if (company.applicationCredits > 0) {
-      await tx.company.update({
+    if (chargeable) {
+      const company = await tx.company.findUniqueOrThrow({
         where: { id: companyId },
-        data: { applicationCredits: { decrement: 1 } },
+        select: { applicationCredits: true },
       });
-    } else {
-      throw new Error("No application credits available");
+
+      if (company.applicationCredits > 0) {
+        await tx.company.update({
+          where: { id: companyId },
+          data: { applicationCredits: { decrement: 1 } },
+        });
+      } else {
+        throw new Error("No application credits available");
+      }
     }
 
     // updateMany so we can scope by status — protects against a concurrent
@@ -250,6 +259,9 @@ export async function submitApplication(formData: FormData) {
         courseType: fullData.subjectMatter,
         deliveryMethod: fullData.deliveryFormat,
         submittedAt,
+        // Stamped in the same transaction as the decrement, so a later
+        // revision of this application is free.
+        ...(chargeable ? { creditChargedAt: submittedAt } : {}),
       },
     });
     if (updated.count !== 1) {

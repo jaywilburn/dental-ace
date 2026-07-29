@@ -14,11 +14,12 @@ import { isEventOnly } from "@/lib/forms/event/schemas";
 export default async function EventCoursesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; detail?: string }>;
+  searchParams: Promise<{ error?: string; detail?: string; eventId?: string }>;
 }) {
   const user = await requireDentalAce();
-  const { error, detail } = await searchParams;
-  const eventId = await ensureEventDraft();
+  const { error, detail, eventId: eventIdParam } = await searchParams;
+  const idQ = eventIdParam ? `?eventId=${eventIdParam}` : "";
+  const eventId = await ensureEventDraft(eventIdParam);
   const draft = await getEventDraft(eventId);
   if (!draft?.eventType) redirect("/company/events/new/qualifiers");
   // Event-only types capture their sessions inline, not attached courses.
@@ -86,7 +87,7 @@ export default async function EventCoursesPage({
             </div>
           )}
         </div>
-        <FormNav back={{ href: "/company/events/new/qualifiers", label: "Back" }} nextLabel="Next: Review" />
+        <FormNav back={{ href: `/company/events/new/qualifiers${idQ}`, label: "Back" }} nextLabel="Next: Review" />
       </form>
     </>
   );

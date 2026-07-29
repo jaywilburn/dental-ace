@@ -12,11 +12,12 @@ import { ensureEventDraft, getEventDraft, saveQualifiers } from "@/lib/events/ev
 export default async function EventQualifiersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; detail?: string }>;
+  searchParams: Promise<{ error?: string; detail?: string; eventId?: string }>;
 }) {
   await requireDentalAce();
-  const { error, detail } = await searchParams;
-  const eventId = await ensureEventDraft();
+  const { error, detail, eventId: eventIdParam } = await searchParams;
+  const idQ = eventIdParam ? `?eventId=${eventIdParam}` : "";
+  const eventId = await ensureEventDraft(eventIdParam);
   const draft = await getEventDraft(eventId);
   if (!draft?.name) redirect("/company/events/new");
   const coverage = draft?.data.coverage;
@@ -70,7 +71,7 @@ export default async function EventQualifiersPage({
           </div>
         </fieldset>
 
-        <FormNav back={{ href: "/company/events/new", label: "Back" }} nextLabel="Next" />
+        <FormNav back={{ href: `/company/events/new${idQ}`, label: "Back" }} nextLabel="Next" />
       </form>
     </>
   );
