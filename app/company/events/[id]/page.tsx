@@ -8,6 +8,7 @@ import { eventAssetUrls } from "@/lib/events/event-assets";
 import {
   sessionCourseInfoReadSchema,
   eventSessionApplicationReadSchema,
+  eventOrgFields,
 } from "@/lib/forms/event/schemas";
 import {
   applicationDataReadSchema,
@@ -15,6 +16,7 @@ import {
 } from "@/lib/forms/application/schemas";
 import {
   courseInfoRows,
+  organizationRows,
   creatorRows,
   presenterRows,
   sessionCourseInfoRows,
@@ -112,6 +114,7 @@ export default async function CompanyEventDetailPage({
   if (event.status === "DRAFT") redirect("/company/events/new");
 
   const data = (event.eventData as Record<string, unknown>) ?? {};
+  const orgRows = organizationRows(eventOrgFields(event.eventData));
   const inlineSessions = event.sessions.filter((s) => s.courseId === null);
   const courseBackedSessions = event.sessions.filter((s) => s.courseId !== null);
   // Full-course model: event-only events whose sessions were submitted as full
@@ -218,12 +221,14 @@ export default async function CompanyEventDetailPage({
               {fmtDate(event.expiresAt) ? (
                 <Row label="Expires" value={fmtDate(event.expiresAt)!} />
               ) : null}
-              <Row label="Organization" value={String(data.organizationName ?? "—")} />
-              <Row
-                label="Administrator"
-                value={`${String(data.adminName ?? "—")}${data.adminEmail ? ` · ${String(data.adminEmail)}` : ""}`}
-              />
             </dl>
+            {/* Full org + contact, matching what the reviewer now sees. The
+                two summary rows here previously omitted address and phone. */}
+            {orgRows.length > 0 ? (
+              <div className="mt-4">
+                <DetailSection title="Organization & Contact" rows={orgRows} />
+              </div>
+            ) : null}
             {event.status === "REJECTED" && event.reviewerNotes ? (
               <div className="mt-3 rounded-md border border-red-300 bg-red-50 p-3">
                 <p className="text-[11px] font-semibold text-red-700">Reviewer feedback</p>

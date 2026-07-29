@@ -63,7 +63,13 @@ export default async function ReviewerQueuePage({
     <>
       <PageHeader
         title="Review Queue"
-        subtitle={`${pending.length} application${pending.length === 1 ? "" : "s"} pending`}
+        // Events sit in their own table below, so counting only applications
+        // understated the queue.
+        subtitle={`${pending.length} application${pending.length === 1 ? "" : "s"}${
+          pendingEvents.length > 0
+            ? ` and ${pendingEvents.length} event${pendingEvents.length === 1 ? "" : "s"}`
+            : ""
+        } pending`}
       />
 
       <form

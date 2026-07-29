@@ -279,3 +279,30 @@ describe("presenterRows", () => {
     ]);
   });
 });
+
+describe("organizationRows accepts a bare org slice", () => {
+  // Events keep org/contact on Event.eventData, not in an application blob, so
+  // the builder takes a structural OrganizationFields rather than the full
+  // ApplicationDataRead. This proves the widening holds.
+  it("builds rows from a plain object with no application fields", () => {
+    const rows = organizationRows({
+      organizationName: "Smile Together",
+      organizationAddress: "Austin, TX 78703",
+      adminName: "Julia Behr",
+      adminEmail: "julia@example.com",
+      adminPhone: "512-538-4095",
+    });
+    expect(rows.map((r) => r.label)).toEqual([
+      "Organization",
+      "Address",
+      "Process Administrator",
+      "Admin Email",
+      "Admin Phone",
+    ]);
+  });
+
+  it("skips absent fields instead of emitting empty rows", () => {
+    expect(organizationRows({ organizationName: "Smile Together" })).toHaveLength(1);
+    expect(organizationRows({})).toEqual([]);
+  });
+});

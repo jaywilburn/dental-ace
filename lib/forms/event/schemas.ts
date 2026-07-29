@@ -8,6 +8,7 @@ import {
   quizQuestionSchema,
   applicationDataReadSchema,
 } from "@/lib/forms/application/schemas";
+import type { OrganizationFields } from "@/lib/forms/application/detail-rows";
 
 /*
   Event-submission form schemas. An event is accredited through its own
@@ -341,3 +342,33 @@ export const eventDataSchema = orgStepSchema
 export type EventData = z.infer<typeof eventDataSchema>;
 export type InlineSession = z.infer<typeof inlineSessionSchema>;
 export type McQuestion = z.infer<typeof mcQuestionSchema>;
+
+/**
+ * Organization + contact slice from Event.eventData, for the read-only detail
+ * views (reviewer and company event pages).
+ *
+ * Deliberately NOT a Zod parse. `orgStepSchema.partial()` would still run
+ * `.email()` on adminEmail, so one malformed address would drop that key and,
+ * with `.partial()`, silently blank the sibling fields too. Drafts now echo raw
+ * input back on validation failure, so half-valid org data is a normal state.
+ * A reviewer must see whatever the provider actually entered, so this coerces
+ * field by field and never throws.
+ *
+ * (A reviewer rejected an event on 2026-07-29 asking "Where is the information
+ * about the company?" because the page never rendered these at all.)
+ */
+export function eventOrgFields(eventData: unknown): OrganizationFields {
+  const d = (eventData ?? {}) as Record<string, unknown>;
+  const str = (v: unknown): string | undefined => {
+    if (typeof v !== "string") return undefined;
+    const trimmed = v.trim();
+    return trimmed.length > 0 ? trimmed : undefined;
+  };
+  return {
+    organizationName: str(d.organizationName),
+    organizationAddress: str(d.organizationAddress),
+    adminName: str(d.adminName),
+    adminEmail: str(d.adminEmail),
+    adminPhone: str(d.adminPhone),
+  };
+}
