@@ -6,7 +6,7 @@ import { FormNav } from "@/components/application-form/form-controls";
 import { requireDentalAce } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { ensureEventDraft, getEventDraft, submitEvent } from "@/lib/events/event-actions";
-import { isInlineFullCourse } from "@/lib/forms/event/schemas";
+import { isInlineFullCourse, eventCreditCost } from "@/lib/forms/event/schemas";
 
 const TYPE_LABEL: Record<EventType, string> = {
   FULL_EVENT_QUIZ: "Full attendance · sessions accredited as courses (not reused)",
@@ -16,11 +16,14 @@ const TYPE_LABEL: Record<EventType, string> = {
 };
 
 /*
-  Event wizard, final step — Review & Submit (step 4 of 4). Event-only types
-  bill one application credit per session: both FULL_EVENT_QUIZ and
-  SELECTIVE_INLINE capture each session as a full course application (the former
-  as a CourseApplication row, the latter inline on event_sessions). Per-course
-  types remain free (their courses were already paid).
+  Event wizard, final step: Review & Submit (step 4 of 4). Event-only types bill
+  one application credit for the WHOLE event, no matter how many sessions it
+  lists: both FULL_EVENT_QUIZ and SELECTIVE_INLINE capture each session as a
+  full course application (the former as a CourseApplication row, the latter
+  inline on event_sessions), but the event is accredited as a single
+  application. The quote below and the charge in submitEvent both come from
+  eventCreditCost so they cannot drift. Per-course types remain free (their
+  courses were already paid).
 */
 export default async function EventReviewPage({
   searchParams,
@@ -57,7 +60,9 @@ export default async function EventReviewPage({
   const allComplete = lightweightInline
     ? inlineSessions.length > 0 && inlineSessions.every((s) => s.complete)
     : sessionApps.length > 0 && sessionApps.every((s) => s.complete);
-  const creditCost = eventOnly ? sessionCount : 0;
+  // Same helper submitEvent charges with, so the quote can never drift from the
+  // amount actually taken.
+  const creditCost = eventCreditCost(type);
   const inlineHours = lightweightInline
     ? inlineSessions.reduce((sum, s) => sum + (s.durationHours ?? 0), 0)
     : sessionApps.reduce((sum, s) => sum + (s.ceHours ?? 0), 0);
@@ -163,7 +168,7 @@ export default async function EventReviewPage({
 
         <div className="rounded-md border border-ace/40 bg-ace-bg p-3 text-[12px] text-ace-dark text-pretty">
           {eventOnly
-            ? `Submitting this event uses ${creditCost} application credit${creditCost === 1 ? "" : "s"} (one per session; you have ${credits}). It then goes to AADB for review.`
+            ? `Submitting this event uses ${creditCost} application credit for the whole event, no matter how many sessions it has. You have ${credits}. It then goes to AADB for review.`
             : "This event attaches courses you already had accredited, so submitting it uses no credits. It then goes to AADB for review."}
         </div>
 

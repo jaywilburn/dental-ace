@@ -3,17 +3,28 @@ import {
   FormInput,
   FormLabel,
 } from "@/components/application-form/form-controls";
+import { FieldError } from "@/components/application-form/field-errors";
 import type {
   ApplicationData,
   QuizQuestion,
 } from "@/lib/forms/application/schemas";
+import type { FieldErrors } from "@/lib/forms/field-errors";
 
 /*
   Quiz builder fields (application "Step 4" data). Q1/Q2 True/False; Q3-Q5
   4-option multiple choice with one correct answer. Includes the rules banner.
   Shared by the standalone wizard and the inline event-session sub-wizard.
+
+  Error keys are q{n}_question / q{n}_option_{j} / q{n}_correct, mapped from Zod
+  paths like ["quiz", 2, "options", 1] by lib/forms/field-errors.ts.
 */
-export function QuizFields({ draft }: { draft: Partial<ApplicationData> }) {
+export function QuizFields({
+  draft,
+  errors = {},
+}: {
+  draft: Partial<ApplicationData>;
+  errors?: FieldErrors;
+}) {
   const quiz = draft.quiz ?? defaultQuiz();
   return (
     <>
@@ -25,6 +36,8 @@ export function QuizFields({ draft }: { draft: Partial<ApplicationData> }) {
           correct. 1 retake allowed.
         </p>
       </div>
+      {/* Quiz-level refinements (the TF/MC ordering rules) belong to no field. */}
+      <FieldError messages={errors.quiz} />
 
       {[0, 1].map((i) => {
         const q = quiz[i];
@@ -38,7 +51,16 @@ export function QuizFields({ draft }: { draft: Partial<ApplicationData> }) {
             </p>
             <FormField fullWidth>
               <FormLabel required>Question Text</FormLabel>
-              <FormInput name={`q${i + 1}_question`} defaultValue={q?.question ?? ""} required />
+              <FormInput
+                id={`q${i + 1}_question`}
+                name={`q${i + 1}_question`}
+                defaultValue={q?.question ?? ""}
+                required
+                minLength={5}
+                maxLength={500}
+                aria-invalid={errors[`q${i + 1}_question`] ? true : undefined}
+              />
+              <FieldError messages={errors[`q${i + 1}_question`]} />
             </FormField>
             <div className="mt-2 flex gap-3 text-[12px] text-text-mid">
               {(["True", "False"] as const).map((v) => (
@@ -53,6 +75,7 @@ export function QuizFields({ draft }: { draft: Partial<ApplicationData> }) {
                 </label>
               ))}
             </div>
+            <FieldError messages={errors[`q${i + 1}_correct`]} />
           </div>
         );
       })}
@@ -69,7 +92,16 @@ export function QuizFields({ draft }: { draft: Partial<ApplicationData> }) {
             </p>
             <FormField fullWidth>
               <FormLabel required>Question Text</FormLabel>
-              <FormInput name={`q${i + 1}_question`} defaultValue={q?.question ?? ""} required />
+              <FormInput
+                id={`q${i + 1}_question`}
+                name={`q${i + 1}_question`}
+                defaultValue={q?.question ?? ""}
+                required
+                minLength={5}
+                maxLength={500}
+                aria-invalid={errors[`q${i + 1}_question`] ? true : undefined}
+              />
+              <FieldError messages={errors[`q${i + 1}_question`]} />
             </FormField>
             <div className="mt-2 grid gap-2 sm:grid-cols-2">
               {[0, 1, 2, 3].map((opt) => (
@@ -85,15 +117,25 @@ export function QuizFields({ draft }: { draft: Partial<ApplicationData> }) {
                   />
                   <FormInput
                     type="text"
+                    id={`q${i + 1}_option_${opt}`}
                     name={`q${i + 1}_option_${opt}`}
                     defaultValue={options[opt] ?? ""}
                     placeholder={`Option ${opt + 1}`}
                     required
+                    minLength={1}
+                    maxLength={200}
                     className="border-0 bg-transparent p-0 focus:ring-0"
                   />
                 </label>
               ))}
             </div>
+            {[0, 1, 2, 3].map((opt) => (
+              <FieldError
+                key={`err${opt}`}
+                messages={errors[`q${i + 1}_option_${opt}`]}
+              />
+            ))}
+            <FieldError messages={errors[`q${i + 1}_correct`]} />
           </div>
         );
       })}

@@ -9,6 +9,9 @@ import { getCurrentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { rateLimit } from "@/lib/rate-limit";
 import { orgStepSchema } from "@/lib/forms/application/schemas";
+import { orgRawFromForm } from "@/lib/forms/application/form-mapping";
+import { sanitizeEcho } from "@/lib/forms/draft-echo";
+import { normalizeFormText } from "@/lib/forms/normalize";
 import {
   eventDetailsSchema,
   qualifierSchema,
@@ -18,6 +21,7 @@ import {
   attachedCoursesSchema,
   deriveEventType,
   isEventOnly,
+  eventCreditCost,
   isInlineFullCourse,
   eventSessionApplicationSchema,
   type EventData,
@@ -172,7 +176,14 @@ export async function getEventDraft(eventId: string): Promise<EventDraft | null>
   };
 }
 
-/** Validate a slice and merge it into the draft's eventData (mirrors mergeStep). */
+/**
+ * Validate a slice and merge it into the draft's eventData (mirrors mergeStep).
+ *
+ * On failure it persists the RAW slice and redirects with ?error=validation so
+ * the step page can re-render what the provider typed and re-derive the
+ * messages from it. See the two editing rules in
+ * lib/forms/application/merge-step.ts (no transaction, no bare try/catch).
+ */
 async function mergeEventStep(
   eventId: string,
   schema: z.ZodTypeAny,
@@ -180,22 +191,25 @@ async function mergeEventStep(
   route: string,
 ): Promise<Record<string, unknown>> {
   const companyId = await customerCompanyId();
-  const result = schema.safeParse(raw);
-  if (!result.success) {
-    const issue = result.error.issues[0];
-    const detail = issue
-      ? `${String(issue.path[0] ?? "Form")}: ${issue.message}`.slice(0, 200)
-      : "Please check the highlighted fields.";
-    redirect(`${route}?error=validation&detail=${encodeURIComponent(detail)}`);
-  }
-  const parsed = result.data as Record<string, unknown>;
   const existing = await prisma.event.findFirst({
     where: { id: eventId, companyId, status: "DRAFT" },
     select: { eventData: true },
   });
   if (!existing) throw new Error("Event draft not found");
+  const current = (existing.eventData as Record<string, unknown>) ?? {};
+
+  const result = schema.safeParse(raw);
+  if (!result.success) {
+    const echo = sanitizeEcho(raw);
+    await prisma.event.updateMany({
+      where: { id: eventId, companyId, status: "DRAFT" },
+      data: { eventData: { ...current, ...echo.value } as Prisma.InputJsonValue },
+    });
+    redirect(`${route}?error=${echo.truncated ? "too_long" : "validation"}`);
+  }
+  const parsed = result.data as Record<string, unknown>;
   const merged = {
-    ...((existing.eventData as Record<string, unknown>) ?? {}),
+    ...current,
     ...parsed,
   };
   await prisma.event.update({
@@ -210,16 +224,10 @@ export async function saveEventDetails(formData: FormData) {
   if (!eventId) throw new Error("Missing eventId");
   const companyId = await customerCompanyId();
 
-  const org = {
-    organizationName: String(formData.get("organizationName") ?? ""),
-    organizationAddress: String(formData.get("organizationAddress") ?? ""),
-    adminName: String(formData.get("adminName") ?? ""),
-    adminEmail: String(formData.get("adminEmail") ?? ""),
-    adminPhone: String(formData.get("adminPhone") ?? ""),
-  };
+  const org = orgRawFromForm(formData);
   const details = {
-    name: String(formData.get("name") ?? ""),
-    eventDate: String(formData.get("eventDate") ?? ""),
+    name: normalizeFormText(formData.get("name")),
+    eventDate: normalizeFormText(formData.get("eventDate")),
   };
 
   await mergeEventStep(
@@ -304,23 +312,23 @@ export async function saveEventQuiz(formData: FormData) {
   const quiz = [
     {
       type: "TF" as const,
-      question: String(formData.get("q1_question") ?? ""),
+      question: normalizeFormText(formData.get("q1_question")),
       correctAnswer: (formData.get("q1_correct") === "True" ? "True" : "False") as
         | "True"
         | "False",
     },
     {
       type: "TF" as const,
-      question: String(formData.get("q2_question") ?? ""),
+      question: normalizeFormText(formData.get("q2_question")),
       correctAnswer: (formData.get("q2_correct") === "True" ? "True" : "False") as
         | "True"
         | "False",
     },
     ...[2, 3, 4].map((i) => ({
       type: "MC" as const,
-      question: String(formData.get(`q${i + 1}_question`) ?? ""),
+      question: normalizeFormText(formData.get(`q${i + 1}_question`)),
       options: [0, 1, 2, 3].map((j) =>
-        String(formData.get(`q${i + 1}_option_${j}`) ?? ""),
+        normalizeFormText(formData.get(`q${i + 1}_option_${j}`)),
       ),
       correctIndex: Number(formData.get(`q${i + 1}_correct`) ?? 0),
     })),
@@ -431,18 +439,26 @@ export async function submitEvent(formData: FormData) {
   const inlineFull = isInlineFullCourse(type);
 
   // Shared prerequisite: event name/date + org captured at the details step.
-  if (!draft.name || !draft.eventDate || !data.organizationName) {
-    redirect(
-      `${ROUTES.details}?error=validation&detail=${encodeURIComponent(
-        "Some required details are missing. Finish this step.",
-      )}`,
-    );
+  //
+  // This MUST be a strict parse, not a presence check. Drafts now save
+  // tolerantly (mergeEventStep echoes the raw slice back on validation failure
+  // so the provider does not lose the screen), so a merely non-empty
+  // organizationName or an unvalidated adminEmail can sit in eventData. Without
+  // the strict gate that invalid provider data would reach PENDING and land on
+  // the accreditation record. Mirrors the per-session gates below.
+  const detailsGate = orgStepSchema.merge(eventDetailsSchema).safeParse({
+    ...data,
+    name: draft.name,
+    eventDate: draft.eventDate,
+  });
+  if (!detailsGate.success) {
+    redirect(`${ROUTES.details}?error=validation`);
   }
 
   // Lightweight inline path (SELECTIVE_INLINE): the event is ONE application
   // whose sessions are Session/Question/Answer rows on event_sessions. Charge
-  // one application credit per session (the same per-session rate as the
-  // full-course path) and move the event to PENDING atomically.
+  // one application credit for the whole event (approval mints a single Event
+  // ID and no courses) and move the event to PENDING atomically.
   if (type === EventType.SELECTIVE_INLINE) {
     const inline = draft.sessions.filter((s) => s.courseId === null);
     if (inline.length === 0) {
@@ -479,7 +495,7 @@ export async function submitEvent(formData: FormData) {
         )}`,
       );
     }
-    const n = inline.length;
+    const cost = eventCreditCost(type);
     const totalHours = inline.reduce(
       (sum, s) => sum + (s.durationHours ? Number(s.durationHours) : 0),
       0,
@@ -491,23 +507,27 @@ export async function submitEvent(formData: FormData) {
       where: { id: companyId },
       select: { applicationCredits: true },
     });
-    if ((bal?.applicationCredits ?? 0) < n) {
+    if ((bal?.applicationCredits ?? 0) < cost) {
       redirect(`${ROUTES.review}?error=credits`);
     }
 
     await prisma.$transaction(async (tx) => {
+      // The row lock stays unconditional even when cost is 0: it also serializes
+      // the DRAFT -> PENDING transition below.
       await tx.$executeRaw`select id from public.companies where id = ${companyId}::uuid for update`;
       const company = await tx.company.findUniqueOrThrow({
         where: { id: companyId },
         select: { applicationCredits: true },
       });
-      if (company.applicationCredits < n) {
+      if (company.applicationCredits < cost) {
         throw new Error("Not enough application credits");
       }
-      await tx.company.update({
-        where: { id: companyId },
-        data: { applicationCredits: { decrement: n } },
-      });
+      if (cost > 0) {
+        await tx.company.update({
+          where: { id: companyId },
+          data: { applicationCredits: { decrement: cost } },
+        });
+      }
       // Drop any stale DRAFT session applications left behind by the retired
       // full-course SELECTIVE_INLINE flow so they cannot linger after submit.
       await tx.courseApplication.deleteMany({
@@ -525,9 +545,9 @@ export async function submitEvent(formData: FormData) {
     });
   } else if (inlineFull) {
     // Event-only full-course path (FULL_EVENT_QUIZ): each session is a full
-    // course application. Validate every one, charge one application credit per
-    // session, and move them + the event to PENDING atomically. Per-course
-    // types stay free (their courses were already paid).
+    // course application. Validate every one, charge one application credit for
+    // the whole event, and move them + the event to PENDING atomically.
+    // Per-course types stay free (their courses were already paid).
     const apps = draft.sessionApplications;
     if (apps.length === 0) {
       redirect(
@@ -543,17 +563,16 @@ export async function submitEvent(formData: FormData) {
     }));
     const bad = parsedSessions.find((s) => !s.parsed.success);
     if (bad) {
-      redirect(
-        `${ROUTES.sessions}/${bad.id}/course?error=validation&detail=${encodeURIComponent(
-          "This session is missing required fields. Finish each step and save.",
-        )}`,
-      );
+      // "incomplete", not "validation": the missing field may be on any of this
+      // session's four steps, so the Course step we land on would re-derive
+      // step1Schema and correctly find nothing wrong.
+      redirect(`${ROUTES.sessions}/${bad.id}/course?error=incomplete`);
     }
     const sessions = parsedSessions.map((s) => ({
       id: s.id,
       data: (s.parsed as { success: true; data: EventSessionApplicationData }).data,
     }));
-    const n = sessions.length;
+    const cost = eventCreditCost(type);
     const totalHours = sessions.reduce((sum, s) => sum + s.data.ceCreditHours, 0);
     const submittedAt = new Date();
 
@@ -562,23 +581,27 @@ export async function submitEvent(formData: FormData) {
       where: { id: companyId },
       select: { applicationCredits: true },
     });
-    if ((bal?.applicationCredits ?? 0) < n) {
+    if ((bal?.applicationCredits ?? 0) < cost) {
       redirect(`${ROUTES.review}?error=credits`);
     }
 
     await prisma.$transaction(async (tx) => {
+      // The row lock stays unconditional even when cost is 0: it also serializes
+      // the DRAFT -> PENDING transition below.
       await tx.$executeRaw`select id from public.companies where id = ${companyId}::uuid for update`;
       const company = await tx.company.findUniqueOrThrow({
         where: { id: companyId },
         select: { applicationCredits: true },
       });
-      if (company.applicationCredits < n) {
+      if (company.applicationCredits < cost) {
         throw new Error("Not enough application credits");
       }
-      await tx.company.update({
-        where: { id: companyId },
-        data: { applicationCredits: { decrement: n } },
-      });
+      if (cost > 0) {
+        await tx.company.update({
+          where: { id: companyId },
+          data: { applicationCredits: { decrement: cost } },
+        });
+      }
 
       // Flip each session application DRAFT -> PENDING, mirroring the columns the
       // reviewer queue + accreditation read (as submitApplication does).

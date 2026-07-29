@@ -6,10 +6,7 @@ import { z } from "zod";
 import { Prisma, EventType } from "@prisma/client";
 import { getCurrentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
-import {
-  step2Schema,
-  step3Schema,
-} from "@/lib/forms/application/schemas";
+import { step3Schema } from "@/lib/forms/application/schemas";
 import {
   sessionCourseInfoSchema,
   mcQuestionSchema,
@@ -19,10 +16,10 @@ import {
   creatorRawFromForm,
   presentersRawFromForm,
 } from "@/lib/forms/application/form-mapping";
-import {
-  sanitizeRichText,
-  richTextPlainLength,
-} from "@/lib/forms/application/rich-text";
+import { sanitizeRichText } from "@/lib/forms/application/rich-text";
+import { step2WriteSchema } from "@/lib/forms/application/write-schemas";
+import { sanitizeEcho } from "@/lib/forms/draft-echo";
+import { normalizeFormText } from "@/lib/forms/normalize";
 
 /*
   Server actions for the SELECTIVE_INLINE per-session mini-wizard. Each session
@@ -32,7 +29,8 @@ import {
   event_sessions.question. This is the lightweight event-only path: NO
   CourseApplication / AccreditedCourse rows are ever created (approveEvent keys
   the accreditation model on pending session applications existing), and billing
-  stays one application credit per session at submit.
+  is one application credit for the whole event at submit, no matter how many
+  sessions it lists (see eventCreditCost in lib/forms/event/schemas.ts).
 
   Parallels lib/events/session-actions.ts (the FULL_EVENT_QUIZ full-course
   sub-wizard) but targets event_sessions JSONB instead of course_applications,
@@ -77,6 +75,11 @@ async function recomputeEventTotalHours(
  * course_info JSONB (scoped to the caller's company + a DRAFT, inline session).
  * Mirrors mergeApplicationStep, but on EventSession instead of CourseApplication.
  * Returns the parsed slice + the parent event id.
+ *
+ * On failure it persists the RAW slice and redirects with ?error=validation, so
+ * the step page can re-render exactly what the provider typed and re-derive the
+ * messages from it. See the two editing rules in
+ * lib/forms/application/merge-step.ts (no transaction, no bare try/catch).
  */
 async function mergeSessionSlice(
   sessionId: string,
@@ -86,16 +89,6 @@ async function mergeSessionSlice(
   errorRoute: string,
   extraColumns?: (parsed: Record<string, unknown>) => Record<string, unknown>,
 ): Promise<{ parsed: Record<string, unknown>; eventId: string }> {
-  const result = schema.safeParse(raw);
-  if (!result.success) {
-    const issue = result.error.issues[0];
-    const detail = issue
-      ? `${String(issue.path[0] ?? "Form")}: ${issue.message}`.slice(0, 200)
-      : "Please check the highlighted fields.";
-    redirect(`${errorRoute}?error=validation&detail=${encodeURIComponent(detail)}`);
-  }
-  const parsed = result.data as Record<string, unknown>;
-
   const session = await prisma.eventSession.findFirst({
     where: {
       id: sessionId,
@@ -105,9 +98,30 @@ async function mergeSessionSlice(
     select: { courseInfo: true, eventId: true },
   });
   if (!session) throw new Error("Session not found");
+  const current = (session.courseInfo as Record<string, unknown>) ?? {};
+
+  const result = schema.safeParse(raw);
+  if (!result.success) {
+    // Echo only. extraColumns (name/durationHours) is deliberately NOT applied:
+    // there is no parsed slice to mirror, and leaving the columns on their last
+    // good values keeps the sessions list readable. The session then reads as
+    // incomplete (isInlineSessionComplete), which blocks Review until it is
+    // fixed. recomputeEventTotalHours is skipped because redirect() throws.
+    const echo = sanitizeEcho(raw);
+    await prisma.eventSession.updateMany({
+      where: {
+        id: sessionId,
+        courseId: null,
+        event: { companyId, status: "DRAFT" },
+      },
+      data: { courseInfo: { ...current, ...echo.value } as Prisma.InputJsonValue },
+    });
+    redirect(`${errorRoute}?error=${echo.truncated ? "too_long" : "validation"}`);
+  }
+  const parsed = result.data as Record<string, unknown>;
 
   const merged = {
-    ...((session.courseInfo as Record<string, unknown>) ?? {}),
+    ...current,
     ...parsed,
   };
   await prisma.eventSession.update({
@@ -231,20 +245,17 @@ export async function saveInlineSessionCreator(formData: FormData) {
   if (!sessionId) throw new Error("Missing sessionId");
   const companyId = await customerCompanyId();
 
+  // Sanitize first so the echo can never store raw pasted markup. The visible
+  // -text floor/ceiling now live in step2WriteSchema; they used to be an ad-hoc
+  // pre-check here that redirected BEFORE the merge helper ran, which bypassed
+  // the echo and blanked all 13 creator fields.
   const detailedBioHtml = sanitizeRichText(
     String(formData.get("detailedBioHtml") ?? ""),
   );
-  if (richTextPlainLength(detailedBioHtml) < 20) {
-    redirect(
-      `${sessionStep(sessionId, "creator")}?error=validation&detail=${encodeURIComponent(
-        "Detailed bio: please write at least 20 characters.",
-      )}`,
-    );
-  }
   await mergeSessionSlice(
     sessionId,
     companyId,
-    step2Schema,
+    step2WriteSchema,
     creatorRawFromForm(formData, detailedBioHtml),
     sessionStep(sessionId, "creator"),
   );
@@ -273,32 +284,33 @@ export async function saveInlineSessionQuestion(formData: FormData) {
 
   const question = {
     type: "MC" as const,
-    question: String(formData.get("question") ?? ""),
-    options: [0, 1, 2, 3].map((j) => String(formData.get(`option_${j}`) ?? "")),
+    question: normalizeFormText(formData.get("question")),
+    options: [0, 1, 2, 3].map((j) => normalizeFormText(formData.get(`option_${j}`))),
     correctIndex: Number(formData.get("correctIndex") ?? 0),
   };
   const result = mcQuestionSchema.safeParse(question);
-  if (!result.success) {
-    const issue = result.error.issues[0];
-    const detail = issue
-      ? `${String(issue.path[0] ?? "Question")}: ${issue.message}`.slice(0, 200)
-      : "Please complete the question and all four answers.";
-    redirect(
-      `${sessionStep(sessionId, "question")}?error=validation&detail=${encodeURIComponent(detail)}`,
-    );
-  }
 
   // `question` is a full overwrite (no JSONB merge), so the ownership predicate
-  // goes straight on the write — one round-trip, no TOCTOU window.
+  // goes straight on the write: one round-trip, no TOCTOU window. On failure we
+  // still write, echoing the raw question so the step page can re-render it and
+  // re-derive the errors instead of blanking the form.
+  const echo = result.success ? null : sanitizeEcho(question);
+  const value = echo ? echo.value : result.data;
   const res = await prisma.eventSession.updateMany({
     where: {
       id: sessionId,
       courseId: null,
       event: { companyId, status: "DRAFT" },
     },
-    data: { question: result.data as unknown as Prisma.InputJsonValue },
+    data: { question: value as unknown as Prisma.InputJsonValue },
   });
   if (res.count === 0) throw new Error("Session not found");
+
+  if (echo) {
+    redirect(
+      `${sessionStep(sessionId, "question")}?error=${echo.truncated ? "too_long" : "validation"}`,
+    );
+  }
 
   revalidatePath(SESSIONS_LIST);
   redirect(SESSIONS_LIST);

@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  orgRawFromForm,
   courseInfoRawFromForm,
   creatorRawFromForm,
   presentersRawFromForm,
@@ -127,5 +128,79 @@ describe("presentersRawFromForm", () => {
     const raw = presentersRawFromForm(formDataFrom(rest));
     expect(raw.presenters[0].role).toBe("Primary Presenter");
     expect(step3Schema.safeParse(raw).success).toBe(true);
+  });
+});
+
+/*
+  Normalization. The builders are the ONLY place raw wizard strings are built,
+  which is what makes normalizeFormText impossible to miss; see its doc comment
+  for why un-normalized textarea input fails a server cap the browser accepted.
+*/
+describe("normalization", () => {
+  function fd(fields: Record<string, string>): FormData {
+    const f = new FormData();
+    for (const [k, v] of Object.entries(fields)) f.set(k, v);
+    return f;
+  }
+
+  it("folds CRLF to LF in course-info text so browser and server caps agree", () => {
+    const raw = courseInfoRawFromForm(
+      fd({ courseObjectives: "1. A\r\n2. B\r\n3. C", courseOutline: "Part 1\r\nPart 2" }),
+    );
+    expect(raw.courseObjectives).toBe("1. A\n2. B\n3. C");
+    expect(raw.courseOutline).toBe("Part 1\nPart 2");
+  });
+
+  it("brings a CRLF-inflated field back under its cap", () => {
+    // 1,500 chars + 500 newlines is exactly 2,000 in the browser but 2,500 on
+    // the wire, which used to fail courseObjectives' .max(2000).
+    const browserValue = "x".repeat(1500) + "\n".repeat(500);
+    const raw = courseInfoRawFromForm(
+      fd({ courseObjectives: browserValue.replace(/\n/g, "\r\n") }),
+    );
+    expect(raw.courseObjectives.length).toBeLessThanOrEqual(2000);
+  });
+
+  it("trims surrounding whitespace", () => {
+    expect(orgRawFromForm(fd({ adminEmail: "  admin@example.com  " })).adminEmail).toBe(
+      "admin@example.com",
+    );
+  });
+
+  it("treats a whitespace-only optional education entry as cleared", () => {
+    const raw = creatorRawFromForm(fd({ educationPart2: "   ", educationPart3: "" }), "<p>b</p>");
+    expect(raw.educationPart2).toBeUndefined();
+    expect(raw.educationPart3).toBeUndefined();
+    // educationPart4 keeps its "N/A" default.
+    expect(raw.educationPart4).toBe("N/A");
+  });
+
+  it("normalizes presenter text", () => {
+    const raw = presentersRawFromForm(fd({ presenter_0_bio: "  Line 1\r\nLine 2  " }));
+    expect(raw.presenters[0].bio).toBe("Line 1\nLine 2");
+  });
+
+  it("defaults a missing presenter role rather than posting an empty enum", () => {
+    expect(presentersRawFromForm(fd({})).presenters[0].role).toBe("Primary Presenter");
+  });
+
+  it("maps every org field", () => {
+    expect(
+      orgRawFromForm(
+        fd({
+          organizationName: "Texas Dental Association",
+          organizationAddress: "1946 S IH-35, Austin, TX 78704",
+          adminName: "Pat Admin",
+          adminEmail: "admin@example.com",
+          adminPhone: "555-987-6543",
+        }),
+      ),
+    ).toEqual({
+      organizationName: "Texas Dental Association",
+      organizationAddress: "1946 S IH-35, Austin, TX 78704",
+      adminName: "Pat Admin",
+      adminEmail: "admin@example.com",
+      adminPhone: "555-987-6543",
+    });
   });
 });

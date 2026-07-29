@@ -7,7 +7,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
   event flips DRAFT -> PENDING only when at least one session exists and every
   session's full application + question validate. Crucially the flow creates NO
   CourseApplication rows (approveEvent keys the lightweight-vs-full-course model
-  on pending session applications existing), and bills one credit per session.
+  on pending session applications existing), and bills ONE credit for the whole
+  event no matter how many sessions it lists (eventCreditCost).
 */
 
 const { getCurrentUser, prismaMock, txMock, redirectMock, sendEmail } = vi.hoisted(() => {
@@ -17,7 +18,11 @@ const { getCurrentUser, prismaMock, txMock, redirectMock, sendEmail } = vi.hoist
       findUniqueOrThrow: vi.fn(),
       update: vi.fn(),
     },
-    courseApplication: { deleteMany: vi.fn(), create: vi.fn() },
+    courseApplication: {
+      deleteMany: vi.fn(),
+      create: vi.fn(),
+      updateMany: vi.fn(),
+    },
     event: { updateMany: vi.fn() },
   };
   return {
@@ -114,8 +119,16 @@ function draftEvent(overrides: Record<string, unknown> = {}) {
     eventDate: "June 14-15, 2026",
     eventType: "SELECTIVE_INLINE",
     totalHours: null,
+    // Full org slice: submitEvent gates the details step with a strict
+    // orgStepSchema.merge(eventDetailsSchema) parse, not a presence check,
+    // because drafts now save tolerantly (mergeEventStep echoes invalid input
+    // back so the provider does not lose the screen).
     eventData: {
       organizationName: "Texas Dental Association",
+      organizationAddress: "1946 S IH-35, Austin, TX 78704",
+      adminName: "Pat Admin",
+      adminEmail: "admin@example.com",
+      adminPhone: "555-987-6543",
     },
     company: { name: "Texas Dental Association" },
     sessions: [
@@ -220,7 +233,7 @@ describe("submitEvent — SELECTIVE_INLINE completeness gate", () => {
     expect(prismaMock.$transaction).not.toHaveBeenCalled();
   });
 
-  it("moves the event to PENDING (one credit per session) when every session is complete", async () => {
+  it("moves the event to PENDING for one credit when every session is complete", async () => {
     prismaMock.event.findFirst.mockResolvedValue(draftEvent());
     await expect(submitEvent(submitForm())).rejects.toThrow(
       /NEXT_REDIRECT:\/company\/events\?just=submitted/,
@@ -228,7 +241,7 @@ describe("submitEvent — SELECTIVE_INLINE completeness gate", () => {
     expect(prismaMock.$transaction).toHaveBeenCalledTimes(1);
     expect(txMock.company.update).toHaveBeenCalledWith({
       where: { id: "company-1" },
-      data: { applicationCredits: { decrement: 2 } },
+      data: { applicationCredits: { decrement: 1 } },
     });
     expect(txMock.event.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -238,11 +251,133 @@ describe("submitEvent — SELECTIVE_INLINE completeness gate", () => {
     );
   });
 
+  it("charges exactly one credit no matter how many sessions", async () => {
+    // 8 sessions, mirroring the Smile Together event that was billed 8 credits
+    // for a single Event ID before 2026-07-29.
+    const sessions = Array.from({ length: 8 }, (_, i) => ({
+      id: `s${i}`,
+      courseId: null,
+      name: `Session ${i}`,
+      durationHours: 1,
+      question: MC_QUESTION,
+      courseInfo: sessionInfo(`Session ${i}`, 1),
+    }));
+    prismaMock.event.findFirst.mockResolvedValue(draftEvent({ sessions }));
+    await expect(submitEvent(submitForm())).rejects.toThrow(
+      /NEXT_REDIRECT:\/company\/events\?just=submitted/,
+    );
+    expect(txMock.company.update).toHaveBeenCalledWith({
+      where: { id: "company-1" },
+      data: { applicationCredits: { decrement: 1 } },
+    });
+  });
+
+  it("submits an 8-session event on a balance of exactly 1 credit", async () => {
+    const sessions = Array.from({ length: 8 }, (_, i) => ({
+      id: `s${i}`,
+      courseId: null,
+      name: `Session ${i}`,
+      durationHours: 1,
+      question: MC_QUESTION,
+      courseInfo: sessionInfo(`Session ${i}`, 1),
+    }));
+    prismaMock.company.findUnique.mockResolvedValue({ applicationCredits: 1 });
+    txMock.company.findUniqueOrThrow.mockResolvedValue({ applicationCredits: 1 });
+    prismaMock.event.findFirst.mockResolvedValue(draftEvent({ sessions }));
+    await expect(submitEvent(submitForm())).rejects.toThrow(
+      /NEXT_REDIRECT:\/company\/events\?just=submitted/,
+    );
+    expect(txMock.company.update).toHaveBeenCalledWith({
+      where: { id: "company-1" },
+      data: { applicationCredits: { decrement: 1 } },
+    });
+  });
+
+  it("redirects to review with error=credits on a zero balance, charging nothing", async () => {
+    prismaMock.company.findUnique.mockResolvedValue({ applicationCredits: 0 });
+    prismaMock.event.findFirst.mockResolvedValue(draftEvent());
+    await expect(submitEvent(submitForm())).rejects.toThrow(
+      /NEXT_REDIRECT:\/company\/events\/new\/review\?error=credits/,
+    );
+    expect(prismaMock.$transaction).not.toHaveBeenCalled();
+  });
+
   it("creates NO CourseApplication rows (keeps the lightweight-inline model discriminator)", async () => {
     prismaMock.event.findFirst.mockResolvedValue(draftEvent());
     await expect(submitEvent(submitForm())).rejects.toThrow(
       /NEXT_REDIRECT:\/company\/events\?just=submitted/,
     );
     expect(txMock.courseApplication.create).not.toHaveBeenCalled();
+  });
+});
+
+/*
+  FULL_EVENT_QUIZ (Opt 1) shares the event-only billing rule: every session is a
+  real CourseApplication row that flips DRAFT -> PENDING, but the EVENT is still
+  accredited as one application and costs one credit.
+*/
+describe("submitEvent — FULL_EVENT_QUIZ billing", () => {
+  // Unlike the inline model, a FULL_EVENT_QUIZ session application is gated by
+  // eventSessionApplicationSchema, which merges orgStepSchema (the sub-wizard
+  // seeds org/contact from the event at creation).
+  const ORG_SLICE = {
+    organizationName: "Texas Dental Association",
+    organizationAddress: "1946 S IH-35, Austin, TX 78704",
+    adminName: "Pat Admin",
+    adminEmail: "admin@example.com",
+    adminPhone: "555-987-6543",
+  };
+
+  function fullQuizEvent(sessionCount: number) {
+    return draftEvent({
+      eventType: "FULL_EVENT_QUIZ",
+      sessions: [],
+      sessionApplications: Array.from({ length: sessionCount }, (_, i) => ({
+        id: `app-${i}`,
+        applicationData: {
+          ...ORG_SLICE,
+          ...sessionInfo(`Session ${i}`, 2),
+          quiz: [MC_QUESTION],
+        },
+      })),
+    });
+  }
+
+  beforeEach(() => {
+    txMock.courseApplication.updateMany.mockResolvedValue({ count: 1 });
+  });
+
+  it("charges one credit for a 3-session event and flips every session", async () => {
+    prismaMock.event.findFirst.mockResolvedValue(fullQuizEvent(3));
+    await expect(submitEvent(submitForm())).rejects.toThrow(
+      /NEXT_REDIRECT:\/company\/events\?just=submitted/,
+    );
+    expect(txMock.company.update).toHaveBeenCalledWith({
+      where: { id: "company-1" },
+      data: { applicationCredits: { decrement: 1 } },
+    });
+    expect(txMock.courseApplication.updateMany).toHaveBeenCalledTimes(3);
+  });
+
+  it("submits a 3-session event on a balance of exactly 1 credit", async () => {
+    prismaMock.company.findUnique.mockResolvedValue({ applicationCredits: 1 });
+    txMock.company.findUniqueOrThrow.mockResolvedValue({ applicationCredits: 1 });
+    prismaMock.event.findFirst.mockResolvedValue(fullQuizEvent(3));
+    await expect(submitEvent(submitForm())).rejects.toThrow(
+      /NEXT_REDIRECT:\/company\/events\?just=submitted/,
+    );
+    expect(txMock.company.update).toHaveBeenCalledWith({
+      where: { id: "company-1" },
+      data: { applicationCredits: { decrement: 1 } },
+    });
+  });
+
+  it("redirects to review with error=credits on a zero balance", async () => {
+    prismaMock.company.findUnique.mockResolvedValue({ applicationCredits: 0 });
+    prismaMock.event.findFirst.mockResolvedValue(fullQuizEvent(3));
+    await expect(submitEvent(submitForm())).rejects.toThrow(
+      /NEXT_REDIRECT:\/company\/events\/new\/review\?error=credits/,
+    );
+    expect(prismaMock.$transaction).not.toHaveBeenCalled();
   });
 });

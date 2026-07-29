@@ -2,13 +2,18 @@ import { PageHeader } from "@/components/portal-shell";
 import { ApplicationStepBar } from "@/components/application-form/step-bar";
 import {
   FormCard,
-  FormErrorBanner,
   FormField,
   FormInput,
   FormLabel,
   FormNav,
-  FormTextarea,
 } from "@/components/application-form/form-controls";
+import { CountedTextarea } from "@/components/application-form/counted-fields";
+import {
+  StepErrors,
+  FieldError,
+} from "@/components/application-form/field-errors";
+import { deriveStepErrors } from "@/lib/forms/field-errors";
+import { orgStepSchema } from "@/lib/forms/application/schemas";
 import { requireApplicationCredits } from "@/lib/company/credit-guards";
 import { prisma } from "@/lib/prisma";
 import { ensureDraft, getDraftData, saveOrgStep } from "@/lib/forms/application/actions";
@@ -22,10 +27,10 @@ import { ensureDraft, getDraftData, saveOrgStep } from "@/lib/forms/application/
 export default async function ApplicationOrgStepPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; detail?: string }>;
+  searchParams: Promise<{ error?: string }>;
 }) {
   const { user, credits: totalCredits } = await requireApplicationCredits();
-  const { error, detail } = await searchParams;
+  const { error } = await searchParams;
   const applicationId = await ensureDraft();
   const draft = await getDraftData(applicationId);
 
@@ -41,6 +46,10 @@ export default async function ApplicationOrgStepPage({
     draft.adminName ??
     [user.firstName, user.lastName].filter(Boolean).join(" ").trim();
   const adminEmailDefault = draft.adminEmail ?? user.email ?? "";
+
+  // Re-derived from the draft the failing action echoed back, so the messages
+  // line up with the values rendered below.
+  const errors = error === "validation" ? deriveStepErrors(orgStepSchema, draft) : {};
 
   return (
     <>
@@ -68,7 +77,7 @@ export default async function ApplicationOrgStepPage({
           ↓ Worksheet
         </span>
       </a>
-      {error === "validation" ? <FormErrorBanner detail={detail} /> : null}
+      <StepErrors error={error} errors={errors} />
       <form action={saveOrgStep} className="space-y-5">
         <input type="hidden" name="applicationId" value={applicationId} />
         <FormCard title="Step 1 — Organization & Contact">
@@ -77,24 +86,30 @@ export default async function ApplicationOrgStepPage({
               Name of Organization / Company / Association / Individual
             </FormLabel>
             <FormInput
+              id="organizationName"
               name="organizationName"
               defaultValue={orgNameDefault}
               required
               minLength={2}
               maxLength={200}
+              aria-invalid={errors.organizationName ? true : undefined}
             />
+            <FieldError messages={errors.organizationName} />
           </FormField>
           <FormField fullWidth>
             <FormLabel required hint="City, State, Zip">
               Organization Full Address
             </FormLabel>
-            <FormTextarea
+            <CountedTextarea
+              id="organizationAddress"
               name="organizationAddress"
               defaultValue={draft.organizationAddress ?? ""}
               required
               minLength={5}
-              maxLength={400}
+              max={400}
+              invalid={Boolean(errors.organizationAddress)}
             />
+            <FieldError messages={errors.organizationAddress} />
           </FormField>
           <FormField fullWidth>
             <FormLabel
@@ -104,32 +119,42 @@ export default async function ApplicationOrgStepPage({
               Process Administrator Full Name
             </FormLabel>
             <FormInput
+              id="adminName"
               name="adminName"
               defaultValue={adminNameDefault}
               required
               minLength={2}
               maxLength={200}
+              aria-invalid={errors.adminName ? true : undefined}
             />
+            <FieldError messages={errors.adminName} />
           </FormField>
           <FormField>
             <FormLabel required>Process Administrator Email</FormLabel>
             <FormInput
               type="email"
+              id="adminEmail"
               name="adminEmail"
               defaultValue={adminEmailDefault}
               required
+              maxLength={200}
+              aria-invalid={errors.adminEmail ? true : undefined}
             />
+            <FieldError messages={errors.adminEmail} />
           </FormField>
           <FormField>
             <FormLabel required>Process Administrator Phone</FormLabel>
             <FormInput
               type="tel"
+              id="adminPhone"
               name="adminPhone"
               defaultValue={draft.adminPhone ?? ""}
               required
               minLength={7}
               maxLength={40}
+              aria-invalid={errors.adminPhone ? true : undefined}
             />
+            <FieldError messages={errors.adminPhone} />
           </FormField>
         </FormCard>
         <FormNav nextLabel="Next: Course Information" />

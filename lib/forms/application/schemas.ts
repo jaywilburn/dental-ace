@@ -80,20 +80,44 @@ export const fileRef = z.object({
 });
 export type FileRef = z.infer<typeof fileRef>;
 
+/*
+  Every .max() below carries its own message. Zod's default ("Too big: expected
+  string to have <=2000 characters") was being shown to providers verbatim,
+  prefixed with the raw JSON key, which read as a system error rather than
+  something they could act on. The numbers themselves are unchanged.
+*/
 export const orgStepSchema = z.object({
-  organizationName: z.string().min(2, "Organization name is required").max(200),
+  organizationName: z
+    .string()
+    .min(2, "Organization name is required")
+    .max(200, "Keep the organization name under 200 characters."),
   organizationAddress: z
     .string()
     .min(5, "Full address (City, State, Zip) is required")
-    .max(400),
-  adminName: z.string().min(2, "Process administrator name is required").max(200),
-  adminEmail: z.string().email("Enter a valid email"),
-  adminPhone: z.string().min(7, "Enter a valid phone number").max(40),
+    .max(400, "Keep the address under 400 characters."),
+  adminName: z
+    .string()
+    .min(2, "Process administrator name is required")
+    .max(200, "Keep the administrator name under 200 characters."),
+  adminEmail: z
+    .string()
+    .email("Enter a valid email")
+    .max(200, "Keep the email under 200 characters."),
+  adminPhone: z
+    .string()
+    .min(7, "Enter a valid phone number")
+    .max(40, "Keep the phone number under 40 characters."),
 });
 
 export const step1Schema = z.object({
-  courseTitle: z.string().min(3, "Course title is required").max(200),
-  ceCreditHours: z.number().min(0.5).max(40),
+  courseTitle: z
+    .string()
+    .min(3, "Course title is required")
+    .max(200, "Keep the course title under 200 characters."),
+  ceCreditHours: z
+    .number()
+    .min(0.5, "Enter at least 0.5 CE hours.")
+    .max(40, "Enter no more than 40 CE hours."),
   subjectMatter: z.enum(CATEGORIES),
   // Provider-declared course format: one of the four canonical COURSE_FORMATS.
   // Persisted to AccreditedCourse.application.deliveryMethod on submit and used
@@ -103,58 +127,108 @@ export const step1Schema = z.object({
   shortDescription: z
     .string()
     .min(20, "Add a short description (up to 2 paragraphs)")
-    .max(1500),
-  publicProtectionStatement: z.string().min(20, "Please describe how this course benefits patient safety").max(2000),
-  courseObjectives: z.string().min(20, "List at least 3 objectives").max(2000),
+    .max(1500, "Keep the short description under 1,500 characters."),
+  publicProtectionStatement: z
+    .string()
+    .min(20, "Please describe how this course benefits patient safety")
+    .max(2000, "Keep the public protection statement under 2,000 characters."),
+  courseObjectives: z
+    .string()
+    .min(20, "List at least 3 objectives")
+    .max(2000, "Keep the objectives under 2,000 characters."),
   // Text since 2026-06 (client feedback: type/paste the outline, not upload).
   // Applications saved before the change carry a fileRef under this key; the
   // read schema below keeps those parseable.
   courseOutline: z
     .string()
     .min(1, "Course outline is required")
-    .max(20_000),
+    .max(20_000, "Keep the course outline under 20,000 characters."),
 });
 
 export const step2Schema = z.object({
-  creatorName: z.string().min(2).max(200),
-  credentials: z.string().min(2).max(200),
-  currentPosition: z.string().min(2).max(200),
+  creatorName: z.string().min(2).max(200, "Keep the creator name under 200 characters."),
+  credentials: z.string().min(2).max(200, "Keep the credentials under 200 characters."),
+  currentPosition: z
+    .string()
+    .min(2)
+    .max(200, "Keep the current position under 200 characters."),
   // Rich-text bio authored in the Step 2 editor (client feedback 2026-06:
   // WYSIWYG, not an upload). Always sanitized through
-  // lib/forms/application/rich-text.ts before it reaches this schema;
-  // saveStep2 additionally enforces a minimum visible-text length.
-  detailedBioHtml: z.string().min(1, "Detailed bio is required").max(20_000),
-  creatorEmail: z.string().email("Enter a valid email"),
-  creatorPhone: z.string().min(7, "Enter a valid phone number").max(40),
-  creatorAddress: z.string().min(5, "Address (City, State, Zip) is required").max(400),
+  // lib/forms/application/rich-text.ts before it reaches this schema.
+  //
+  // This cap counts HTML, so pasted formatting can spend it without much
+  // visible text. The VISIBLE-text floor and ceiling live in
+  // ./write-schemas.ts (step2WriteSchema), which is server-only because
+  // richTextPlainLength pulls in sanitize-html and this module ships to the
+  // browser via the public attendee forms.
+  detailedBioHtml: z
+    .string()
+    .min(1, "Detailed bio is required")
+    .max(20_000, "The detailed bio is too long. Shorten it or paste it as plain text."),
+  creatorEmail: z
+    .string()
+    .email("Enter a valid email")
+    .max(200, "Keep the email under 200 characters."),
+  creatorPhone: z
+    .string()
+    .min(7, "Enter a valid phone number")
+    .max(40, "Keep the phone number under 40 characters."),
+  creatorAddress: z
+    .string()
+    .min(5, "Address (City, State, Zip) is required")
+    .max(400, "Keep the address under 400 characters."),
   highestDegree: z.enum(HIGHEST_DEGREES),
   educationPart1: z
     .string()
     .min(2, "List universities/colleges, degrees, and graduation dates")
-    .max(1000),
-  educationPart2: z.string().max(1000).optional(),
-  educationPart3: z.string().max(1000).optional(),
-  educationPart4: z.string().max(1000).default("N/A"),
+    .max(1000, "Keep this education entry under 1,000 characters."),
+  educationPart2: z
+    .string()
+    .max(1000, "Keep this education entry under 1,000 characters.")
+    .optional(),
+  educationPart3: z
+    .string()
+    .max(1000, "Keep this education entry under 1,000 characters.")
+    .optional(),
+  educationPart4: z
+    .string()
+    .max(1000, "Keep this education entry under 1,000 characters.")
+    .default("N/A"),
   creatorExperience: z
     .string()
     .min(10, "Describe experience relative to the course subject")
-    .max(2000),
+    .max(2000, "Keep the experience description under 2,000 characters."),
   // CV/Resume question removed 2026-06 (client: no longer needed). Legacy
   // applications still carry a cvResume value; the read schema keeps it
   // parseable so old records stay viewable.
 });
 
 export const presenterSchema = z.object({
-  name: z.string().min(2).max(200),
+  name: z.string().min(2).max(200, "Keep the presenter name under 200 characters."),
   role: z.enum(["Primary Presenter", "Co-Presenter", "Moderator"]),
-  commercialDisclosure: z.string().min(2).max(1000),
-  experience: z.string().min(2, "Experience is required").max(1000),
-  training: z.string().min(2, "Training received is required").max(1000),
-  bio: z.string().min(2, "Bio is required").max(2000),
+  commercialDisclosure: z
+    .string()
+    .min(2)
+    .max(1000, "Keep the commercial disclosure under 1,000 characters."),
+  experience: z
+    .string()
+    .min(2, "Experience is required")
+    .max(1000, "Keep the presenter experience under 1,000 characters."),
+  training: z
+    .string()
+    .min(2, "Training received is required")
+    .max(1000, "Keep the training description under 1,000 characters."),
+  bio: z
+    .string()
+    .min(2, "Bio is required")
+    .max(2000, "Keep the presenter bio under 2,000 characters."),
 });
 
 export const step3Schema = z.object({
-  presenters: z.array(presenterSchema).min(1).max(8),
+  presenters: z
+    .array(presenterSchema)
+    .min(1, "Add at least one presenter.")
+    .max(8, "You can list up to 8 presenters."),
   // Presenter headshot upload removed 2026-06 (client: no longer needed).
   // Legacy applications still carry a headshot fileRef; the read schema keeps
   // it parseable so old records stay viewable (shown via the Attachments card).
@@ -162,14 +236,27 @@ export const step3Schema = z.object({
 
 const trueFalseQuestionSchema = z.object({
   type: z.literal("TF"),
-  question: z.string().min(5).max(500),
+  question: z
+    .string()
+    .min(5, "Write a question of at least 5 characters.")
+    .max(500, "Keep each question under 500 characters."),
   correctAnswer: z.enum(["True", "False"]),
 });
 
 const multipleChoiceQuestionSchema = z.object({
   type: z.literal("MC"),
-  question: z.string().min(5).max(500),
-  options: z.array(z.string().min(1).max(200)).length(4),
+  question: z
+    .string()
+    .min(5, "Write a question of at least 5 characters.")
+    .max(500, "Keep each question under 500 characters."),
+  options: z
+    .array(
+      z
+        .string()
+        .min(1, "Every answer option needs text.")
+        .max(200, "Keep each answer under 200 characters."),
+    )
+    .length(4),
   correctIndex: z.number().int().min(0).max(3),
 });
 

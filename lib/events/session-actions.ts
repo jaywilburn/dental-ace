@@ -7,19 +7,19 @@ import { getCurrentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import {
   step1Schema,
-  step2Schema,
   step3Schema,
   orgStepSchema,
 } from "@/lib/forms/application/schemas";
-import {
-  mcQuestionSchema,
-  eventSessionQuizStepSchema,
-} from "@/lib/forms/event/schemas";
+import { eventSessionQuizStepSchema } from "@/lib/forms/event/schemas";
 import { mergeApplicationStep } from "@/lib/forms/application/merge-step";
+import { step2WriteSchema } from "@/lib/forms/application/write-schemas";
 import {
-  sanitizeRichText,
-  richTextPlainLength,
-} from "@/lib/forms/application/rich-text";
+  courseInfoRawFromForm,
+  creatorRawFromForm,
+  presentersRawFromForm,
+} from "@/lib/forms/application/form-mapping";
+import { sanitizeRichText } from "@/lib/forms/application/rich-text";
+import { normalizeFormText } from "@/lib/forms/normalize";
 
 /*
   Server actions for the inline event-session sub-wizard (event-only full-course
@@ -169,22 +169,11 @@ export async function saveSessionCourse(formData: FormData) {
   if (!sessionAppId) throw new Error("Missing sessionAppId");
   const companyId = await customerCompanyId();
 
-  const raw = {
-    courseTitle: String(formData.get("courseTitle") ?? ""),
-    ceCreditHours: Number(formData.get("ceCreditHours") ?? 0),
-    subjectMatter: String(formData.get("subjectMatter") ?? ""),
-    deliveryFormat: String(formData.get("deliveryFormat") ?? ""),
-    primaryDistributionFormat: String(formData.get("primaryDistributionFormat") ?? ""),
-    shortDescription: String(formData.get("shortDescription") ?? ""),
-    publicProtectionStatement: String(formData.get("publicProtectionStatement") ?? ""),
-    courseObjectives: String(formData.get("courseObjectives") ?? ""),
-    courseOutline: String(formData.get("courseOutline") ?? ""),
-  };
   await mergeApplicationStep(
     sessionAppId,
     companyId,
     step1Schema,
-    raw,
+    courseInfoRawFromForm(formData),
     sessionStep(sessionAppId, "course"),
   );
   redirect(sessionStep(sessionAppId, "creator"));
@@ -195,34 +184,16 @@ export async function saveSessionCreator(formData: FormData) {
   if (!sessionAppId) throw new Error("Missing sessionAppId");
   const companyId = await customerCompanyId();
 
+  // Sanitize first so the echo can never store raw pasted markup. The visible
+  // -text floor/ceiling live in step2WriteSchema; they used to be an ad-hoc
+  // pre-check here that redirected BEFORE the merge helper ran, bypassing the
+  // echo and blanking all 13 creator fields.
   const detailedBioHtml = sanitizeRichText(String(formData.get("detailedBioHtml") ?? ""));
-  if (richTextPlainLength(detailedBioHtml) < 20) {
-    redirect(
-      `${sessionStep(sessionAppId, "creator")}?error=validation&detail=${encodeURIComponent(
-        "Detailed bio: please write at least 20 characters.",
-      )}`,
-    );
-  }
-  const raw = {
-    creatorName: String(formData.get("creatorName") ?? ""),
-    credentials: String(formData.get("credentials") ?? ""),
-    currentPosition: String(formData.get("currentPosition") ?? ""),
-    detailedBioHtml,
-    creatorEmail: String(formData.get("creatorEmail") ?? ""),
-    creatorPhone: String(formData.get("creatorPhone") ?? ""),
-    creatorAddress: String(formData.get("creatorAddress") ?? ""),
-    highestDegree: String(formData.get("highestDegree") ?? ""),
-    educationPart1: String(formData.get("educationPart1") ?? ""),
-    educationPart2: String(formData.get("educationPart2") ?? "") || undefined,
-    educationPart3: String(formData.get("educationPart3") ?? "") || undefined,
-    educationPart4: String(formData.get("educationPart4") ?? "") || "N/A",
-    creatorExperience: String(formData.get("creatorExperience") ?? ""),
-  };
   await mergeApplicationStep(
     sessionAppId,
     companyId,
-    step2Schema,
-    raw,
+    step2WriteSchema,
+    creatorRawFromForm(formData, detailedBioHtml),
     sessionStep(sessionAppId, "creator"),
   );
   redirect(sessionStep(sessionAppId, "presenters"));
@@ -233,21 +204,11 @@ export async function saveSessionPresenters(formData: FormData) {
   if (!sessionAppId) throw new Error("Missing sessionAppId");
   const companyId = await customerCompanyId();
 
-  const presenters = [
-    {
-      name: String(formData.get("presenter_0_name") ?? ""),
-      role: String(formData.get("presenter_0_role") ?? "Primary Presenter"),
-      commercialDisclosure: String(formData.get("presenter_0_commercialDisclosure") ?? ""),
-      experience: String(formData.get("presenter_0_experience") ?? ""),
-      training: String(formData.get("presenter_0_training") ?? ""),
-      bio: String(formData.get("presenter_0_bio") ?? ""),
-    },
-  ];
   await mergeApplicationStep(
     sessionAppId,
     companyId,
     step3Schema,
-    { presenters },
+    presentersRawFromForm(formData),
     sessionStep(sessionAppId, "presenters"),
   );
   redirect(sessionStep(sessionAppId, "quiz"));
@@ -261,27 +222,21 @@ export async function saveSessionQuiz(formData: FormData) {
   // One MC question per session (July 2026): it becomes the single question the
   // attendee answers for this session (course.quizQuestions -> firstCourseMc).
   // Stored as a 1-element quiz array so downstream reads are unchanged.
+  //
+  // Validated by the merge helper rather than a pre-check, so a bad question
+  // echoes back to the form instead of blanking it. The helper's schema wraps
+  // mcQuestionSchema, so the error paths stay quiz[0].* and map to q1_* keys.
   const question = {
     type: "MC" as const,
-    question: String(formData.get("question") ?? ""),
-    options: [0, 1, 2, 3].map((j) => String(formData.get(`option_${j}`) ?? "")),
+    question: normalizeFormText(formData.get("question")),
+    options: [0, 1, 2, 3].map((j) => normalizeFormText(formData.get(`option_${j}`))),
     correctIndex: Number(formData.get("correctIndex") ?? 0),
   };
-  const result = mcQuestionSchema.safeParse(question);
-  if (!result.success) {
-    const issue = result.error.issues[0];
-    const detail = issue
-      ? `${String(issue.path[0] ?? "Question")}: ${issue.message}`.slice(0, 200)
-      : "Please complete the question and all four answers.";
-    redirect(
-      `${sessionStep(sessionAppId, "quiz")}?error=validation&detail=${encodeURIComponent(detail)}`,
-    );
-  }
   await mergeApplicationStep(
     sessionAppId,
     companyId,
     eventSessionQuizStepSchema,
-    { quiz: [result.data] },
+    { quiz: [question] },
     sessionStep(sessionAppId, "quiz"),
   );
   // Last step: back to the sessions list to add another or review.

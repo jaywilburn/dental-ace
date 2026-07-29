@@ -1,13 +1,15 @@
 import { cn } from "@/lib/utils";
+import { inputBase } from "./form-styles";
 
 /*
   Form input primitives styled to match logic/dentalace-dev-mockup-suite-v3.html
   .form-input / .form-select / .form-label. Pure server-rendered tags; no client
   state. Used by the multi-step application form.
-*/
 
-const inputBase =
-  "w-full rounded-md border border-border bg-white px-3 py-2 text-[13px] text-navy outline-none transition-colors focus:border-ace focus:ring-2 focus:ring-ace/30";
+  Fields with a character limit use CountedTextarea from ./counted-fields
+  instead of FormTextarea, so the provider can see how close they are to the cap
+  before the server rejects the step.
+*/
 
 export function FormLabel({
   children,

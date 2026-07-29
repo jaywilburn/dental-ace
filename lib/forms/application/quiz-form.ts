@@ -1,4 +1,5 @@
 import { step4Schema, type QuizQuestion } from "@/lib/forms/application/schemas";
+import { normalizeFormText } from "@/lib/forms/normalize";
 
 /*
   FormData -> quiz-array mapping for the 5-question certificate quiz. The field
@@ -21,15 +22,17 @@ export function quizFromFormData(formData: QuizFormData): QuizQuestion[] {
   return [
     ...[1, 2].map((n) => ({
       type: "TF" as const,
-      question: String(formData.get(`q${n}_question`) ?? ""),
+      question: normalizeFormText(formData.get(`q${n}_question`)),
       correctAnswer: (formData.get(`q${n}_correct`) === "True" ? "True" : "False") as
         | "True"
         | "False",
     })),
     ...[3, 4, 5].map((n) => ({
       type: "MC" as const,
-      question: String(formData.get(`q${n}_question`) ?? ""),
-      options: [0, 1, 2, 3].map((j) => String(formData.get(`q${n}_option_${j}`) ?? "")),
+      question: normalizeFormText(formData.get(`q${n}_question`)),
+      options: [0, 1, 2, 3].map((j) =>
+        normalizeFormText(formData.get(`q${n}_option_${j}`)),
+      ),
       correctIndex: Number(formData.get(`q${n}_correct`) ?? 0),
     })),
   ];

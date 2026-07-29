@@ -13,7 +13,8 @@ import {
   addInlineSession,
   removeInlineSession,
 } from "@/lib/events/inline-session-actions";
-import { isEventOnly } from "@/lib/forms/event/schemas";
+import { isEventOnly, eventCreditCost } from "@/lib/forms/event/schemas";
+import { prisma } from "@/lib/prisma";
 
 /*
   Event wizard, Sessions step (event-only types). Two builders share this step,
@@ -25,14 +26,15 @@ import { isEventOnly } from "@/lib/forms/event/schemas";
   - FULL_EVENT_QUIZ (Opt 1): each session is a full course application captured
     inline (sessions/[sessionAppId]/...), plus one multiple-choice question.
 
-  Both bill one application credit per session at submit.
+  Both bill one application credit for the whole event at submit, no matter how
+  many sessions are added.
 */
 export default async function EventSessionsPage({
   searchParams,
 }: {
   searchParams: Promise<{ error?: string; detail?: string }>;
 }) {
-  await requireDentalAce();
+  const user = await requireDentalAce();
   const { error, detail } = await searchParams;
   const eventId = await ensureEventDraft();
   const draft = await getEventDraft(eventId);
@@ -40,6 +42,28 @@ export default async function EventSessionsPage({
   if (!isEventOnly(draft.eventType)) {
     redirect("/company/events/new/courses");
   }
+
+  // Non-blocking heads-up only. Deliberately NOT a requireApplicationCredits()
+  // gate: that redirects to the buy page, which would eject a provider out of a
+  // half-built multi-session draft with no way back to it.
+  const credits = user.companyId
+    ? (
+        await prisma.company.findUnique({
+          where: { id: user.companyId },
+          select: { applicationCredits: true },
+        })
+      )?.applicationCredits ?? 0
+    : 0;
+  const lowCredits =
+    credits < eventCreditCost(draft.eventType) ? (
+      <div className="mb-4 rounded-md border border-orange-300 bg-orange-50 p-3 text-[12px] text-orange-700 text-pretty">
+        You have {credits} application credits. You can build this event now, and
+        you will need 1 credit to submit it.{" "}
+        <Link href="/company/buy/credits" className="font-semibold underline">
+          Buy credits
+        </Link>
+      </div>
+    ) : null;
 
   // Lightweight inline builder (SELECTIVE_INLINE): each session is a full course
   // application captured through its own mini-wizard, stored on event_sessions.
@@ -51,6 +75,7 @@ export default async function EventSessionsPage({
       <>
         <PageHeader title="New Event" subtitle="Step 3 of 4 — Sessions" />
         {error === "validation" ? <FormErrorBanner detail={detail} /> : null}
+        {lowCredits}
 
         <div className="mb-4 rounded-md border border-ver bg-ver-bg p-3 text-[12px] text-ver-dark text-pretty">
           Because these sessions are offered only at this event, the whole event
@@ -60,7 +85,7 @@ export default async function EventSessionsPage({
           session&apos;s details, select the sessions they attended, and answer
           each session&apos;s question; a correct answer earns that session&apos;s
           hours on their certificate. Submitting the event uses one application
-          credit per session.
+          credit for the whole event, no matter how many sessions you add.
         </div>
 
         <div className="space-y-3">
@@ -160,6 +185,7 @@ export default async function EventSessionsPage({
     <>
       <PageHeader title="New Event" subtitle="Step 3 of 4 — Sessions" />
       {error === "validation" ? <FormErrorBanner detail={detail} /> : null}
+      {lowCredits}
 
       <div className="mb-4 rounded-md border border-ver bg-ver-bg p-3 text-[12px] text-ver-dark text-pretty">
         Because you are not reusing these sessions as standalone courses, each one
@@ -167,7 +193,8 @@ export default async function EventSessionsPage({
         full application (course info, creator, presenters, and one multiple
         choice question). Attendees answer one question per session and their
         certificate shows the full event hours. Submitting the event uses one
-        application credit per session.
+        application credit for the whole event, no matter how many sessions you
+        add.
       </div>
 
       <div className="space-y-3">
