@@ -64,6 +64,9 @@ export async function renameCompany(formData: FormData) {
         summary: `Renamed company "${company.name}" to "${v.name}"`,
         details: {
           companyId,
+          // companyName is the shared key the audit log links a company by;
+          // oldName/newName stay for the rename-specific record.
+          companyName: v.name,
           oldName: company.name,
           newName: v.name,
           protrackCertsUpdated: synced.count,

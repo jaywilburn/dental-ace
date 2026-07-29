@@ -2,29 +2,37 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { BillingTransactionType } from "@prisma/client";
+import { AdminAuditAction, BillingTransactionType } from "@prisma/client";
 import { requireStaff } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
+import { recordAdminAction } from "@/lib/admin/audit";
 import {
   validateAppCreditAdjustment,
   validateCertBalanceAdjustment,
+  balanceAdjustmentSummary,
+  type BalanceField,
   type OverrideValidation,
 } from "@/lib/admin/override-rules";
 
 /*
   Admin billing overrides (PRD Flow F). Each adjustment runs in a transaction
   with a SELECT ... FOR UPDATE lock on the company row, re-reads the balance
-  UNDER that lock, validates against it, mutates, and writes an append-only
+  UNDER that lock, validates against it, mutates, and writes BOTH an append-only
   billing_transactions row (amountCents 0, stripeEventId null, performedById =
-  admin). No edit/delete path.
+  admin) and a COMPANY_BALANCE_ADJUSTED audit row. No edit/delete path.
 
   Both balances move in either direction, and each writes a type that names the
   balance it touched, so a mis-grant is both reversible and legible.
+
+  The audit row is written in the SAME transaction as the balance change, so
+  there is no such thing as an applied-but-unlogged adjustment. It duplicates
+  what billing_transactions records on purpose: that table answers "what is this
+  company's billing history", the audit log answers "what have admins done", and
+  before 2026-07-29 a balance change appeared only in the first, so nobody
+  looking in the Audit Log could see money move.
 */
 
 class OverrideError extends Error {}
-
-type BalanceField = "applicationCredits" | "certBalance";
 
 /**
  * Applies `delta` to one company balance under a row lock, validating against
@@ -45,9 +53,10 @@ async function applyAdjustment(opts: {
       await tx.$executeRaw`select id from public.companies where id = ${companyId}::uuid for update`;
       const company = await tx.company.findUniqueOrThrow({
         where: { id: companyId },
-        select: { applicationCredits: true, certBalance: true },
+        select: { name: true, applicationCredits: true, certBalance: true },
       });
-      const v = validate(delta, company[field]);
+      const before = company[field];
+      const v = validate(delta, before);
       if (!v.ok) throw new OverrideError(v.error);
       await tx.company.update({
         where: { id: companyId },
@@ -60,6 +69,26 @@ async function applyAdjustment(opts: {
           quantity: delta,
           amountCents: 0,
           performedById: adminId,
+        },
+      });
+      await recordAdminAction(tx, {
+        actorUserId: adminId,
+        // The subject is a company, not a user; identity lives in details.
+        targetUserId: null,
+        action: AdminAuditAction.COMPANY_BALANCE_ADJUSTED,
+        summary: balanceAdjustmentSummary({
+          field,
+          delta,
+          before,
+          companyName: company.name,
+        }),
+        details: {
+          companyId,
+          companyName: company.name,
+          balance: field,
+          delta,
+          before,
+          after: before + delta,
         },
       });
     });

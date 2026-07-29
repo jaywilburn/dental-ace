@@ -2,6 +2,8 @@ import { describe, it, expect } from "vitest";
 import {
   validateAppCreditAdjustment,
   validateCertBalanceAdjustment,
+  balanceAdjustmentSummary,
+  balanceNoun,
 } from "@/lib/admin/override-rules";
 
 describe("validateAppCreditAdjustment", () => {
@@ -56,5 +58,70 @@ describe("validateCertBalanceAdjustment", () => {
   it("keeps its own larger cap", () => {
     expect(validateCertBalanceAdjustment(20000, 0)).toEqual({ ok: true });
     expect(validateCertBalanceAdjustment(100001, 0).ok).toBe(false);
+  });
+});
+
+describe("balanceNoun", () => {
+  it("names each balance and pluralizes on magnitude, not sign", () => {
+    expect(balanceNoun("applicationCredits", 5)).toBe("application credits");
+    expect(balanceNoun("applicationCredits", 1)).toBe("application credit");
+    expect(balanceNoun("applicationCredits", -1)).toBe("application credit");
+    expect(balanceNoun("certBalance", 50)).toBe("certificates");
+    expect(balanceNoun("certBalance", -1)).toBe("certificate");
+  });
+});
+
+describe("balanceAdjustmentSummary", () => {
+  // The Audit Log has no filter UI, so the summary is where an admin reads what
+  // happened. It has to name the balance, the direction and the before/after.
+  it("reads as a removal, naming the balance and the before/after", () => {
+    expect(
+      balanceAdjustmentSummary({
+        field: "applicationCredits",
+        delta: -155,
+        before: 155,
+        companyName: "SKF Practice Solutions",
+      }),
+    ).toBe("Removed 155 application credits from SKF Practice Solutions (155 → 0)");
+  });
+
+  it("reads as an addition", () => {
+    expect(
+      balanceAdjustmentSummary({
+        field: "certBalance",
+        delta: 155,
+        before: 0,
+        companyName: "SKF Practice Solutions",
+      }),
+    ).toBe("Added 155 certificates to SKF Practice Solutions (0 → 155)");
+  });
+
+  it("distinguishes the two balances, which a bare quantity could not", () => {
+    const credits = balanceAdjustmentSummary({
+      field: "applicationCredits",
+      delta: 155,
+      before: 0,
+      companyName: "SKF Practice Solutions",
+    });
+    const certs = balanceAdjustmentSummary({
+      field: "certBalance",
+      delta: 155,
+      before: 0,
+      companyName: "SKF Practice Solutions",
+    });
+    expect(credits).not.toBe(certs);
+    expect(credits).toContain("application credits");
+    expect(certs).toContain("certificates");
+  });
+
+  it("stays singular at one", () => {
+    expect(
+      balanceAdjustmentSummary({
+        field: "applicationCredits",
+        delta: 1,
+        before: 3,
+        companyName: "Pearl, Inc.",
+      }),
+    ).toBe("Added 1 application credit to Pearl, Inc. (3 → 4)");
   });
 });

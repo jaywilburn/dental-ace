@@ -11,6 +11,36 @@
 
 export type OverrideValidation = { ok: true } | { ok: false; error: string };
 
+/** The two company balances an admin can adjust. Keyed to the Prisma field. */
+export type BalanceField = "applicationCredits" | "certBalance";
+
+/** Noun for a balance, pluralized against `count` (sign ignored). */
+export function balanceNoun(field: BalanceField, count: number): string {
+  const plural = Math.abs(count) !== 1;
+  if (field === "applicationCredits") {
+    return plural ? "application credits" : "application credit";
+  }
+  return plural ? "certificates" : "certificate";
+}
+
+/**
+ * Audit-log summary for a balance adjustment. Names the balance, the direction,
+ * the company and the before/after, so the Audit Log answers "who changed this
+ * and to what" without opening the company page.
+ */
+export function balanceAdjustmentSummary(opts: {
+  field: BalanceField;
+  delta: number;
+  before: number;
+  companyName: string;
+}): string {
+  const { field, delta, before, companyName } = opts;
+  const verb = delta < 0 ? "Removed" : "Added";
+  const preposition = delta < 0 ? "from" : "to";
+  const noun = balanceNoun(field, delta);
+  return `${verb} ${Math.abs(delta)} ${noun} ${preposition} ${companyName} (${before} → ${before + delta})`;
+}
+
 function validateAdjustment(
   delta: number,
   currentBalance: number,

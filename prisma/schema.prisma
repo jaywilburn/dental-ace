@@ -233,6 +233,12 @@ enum AdminAuditAction {
   // (the subject is an event/application, not a user); details carries the
   // entity, its id, and the decision that was reversed.
   REVIEW_REOPENED
+  // An admin moved a company's application-credit or certificate balance.
+  // Written by lib/admin/billing-overrides.ts in the SAME transaction as the
+  // balance change and its billing_transactions row. targetUserId is null (the
+  // subject is a company, not a user); details carries companyId, companyName,
+  // which balance moved, the delta, and the before/after values.
+  COMPANY_BALANCE_ADJUSTED
 }
 
 model AdminAuditLog {
