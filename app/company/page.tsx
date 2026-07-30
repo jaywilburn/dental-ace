@@ -5,6 +5,7 @@ import { TrainingVideoCta } from "@/components/company/training-video-cta";
 import { requireDentalAce } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { ONBOARDING_SCHEDULER_URL } from "@/lib/onboarding";
+import { txnLabel, txnQuantityText } from "@/lib/billing/transaction-labels";
 import { dismissOnboarding } from "./actions";
 
 /*
@@ -226,10 +227,10 @@ export default async function CompanyDashboard({
                       }).format(txn.createdAt)}
                     </td>
                     <td className="px-4 py-2 font-medium text-navy">
-                      {labelFor(txn.type)}
+                      {txnLabel(txn.type)}
                     </td>
                     <td className="px-4 py-2 text-text-mid">
-                      {txn.quantity} × {labelFor(txn.type, true)} · $
+                      {txnQuantityText(txn.type, txn.quantity)} · $
                       {(txn.amountCents / 100).toLocaleString("en-US", {
                         minimumFractionDigits: 2,
                       })}
@@ -245,15 +246,3 @@ export default async function CompanyDashboard({
   );
 }
 
-function labelFor(type: string, unit = false): string {
-  switch (type) {
-    case "APP_CREDIT":
-      return unit ? "credit" : "Application credits";
-    case "CERT_BUNDLE":
-      return unit ? "certificate" : "Certificate bundle";
-    case "ADMIN_OVERRIDE":
-      return "Admin override";
-    default:
-      return type;
-  }
-}

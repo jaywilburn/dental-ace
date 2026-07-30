@@ -1,6 +1,7 @@
 import { PageHeader } from "@/components/portal-shell";
 import { requireDentalAce } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
+import { txnLabel, txnQuantityText } from "@/lib/billing/transaction-labels";
 
 /*
   Billing History — paginated table of all billing_transactions rows for the
@@ -73,11 +74,10 @@ export default async function BillingHistoryPage({
                       }).format(txn.createdAt)}
                     </td>
                     <td className="px-4 py-2 font-medium text-navy">
-                      {labelFor(txn.type)}
+                      {txnLabel(txn.type)}
                     </td>
                     <td className="px-4 py-2 text-text-mid">
-                      {txn.quantity}{" "}
-                      {txn.type === "CERT_BUNDLE" ? "certificates" : "credits"}
+                      {txnQuantityText(txn.type, txn.quantity)}
                     </td>
                     <td className="px-4 py-2 text-right font-medium text-navy tabular-nums">
                       {txn.amountCents > 0
@@ -106,15 +106,3 @@ export default async function BillingHistoryPage({
   );
 }
 
-function labelFor(type: string): string {
-  switch (type) {
-    case "APP_CREDIT":
-      return "Application credits";
-    case "CERT_BUNDLE":
-      return "Certificate bundle";
-    case "ADMIN_OVERRIDE":
-      return "Admin override";
-    default:
-      return type;
-  }
-}

@@ -38,7 +38,12 @@ enum ApplicationStatus {
 enum BillingTransactionType {
   APP_CREDIT
   CERT_BUNDLE
+  // Legacy. Records an admin adjustment without saying WHICH balance moved, so
+  // a mis-grant is invisible in the ledger. Retained only for rows written
+  // before 2026-07-29; never write it again. Use the two typed values below.
   ADMIN_OVERRIDE
+  ADMIN_OVERRIDE_APP_CREDITS
+  ADMIN_OVERRIDE_CERTS
 }
 
 // ── Phase 2 (ProTrack) enums ────────────────────────────────────────────────
@@ -228,6 +233,12 @@ enum AdminAuditAction {
   // (the subject is an event/application, not a user); details carries the
   // entity, its id, and the decision that was reversed.
   REVIEW_REOPENED
+  // An admin moved a company's application-credit or certificate balance.
+  // Written by lib/admin/billing-overrides.ts in the SAME transaction as the
+  // balance change and its billing_transactions row. targetUserId is null (the
+  // subject is a company, not a user); details carries companyId, companyName,
+  // which balance moved, the delta, and the before/after values.
+  COMPANY_BALANCE_ADJUSTED
 }
 
 model AdminAuditLog {

@@ -5,6 +5,11 @@ import { prisma } from "@/lib/prisma";
 
 const PAGE_SIZE = 25;
 
+/** Narrow an untyped `details` value to a non-empty string, else undefined. */
+function str(value: unknown): string | undefined {
+  return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
 export default async function AdminAuditPage({
   searchParams,
 }: {
@@ -49,11 +54,15 @@ export default async function AdminAuditPage({
               </thead>
               <tbody>
                 {entries.map((e) => {
-                  const targetEmail =
-                    e.target?.email ??
-                    (e.details && typeof e.details === "object" && !Array.isArray(e.details)
-                      ? (e.details as Record<string, unknown>).email
-                      : undefined);
+                  const details =
+                    e.details && typeof e.details === "object" && !Array.isArray(e.details)
+                      ? (e.details as Record<string, unknown>)
+                      : undefined;
+                  const targetEmail = e.target?.email ?? details?.email;
+                  // Company-scoped actions (rename, balance adjustment) carry no
+                  // target user. Link the company instead of rendering a dash.
+                  const companyId = str(details?.companyId);
+                  const companyName = str(details?.companyName) ?? str(details?.newName);
                   return (
                     <tr key={e.id} className="border-b border-border last:border-b-0 align-top">
                       <td className="px-4 py-2 text-text-muted tabular-nums whitespace-nowrap">
@@ -69,6 +78,10 @@ export default async function AdminAuditPage({
                         {e.target ? (
                           <Link href={`/admin/users/${e.target.id}`} className="text-ace-dark underline">
                             {e.target.email}
+                          </Link>
+                        ) : companyId ? (
+                          <Link href={`/admin/companies/${companyId}`} className="text-ace-dark underline">
+                            {companyName ?? "Company"}
                           </Link>
                         ) : (
                           (typeof targetEmail === "string" ? targetEmail : "—")
