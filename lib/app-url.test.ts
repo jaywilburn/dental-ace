@@ -7,15 +7,15 @@ describe("appBaseUrl", () => {
   });
 
   it("pins to NEXT_PUBLIC_APP_URL when configured, ignoring the request origin", () => {
-    vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://dentalace.org/");
-    expect(appBaseUrl("https://evil.example")).toBe("https://dentalace.org");
+    vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://www.dentalace.org/");
+    expect(appBaseUrl("https://evil.example")).toBe("https://www.dentalace.org");
   });
 
   it("falls back to the canonical domain in production when unconfigured", () => {
     vi.stubEnv("NEXT_PUBLIC_APP_URL", "");
     vi.stubEnv("NODE_ENV", "production");
-    expect(appBaseUrl()).toBe("https://dentalace.org");
-    expect(appBaseUrl("https://evil.example")).toBe("https://dentalace.org");
+    expect(appBaseUrl()).toBe("https://www.dentalace.org");
+    expect(appBaseUrl("https://evil.example")).toBe("https://www.dentalace.org");
   });
 
   it("uses the request origin in dev when unconfigured", () => {

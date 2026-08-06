@@ -7,7 +7,7 @@ import { approveRequest, denyRequest } from "@/lib/auth/access-requests";
 export async function approveAction(formData: FormData): Promise<void> {
   const admin = await requireStaff("ADMIN");
   const id = String(formData.get("id") ?? "");
-  const origin = (await headers()).get("origin") ?? "https://dentalace.org";
+  const origin = (await headers()).get("origin") ?? "https://www.dentalace.org";
   const r = await approveRequest(id, admin.id, origin);
   redirect(r.ok ? "/admin/access-requests?done=approved" : `/admin/access-requests?error=${encodeURIComponent(r.message)}`);
 }

@@ -7,6 +7,7 @@ import { z } from "zod";
 import { StaffRole } from "@prisma/client";
 import { requireStaff } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
+import { appBaseUrl } from "@/lib/app-url";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { recordAdminAction } from "@/lib/admin/audit";
 import { evaluateDeletable } from "@/lib/admin/deletion-rules";
@@ -504,7 +505,7 @@ export async function resendVerification(formData: FormData) {
   if (user.emailVerifiedAt) fail(userId, "That account is already verified.");
 
   const token = signEmailVerificationToken(user.id);
-  const verifyUrl = `${resolveBaseUrl()}/api/auth/verify-email?token=${encodeURIComponent(token)}`;
+  const verifyUrl = `${appBaseUrl()}/api/auth/verify-email?token=${encodeURIComponent(token)}`;
   await sendEmail({
     to: user.email,
     subject: "Confirm your email",
@@ -538,7 +539,7 @@ export async function sendSetPasswordLink(formData: FormData) {
   if (!user) fail(userId, "Account not found.");
 
   const token = signSetPasswordToken(user.id);
-  const setPasswordUrl = `${resolveBaseUrl()}/set-password?token=${encodeURIComponent(token)}`;
+  const setPasswordUrl = `${appBaseUrl()}/set-password?token=${encodeURIComponent(token)}`;
   const roleLabel =
     user.staffRole === "ADMIN" ? "Admin" : user.staffRole === "REVIEWER" ? "Reviewer" : "account";
   await sendEmail({
@@ -559,18 +560,6 @@ export async function sendSetPasswordLink(formData: FormData) {
 
   revalidatePath(`/admin/users/${userId}`);
   back(userId, { ok: "setpw" });
-}
-
-/**
- * Canonical base URL for outbound links without a request object. Mirrors the
- * logic in lib/app-url.ts: NEXT_PUBLIC_APP_URL, then the production domain, then
- * localhost for dev.
- */
-function resolveBaseUrl(): string {
-  const configured = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/+$/, "");
-  if (configured) return configured;
-  if (process.env.NODE_ENV === "production") return "https://dentalace.org";
-  return "http://localhost:3000";
 }
 
 // ── create account (generalized from provision.ts) ───────────────────────────
@@ -644,7 +633,7 @@ export async function createUserAccount(formData: FormData) {
   await notifyAccountCreated(userId);
 
   const token = signSetPasswordToken(userId);
-  const setPasswordUrl = `${resolveBaseUrl()}/set-password?token=${encodeURIComponent(token)}`;
+  const setPasswordUrl = `${appBaseUrl()}/set-password?token=${encodeURIComponent(token)}`;
   const roleLabel =
     data.staffRole === "ADMIN" ? "Admin" : data.staffRole === "REVIEWER" ? "Reviewer" : "account";
   await sendEmail({

@@ -19,6 +19,6 @@ import "server-only";
 export function appBaseUrl(requestOrigin?: string): string {
   const configured = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/+$/, "");
   if (configured) return configured;
-  if (process.env.NODE_ENV === "production") return "https://dentalace.org";
+  if (process.env.NODE_ENV === "production") return "https://www.dentalace.org";
   return requestOrigin ?? "http://localhost:3000";
 }

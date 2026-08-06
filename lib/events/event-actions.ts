@@ -7,6 +7,7 @@ import { z } from "zod";
 import { Prisma, EventType } from "@prisma/client";
 import { getCurrentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
+import { appBaseUrl } from "@/lib/app-url";
 import { rateLimit } from "@/lib/rate-limit";
 import { orgStepSchema } from "@/lib/forms/application/schemas";
 import { orgRawFromForm } from "@/lib/forms/application/form-mapping";
@@ -749,7 +750,7 @@ export async function submitEvent(formData: FormData) {
       ceHours: draft.totalHours ? Number(draft.totalHours) : 0,
       deliveryFormat: "Live Event",
       submittedAt: submittedAt.toLocaleString(),
-      reviewUrl: `${process.env.NEXT_PUBLIC_APP_URL ?? ""}/reviewer/events/${eventId}`,
+      reviewUrl: `${appBaseUrl()}/reviewer/events/${eventId}`,
     };
     try {
       await sendEmail({

@@ -8,6 +8,7 @@ import { rateLimit } from "@/lib/rate-limit";
 import { Prisma } from "@prisma/client";
 import { getCurrentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
+import { appBaseUrl } from "@/lib/app-url";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import {
   orgStepSchema,
@@ -281,7 +282,7 @@ export async function submitApplication(formData: FormData) {
       ceHours: fullData.ceCreditHours,
       deliveryFormat: fullData.deliveryFormat,
       submittedAt: submittedAt.toLocaleString(),
-      reviewUrl: `${process.env.NEXT_PUBLIC_APP_URL ?? ""}/reviewer/${applicationId}`,
+      reviewUrl: `${appBaseUrl()}/reviewer/${applicationId}`,
     };
     try {
       await sendEmail({

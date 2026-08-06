@@ -128,7 +128,7 @@ export async function sendNotices(formData: FormData): Promise<void> {
     },
   });
 
-  const protrackUrl = `${appBaseUrl("https://dentalace.org")}/protrack`;
+  const protrackUrl = `${appBaseUrl("https://www.dentalace.org")}/protrack`;
   const boardRow = await prisma.board.findUnique({
     where: { id: board.id },
     select: { name: true },

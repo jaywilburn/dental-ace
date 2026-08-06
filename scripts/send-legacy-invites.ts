@@ -44,7 +44,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 function resolveBaseUrl(): string {
   const configured = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/+$/, "");
   if (configured) return configured;
-  if (process.env.NODE_ENV === "production") return "https://dentalace.org";
+  if (process.env.NODE_ENV === "production") return "https://www.dentalace.org";
   return "http://localhost:3000";
 }
 

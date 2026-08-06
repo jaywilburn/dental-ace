@@ -78,7 +78,7 @@ export async function registerCompany(formData: FormData): Promise<void> {
       zip: data.zip,
     },
     undefined,
-    (await headers()).get("origin") ?? "https://dentalace.org",
+    (await headers()).get("origin") ?? "https://www.dentalace.org",
   );
   if (!created.ok) {
     redirect(`${REGISTER_ROUTE}?error=validation&detail=${encodeURIComponent(created.message)}`);

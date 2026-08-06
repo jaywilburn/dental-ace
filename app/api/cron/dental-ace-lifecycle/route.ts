@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { appBaseUrl } from "@/lib/app-url";
 import { sendEmail } from "@/lib/email/send";
 import CourseExpiringEmail from "@/emails/course-expiring";
 import LowCertBalanceEmail from "@/emails/low-cert-balance";
@@ -86,7 +87,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const origin = process.env.NEXT_PUBLIC_APP_URL ?? new URL(request.url).origin;
+  const origin = appBaseUrl();
   const now = new Date();
   let coursesReminded = 0;
   let lowBalance = 0;

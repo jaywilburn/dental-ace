@@ -27,7 +27,7 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://dentalace.org"),
+  metadataBase: new URL("https://www.dentalace.org"),
   title: {
     default: "DentalACE One · The Complete Dental CE Platform",
     template: "%s · DentalACE One",
@@ -37,7 +37,7 @@ export const metadata: Metadata = {
   applicationName: "DentalACE One",
   openGraph: {
     type: "website",
-    url: "https://dentalace.org",
+    url: "https://www.dentalace.org",
     siteName: "DentalACE One",
     title: "DentalACE One · The Complete Dental CE Platform",
     description:
