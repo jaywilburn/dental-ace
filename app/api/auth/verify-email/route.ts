@@ -1,20 +1,15 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { prisma } from "@/lib/prisma";
-import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { verifyEmailVerificationToken } from "@/lib/auth/verification-token";
-import { syncIssuedCertsForLicensee } from "@/lib/protrack/ace-sync";
-import { sendEmail } from "@/lib/email/send";
-import { appBaseUrl } from "@/lib/app-url";
-import { notifyAccountCreated } from "@/lib/auth/signup-notification";
-import ProtrackWelcomeEmail from "@/emails/protrack-welcome";
-import WelcomeDentalAceOneEmail from "@/emails/welcome-dental-ace-one";
+import { confirmEmailAndActivate } from "@/lib/auth/activate-account";
 
 /*
   GET /api/auth/verify-email?token=... — the link in the verification email.
 
-  Verifies the signed token, marks the account verified, mirrors confirmation to
-  Supabase Auth (so /login accepts it), runs the now-safe ACE certificate
-  backfill, then sends the user to /login to sign in.
+  Verifies the signed token, then hands off to confirmEmailAndActivate, which
+  marks the account verified, mirrors confirmation to Supabase Auth (so /login
+  accepts it), runs the now-safe ACE certificate backfill, sends the welcome, and
+  notifies ops — exactly once via an atomic claim. Then sends the user to /login
+  to sign in.
 
   SECURITY: this does NOT mint a session. Auto-signing-in from a GET link is a
   login-CSRF / session-fixation vector — a forced navigation to a valid link
@@ -28,79 +23,13 @@ export const runtime = "nodejs";
 export async function GET(request: NextRequest) {
   const origin = request.nextUrl.origin;
   const token = request.nextUrl.searchParams.get("token") ?? "";
-  const fail = () =>
-    NextResponse.redirect(`${origin}/login?error=verification`, 303);
 
   const userId = verifyEmailVerificationToken(token);
-  if (!userId) return fail();
+  if (!userId) return NextResponse.redirect(`${origin}/login?error=verification`, 303);
 
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: {
-      id: true,
-      email: true,
-      firstName: true,
-      signupIntent: true,
-      licenses: {
-        where: { isPrimary: true },
-        select: { state: true, licenseType: true },
-        take: 1,
-      },
-    },
-  });
-  if (!user) return fail();
-
-  // Atomically claim the first verification: flip emailVerifiedAt null -> now in
-  // a single conditional UPDATE. Concurrent requests (an email-scanner prefetch
-  // racing the user's click) then can't both pass a read-then-check guard and
-  // double-fire the welcome + ops notification — only the request that wins the
-  // claim (count === 1) runs the one-time side effects.
-  const claimed = await prisma.user.updateMany({
-    where: { id: userId, emailVerifiedAt: null },
-    data: { emailVerifiedAt: new Date() },
-  });
-  if (claimed.count === 1) {
-    // Mirror to Supabase Auth so signInWithPassword accepts the account later.
-    const admin = createServiceRoleClient();
-    await admin.auth.admin
-      .updateUserById(userId, { email_confirm: true })
-      .catch(() => {});
-    // Email is now proven — backfill any matching DentalACE-issued certificates.
-    await syncIssuedCertsForLicensee(userId).catch(() => {});
-    // The account is now active: send the welcome. Best-effort — a send failure
-    // must not break verification.
-    //
-    // Company / staff signups may never use ProTrack, so they get the platform
-    // welcome instead of leading with "Welcome to ProTrack" (client feedback).
-    // Individuals (and legacy null rows) keep the ProTrack welcome.
-    if (user.signupIntent === "COMPANY" || user.signupIntent === "STAFF") {
-      await sendEmail({
-        to: user.email,
-        subject: WelcomeDentalAceOneEmail.subject(),
-        react: WelcomeDentalAceOneEmail({
-          firstName: user.firstName ?? "there",
-          intent: user.signupIntent === "STAFF" ? "staff" : "company",
-          homeUrl: `${appBaseUrl(origin)}/home`,
-        }),
-      }).catch(() => {});
-    } else {
-      const primary = user.licenses[0];
-      await sendEmail({
-        to: user.email,
-        subject: ProtrackWelcomeEmail.subject(),
-        react: ProtrackWelcomeEmail({
-          firstName: user.firstName ?? "there",
-          state: primary?.state ?? null,
-          licenseType: primary?.licenseType ?? null,
-          dashboardUrl: `${appBaseUrl(origin)}/protrack`,
-        }),
-      }).catch(() => {});
-    }
-
-    // Notify AADB ops that a new account is now active (who + which type).
-    // Best-effort (logs, never throws). Inside the claim so it fires exactly once.
-    await notifyAccountCreated(userId, origin);
-  }
+  // Idempotent activation (mirror to Auth, cert backfill, welcome, ops notice).
+  // A re-click or a user already activated another way is a harmless no-op.
+  await confirmEmailAndActivate(userId, origin);
 
   // No session minted (see SECURITY note above). Send them to sign in.
   return NextResponse.redirect(`${origin}/login?verified=1`, 303);

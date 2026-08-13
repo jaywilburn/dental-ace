@@ -14,20 +14,30 @@ import { getCurrentUser, homePathFor } from "@/lib/auth/session";
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; resent?: string; verified?: string }>;
+  searchParams: Promise<{
+    error?: string;
+    resent?: string;
+    verified?: string;
+    reset?: string;
+    reset_sent?: string;
+  }>;
 }) {
   // If already signed in, skip the form and route to the platform hub.
   const current = await getCurrentUser();
   if (current) redirect(homePathFor());
 
-  const { error, resent, verified } = await searchParams;
+  const { error, resent, verified, reset, reset_sent } = await searchParams;
   const errorMessage = errorMessageFor(error);
   const unverified = error === "unverified";
   const info = verified
     ? "Your email is confirmed. Please sign in."
     : resent
       ? "Verification email sent. Check your inbox."
-      : null;
+      : reset
+        ? "Your password has been reset. Please sign in."
+        : reset_sent
+          ? "If that email is registered, we've sent a password reset link."
+          : null;
 
   return (
     <main className="flex min-h-dvh items-center justify-center bg-navy p-8">
@@ -78,6 +88,11 @@ export default async function LoginPage({
               required
               className="w-full rounded-md border border-white/[0.12] bg-white/[0.07] px-3 py-2.5 text-xs text-white outline-none transition focus:border-ace/60 focus:bg-white/[0.09]"
             />
+            <div className="mt-1.5 text-right">
+              <Link className="text-[10px] text-white/50 transition hover:text-ace-light" href="/forgot-password">
+                Forgot your password?
+              </Link>
+            </div>
           </div>
 
           {info ? (
