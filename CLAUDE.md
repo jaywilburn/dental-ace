@@ -30,6 +30,7 @@ The SOW (v1.1, May 2026) is the contract document, but three stack choices were 
 | NextAuth.js v5 | **Supabase Auth** | Native RLS integration; one fewer service. Access via per-feature entitlement columns on `users` (mirrored to JWT claims), not a single role. |
 | AWS S3 (two buckets) | **Supabase Storage (two buckets)** | Drops the AWS account. Same two-bucket split: `certificates` + `uploads`. Private; signed URLs only. |
 | A rejected application needs a **new credit** to resubmit | **Resubmitting after a decision is free** | Client decision 2026-07-29, after a reviewer rejected a complete event because the review UI hid it. Charging again for our own defect was untenable. Gated by `creditChargedAt`; the rejection email copy was rewritten to match. Flag to AADB as a documented deviation. |
+| Fixed 75/25 revenue split (CE Exchange / AADB) via Stripe Connect | **75/25 (John Stamper Media / AADB), 75% of the gross charge, all platform revenue** | Recipient changed from CE Exchange to John Stamper Media; same 75/25 economics. Confirmed by client 2026-08-05 (an interim 70/30 note from 2026-08-04 was a miscommunication, corrected same week). Covers company SKUs AND ProTrack Pro subscriptions; AADB keeps the master account and absorbs Stripe processing fees out of its 25%. Flag to AADB as a documented deviation. |
 
 Everything else from the SOW stands: Prisma + Postgres, Stripe + Stripe Connect, Resend, Vercel, Puppeteer + `@sparticuz/chromium`, qrcode, ShadCN + Tailwind themed.
 
@@ -99,7 +100,7 @@ DentalACE One is **one platform**; features are gated by **per-user entitlements
 - **Mock mode** — when `STRIPE_SECRET_KEY` is absent (or `STRIPE_MOCK_MODE=true`), `lib/billing/checkout-mode.ts` reports mock mode. The Buy pages route to `/dev/stripe-mock-checkout`, which POSTs to `/api/dev/mock-stripe-webhook`. Both routes call into the same `handleCheckoutCompleted` in `lib/billing/webhook-core.ts` that the real `/api/webhooks/stripe` will. When a real Stripe account lands, only env vars + the session-creation function change.
 - **Local testing (real mode)** — `stripe listen --forward-to localhost:3000/api/webhooks/stripe`.
 - **Live webhook destination must be `https://www.dentalace.org/api/webhooks/stripe`** (the canonical serving domain). The apex `dentalace.org` 308-redirects to `www`, and Stripe never follows redirects, so an apex-pointed endpoint fails every delivery while checkout still succeeds (shipped broken 2026-06-30, caught 2026-07-13). When changing the endpoint, **update the URL in place** — deleting/recreating rotates the signing secret and invalidates `STRIPE_WEBHOOK_SECRET` on Vercel.
-- **Stripe Connect** — AADB is the master account, CE Exchange is the connected recipient. Phase 1 split is a fixed 75/25 (CE Exchange / AADB) automated via transfers.
+- **Stripe Connect revenue share** — AADB is the master account (payouts go to AADB's bank). **75% of every gross charge transfers to John Stamper Media's connected account**; AADB keeps 25% and absorbs Stripe processing fees. Applies to ALL platform revenue: one-time company SKUs and ProTrack Pro subscriptions. (Supersedes the SOW's CE Exchange recipient; confirmed 2026-08-05.) Implementation: `lib/billing/revshare.ts` + the real webhook route. Transfers are created only by the real webhook (never mock mode), pinned to their charge via `source_transaction`, deduped by listing `transfer_group` (session/invoice id) — deliberately **no Stripe idempotency keys** (Stripe caches error responses per key for 24h, which would wedge retries). Subscription revenue is captured via `invoice.payment_succeeded` (initial + renewals), never in the subscription-mode checkout branch (that would double-count). Requires `STRIPE_CONNECT_REVSHARE_ACCOUNT_ID` (unset = fulfill but skip + warn) and `invoice.payment_succeeded` enabled on the Dashboard webhook endpoint (update in place). **Refunds need a manual transfer reversal** in the Dashboard — there is no in-app refund flow.
 - **Admin balance overrides are symmetric and self-describing.** Both balances (`applicationCredits`, `certBalance`) adjust in either direction through `lib/admin/billing-overrides.ts`, validated against the balance read **under the company row lock** and floored at zero. Every write records `ADMIN_OVERRIDE_APP_CREDITS` or `ADMIN_OVERRIDE_CERTS` so the ledger says which balance moved; bare `ADMIN_OVERRIDE` is legacy-only and must never be written again. **Each adjustment also writes a `COMPANY_BALANCE_ADJUSTED` audit row in the same transaction**, so money movement is visible in `/admin/audit` and not only on the company page. The duplication is intentional: `billing_transactions` answers "what is this company's billing history", the audit log answers "what have admins done". (Shipped one-way on the credits side: on 2026-07-29 an admin granted 155 application credits meaning to grant certificates, and neither the panel nor the ledger could undo or even identify it. 28 of 36 rows carry the ambiguous type and are deliberately **not** backfilled, because nothing in the data says which balance they touched.)
 
 ### Events (multi-session Live Event)
@@ -267,3 +268,19 @@ If the admin password is rotated in Supabase Auth, update this table.
 - Repo: **`github.com/jaywilburn/dental-ace`** (private).
 - Branch protection on `main`: PR required before merge (enable once a collaborator is added).
 - Will transfer to the client's GitHub at launch.
+
+---
+
+## Agent skills
+
+### Issue tracker
+
+Client requests are pasted into the session and persisted as local markdown under `.scratch/`. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default vocabulary — the five canonical labels used as-is. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.

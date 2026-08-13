@@ -7,6 +7,10 @@ import {
   syncProSubscription,
   cancelProSubscriptionBySubId,
 } from "@/lib/billing/pro-webhook-core";
+import {
+  maybeCreateRevshareTransfer,
+  type RevshareOutcome,
+} from "@/lib/billing/revshare";
 
 /*
   Real Stripe webhook. Active once STRIPE_SECRET_KEY + STRIPE_WEBHOOK_SECRET are
@@ -15,9 +19,18 @@ import {
 
   Branches on event:
   - checkout.session.completed (mode "subscription") → activate ProTrack Pro.
-  - checkout.session.completed (mode "payment")      → company one-time SKU.
+  - checkout.session.completed (mode "payment")      → company one-time SKU
+                                                       + revshare transfer.
+  - invoice.payment_succeeded                        → revshare transfer for
+                                                       Pro sub payments
+                                                       (initial + renewals).
   - customer.subscription.updated                    → sync Pro status/period.
   - customer.subscription.deleted                    → downgrade to Free.
+
+  Revshare transfer failures return 500 so Stripe redelivers; the grant side is
+  idempotent (billing_transactions.stripe_event_id), so a retry only reattempts
+  the transfer. The invoice.payment_succeeded event must be enabled on the
+  Dashboard webhook endpoint (update it in place, never delete/recreate).
 */
 
 export const runtime = "nodejs";
@@ -71,6 +84,72 @@ function periodEnd(sub: StripeSubLike): Date {
 
 function customerId(sub: StripeSubLike): string {
   return typeof sub.customer === "string" ? sub.customer : sub.customer.id;
+}
+
+// Minimal invoice shape, decoupled from the SDK: charge/payment_intent were
+// top-level fields before the Basil API versions moved them under payments[].
+type StripeInvoiceLike = {
+  id: string;
+  amount_paid?: number | null;
+  currency?: string | null;
+  charge?: string | { id: string } | null;
+  payment_intent?: string | { id: string } | null;
+  payments?: {
+    data?: Array<{
+      payment?: {
+        payment_intent?: string | { id: string } | null;
+        charge?: string | { id: string } | null;
+      } | null;
+    } | null> | null;
+  } | null;
+};
+
+function idOf(v: string | { id: string } | null | undefined): string | null {
+  return typeof v === "string" ? v : (v?.id ?? null);
+}
+
+/** Charge id backing an invoice, resolving the payment intent when needed. */
+async function invoiceChargeId(
+  stripe: Stripe,
+  invoice: StripeInvoiceLike,
+): Promise<string | null> {
+  let paymentIntent = idOf(invoice.payment_intent);
+  const direct = idOf(invoice.charge);
+  if (direct) return direct;
+  if (!paymentIntent) {
+    for (const p of invoice.payments?.data ?? []) {
+      const charge = idOf(p?.payment?.charge);
+      if (charge) return charge;
+      paymentIntent ??= idOf(p?.payment?.payment_intent);
+    }
+  }
+  return paymentIntent ? chargeIdFromPaymentIntent(stripe, paymentIntent) : null;
+}
+
+async function chargeIdFromPaymentIntent(
+  stripe: Stripe,
+  paymentIntentId: string,
+): Promise<string | null> {
+  const intent = (await stripe.paymentIntents.retrieve(
+    paymentIntentId,
+  )) as unknown as { latest_charge?: string | { id: string } | null };
+  return idOf(intent.latest_charge);
+}
+
+function logRevshare(eventId: string, outcome: RevshareOutcome): void {
+  if (outcome.status === "created") {
+    console.log(
+      `[stripe-webhook] ${eventId} revshare transfer created: ${outcome.transferId} (${outcome.amountCents} cents)`,
+    );
+  } else if (outcome.status === "exists") {
+    console.log(
+      `[stripe-webhook] ${eventId} revshare transfer already exists: ${outcome.transferId}`,
+    );
+  } else if (outcome.reason === "no_account") {
+    console.warn(
+      `[stripe-webhook] ${eventId} revshare skipped: STRIPE_CONNECT_REVSHARE_ACCOUNT_ID not set`,
+    );
+  }
 }
 
 async function activateFromSubscription(sub: StripeSubLike): Promise<boolean> {
@@ -164,6 +243,44 @@ export async function POST(request: NextRequest) {
             console.log(
               `[stripe-webhook] ${event.id} ${outcome.status}: ${skuId} x${quantity} -> company ${companyId}`,
             );
+            // Revshare AFTER the grant: the grant is idempotent, so a 500 here
+            // makes Stripe redeliver and only the transfer is reattempted.
+            const gross = session.amount_total ?? 0;
+            if (gross > 0) {
+              const paymentIntentId = idOf(session.payment_intent);
+              const chargeId = paymentIntentId
+                ? await chargeIdFromPaymentIntent(stripe, paymentIntentId)
+                : null;
+              if (!chargeId) {
+                console.error(
+                  `[stripe-webhook] ${event.id} revshare unresolvable: session ${session.id} has no charge`,
+                );
+                return NextResponse.json(
+                  { error: "Revshare source charge not found" },
+                  { status: 500 },
+                );
+              }
+              try {
+                const revshare = await maybeCreateRevshareTransfer(stripe, {
+                  stripeEventId: event.id,
+                  sourceId: session.id,
+                  grossCents: gross,
+                  currency: session.currency ?? "usd",
+                  chargeId,
+                  description: `DentalACE One revenue share (${skuId} x${quantity})`,
+                });
+                logRevshare(event.id, revshare);
+              } catch (err) {
+                console.error(
+                  `[stripe-webhook] ${event.id} revshare transfer failed for session ${session.id}`,
+                  err,
+                );
+                return NextResponse.json(
+                  { error: "Revshare transfer failed" },
+                  { status: 500 },
+                );
+              }
+            }
           } else {
             console.error(
               `[stripe-webhook] ${event.id} dropped (${outcome.status}): ${skuId} x${quantity} -> company ${companyId}`,
@@ -172,10 +289,50 @@ export async function POST(request: NextRequest) {
         } else {
           // Sessions created outside the app (Payment Link, Dashboard) carry
           // no skuId/client_reference_id and can't be fulfilled automatically.
+          // No revshare transfer is created either; handle both manually.
           console.error(
             `[stripe-webhook] ${event.id} unfulfillable: missing ${skuId ? "" : "metadata.skuId "}${companyId ? "" : "client_reference_id"} (session ${session.id})`,
           );
         }
+      }
+      break;
+    }
+    case "invoice.payment_succeeded": {
+      // ProTrack Pro subscription revenue: the initial payment and every
+      // renewal each produce one paid invoice, so this single handler covers
+      // the whole subscription stream without double-counting the checkout.
+      const invoice = event.data.object as unknown as StripeInvoiceLike;
+      const gross = invoice.amount_paid ?? 0;
+      if (gross <= 0) break;
+      const chargeId = await invoiceChargeId(stripe, invoice);
+      if (!chargeId) {
+        console.error(
+          `[stripe-webhook] ${event.id} revshare unresolvable: invoice ${invoice.id} has no charge`,
+        );
+        return NextResponse.json(
+          { error: "Revshare source charge not found" },
+          { status: 500 },
+        );
+      }
+      try {
+        const revshare = await maybeCreateRevshareTransfer(stripe, {
+          stripeEventId: event.id,
+          sourceId: invoice.id,
+          grossCents: gross,
+          currency: invoice.currency ?? "usd",
+          chargeId,
+          description: "DentalACE One revenue share (ProTrack Pro invoice)",
+        });
+        logRevshare(event.id, revshare);
+      } catch (err) {
+        console.error(
+          `[stripe-webhook] ${event.id} revshare transfer failed for invoice ${invoice.id}`,
+          err,
+        );
+        return NextResponse.json(
+          { error: "Revshare transfer failed" },
+          { status: 500 },
+        );
       }
       break;
     }
