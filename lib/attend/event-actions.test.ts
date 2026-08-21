@@ -127,6 +127,24 @@ describe("submitEventAttendance — certificate email recipient + hardening", ()
     mockEvent();
   });
 
+  it("rejects a non-approved event without issuing a certificate (assets stay gated until approval)", async () => {
+    loadEventByToken.mockResolvedValueOnce({
+      id: "event-1",
+      companyId: "company-1",
+      name: "Big Live Event",
+      eventIdNumber: null,
+      status: "PENDING",
+      expiresAt: null,
+      company: { certBalance: 10 },
+    });
+
+    const result = await submitEventAttendance(buildInput());
+
+    expect(result).toEqual({ status: "event_inactive" });
+    expect(prismaMock.$transaction).not.toHaveBeenCalled();
+    expect(sendEmail).not.toHaveBeenCalled();
+  });
+
   it("emails the exact entered address (casing preserved) with the PDF attached", async () => {
     const result = await submitEventAttendance(buildInput());
 

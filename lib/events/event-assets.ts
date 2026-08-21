@@ -1,4 +1,5 @@
 import "server-only";
+import type { ApplicationStatus } from "@prisma/client";
 import { renderQrPng } from "@/lib/qrcode";
 import { renderApprovalLetterPdf } from "@/lib/pdf/approval-letter";
 import { appBaseUrl } from "@/lib/app-url";
@@ -17,6 +18,38 @@ import { getLetterSignatory } from "@/lib/admin/letter-settings";
   Server-only: storage IO uses the service-role client. The caller must already
   have scoped the event to the requesting company.
 */
+
+/*
+  The gate for exposing an event's assets on the company dashboard. An event's
+  assets (attendee link, QR, approval letter, marketing badge) must never surface
+  to the company until the board has approved it. Unlike a standalone course
+  (whose AccreditedCourse row only exists post-approval), an Event row and its
+  attendee_link_token exist from DRAFT, so the dashboard's asset surfaces (the
+  events list + detail pages) gate their render and signed-URL building on this.
+  Centralized after a client report (2026-08-21) that assets appeared pre-approval,
+  to make the invariant explicit and regression-proof. (The public /attend/event
+  claim flow fails closed on its own independent status check.)
+
+  A type guard so callers narrow eventIdNumber/approvedAt/expiresAt to non-null
+  and can build an EventAssetInput without repeating the checks.
+*/
+export type EventAssetGate = {
+  status: ApplicationStatus;
+  eventIdNumber: string | null;
+  approvedAt: Date | null;
+  expiresAt: Date | null;
+};
+
+export function eventAssetsReady<T extends EventAssetGate>(
+  event: T,
+): event is T & { eventIdNumber: string; approvedAt: Date; expiresAt: Date } {
+  return (
+    event.status === "APPROVED" &&
+    event.eventIdNumber !== null &&
+    event.approvedAt !== null &&
+    event.expiresAt !== null
+  );
+}
 
 export type EventAssetInput = {
   attendeeLinkToken: string;

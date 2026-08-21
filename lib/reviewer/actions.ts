@@ -115,6 +115,7 @@ export async function approveApplication(formData: FormData) {
           year: "numeric",
         }),
         myCoursesUrl: `${appBase}/company/courses`,
+        buyCertsUrl: `${appBase}/company/buy/certs`,
       };
       await sendEmail({
         to: customerEmail,

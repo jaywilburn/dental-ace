@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { AssetIo } from "@/lib/courses/course-assets";
-import { eventAssetUrls } from "./event-assets";
+import { eventAssetUrls, eventAssetsReady } from "./event-assets";
 
 // Regeneration (the object-missing path) renders the approval letter, which
 // reads the signatory via getLetterSignatory() -> Prisma. The shared vitest
@@ -101,5 +101,34 @@ describe("eventAssetUrls", () => {
     expect(qrUploads[0]?.body.subarray(0, 4)).toEqual(
       Buffer.from([0x89, 0x50, 0x4e, 0x47]),
     );
+  });
+});
+
+// The gate the company event dashboard (list + detail pages) routes its asset
+// render + signed-URL building through. An event row (and its attendee_link_token)
+// exist from DRAFT, so if this returns true too early a pending event's assets
+// leak on the dashboard (client report, 2026-08-21).
+describe("eventAssetsReady", () => {
+  const approved = {
+    status: "APPROVED" as const,
+    eventIdNumber: "ACE-EVT-2026-00007",
+    approvedAt: new Date("2026-06-01T00:00:00Z"),
+    expiresAt: new Date("2029-06-01T00:00:00Z"),
+  };
+
+  it("is true only for a fully-approved event", () => {
+    expect(eventAssetsReady(approved)).toBe(true);
+  });
+
+  it("is false for every non-approved status", () => {
+    for (const status of ["DRAFT", "PENDING", "REJECTED"] as const) {
+      expect(eventAssetsReady({ ...approved, status })).toBe(false);
+    }
+  });
+
+  it("is false when any approval field is missing", () => {
+    expect(eventAssetsReady({ ...approved, eventIdNumber: null })).toBe(false);
+    expect(eventAssetsReady({ ...approved, approvedAt: null })).toBe(false);
+    expect(eventAssetsReady({ ...approved, expiresAt: null })).toBe(false);
   });
 });

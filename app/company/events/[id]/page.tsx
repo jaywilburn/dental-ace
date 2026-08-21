@@ -5,7 +5,7 @@ import { PageHeader } from "@/components/portal-shell";
 import { requireDentalAce } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { reviseEvent } from "@/lib/company/resubmit-actions";
-import { eventAssetUrls } from "@/lib/events/event-assets";
+import { eventAssetUrls, eventAssetsReady } from "@/lib/events/event-assets";
 import {
   sessionCourseInfoReadSchema,
   eventSessionApplicationReadSchema,
@@ -138,12 +138,10 @@ export default async function CompanyEventDetailPage({
     ? { ...eventAppParsed.data, quiz: [] }
     : null;
 
+  // eventAssetsReady is the single gate for exposing an event's assets; it
+  // narrows eventIdNumber/approvedAt/expiresAt to non-null for the call below.
   const approvedAssets =
-    tab === "assets" &&
-    event.status === "APPROVED" &&
-    event.eventIdNumber &&
-    event.approvedAt &&
-    event.expiresAt
+    tab === "assets" && eventAssetsReady(event)
       ? await eventAssetUrls({
           attendeeLinkToken: event.attendeeLinkToken,
           qrCodeUrl: event.qrCodeUrl,

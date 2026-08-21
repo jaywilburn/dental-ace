@@ -262,6 +262,7 @@ export async function approveEvent(formData: FormData) {
         approvedAt: approvedAt.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }),
         expiresAt: expiresAt.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }),
         myCoursesUrl: `${appBaseUrl()}/company/events`,
+        buyCertsUrl: `${appBaseUrl()}/company/buy/certs`,
       };
       await sendEmail({
         to: customerEmail,

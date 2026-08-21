@@ -3,7 +3,7 @@ import { PageHeader } from "@/components/portal-shell";
 import { requireDentalAce } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { reviseEvent } from "@/lib/company/resubmit-actions";
-import { eventAssetUrls } from "@/lib/events/event-assets";
+import { eventAssetUrls, eventAssetsReady } from "@/lib/events/event-assets";
 import type { ApplicationStatus, EventType } from "@prisma/client";
 
 /*
@@ -67,24 +67,23 @@ export default async function EventsIndexPage({
     { qrViewUrl: string | null; qrDownloadUrl: string | null; letterDownloadUrl: string | null }
   >();
   await Promise.all(
-    events
-      .filter((e) => e.status === "APPROVED" && e.eventIdNumber && e.approvedAt && e.expiresAt)
-      .map(async (e) => {
-        assets.set(
-          e.id,
-          await eventAssetUrls({
-            attendeeLinkToken: e.attendeeLinkToken,
-            qrCodeUrl: e.qrCodeUrl,
-            approvalLetterUrl: e.approvalLetterUrl,
-            eventIdNumber: e.eventIdNumber!,
-            eventName: e.name,
-            companyName: company?.name ?? "",
-            totalHours: e.totalHours ? Number(e.totalHours) : 0,
-            approvedAt: e.approvedAt!,
-            expiresAt: e.expiresAt!,
-          }),
-        );
-      }),
+    // eventAssetsReady narrows eventIdNumber/approvedAt/expiresAt to non-null.
+    events.filter(eventAssetsReady).map(async (e) => {
+      assets.set(
+        e.id,
+        await eventAssetUrls({
+          attendeeLinkToken: e.attendeeLinkToken,
+          qrCodeUrl: e.qrCodeUrl,
+          approvalLetterUrl: e.approvalLetterUrl,
+          eventIdNumber: e.eventIdNumber,
+          eventName: e.name,
+          companyName: company?.name ?? "",
+          totalHours: e.totalHours ? Number(e.totalHours) : 0,
+          approvedAt: e.approvedAt,
+          expiresAt: e.expiresAt,
+        }),
+      );
+    }),
   );
 
   return (
@@ -182,7 +181,7 @@ export default async function EventsIndexPage({
                         >
                           Continue
                         </Link>
-                      ) : event.status === "APPROVED" ? (
+                      ) : eventAssetsReady(event) ? (
                         <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-[11px]">
                           <Link href={`/attend/event/${event.attendeeLinkToken}`} className="text-ace-dark underline">
                             Attendee Link

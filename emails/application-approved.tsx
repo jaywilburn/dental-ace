@@ -15,6 +15,7 @@ export type ApplicationApprovedProps = {
   approvedAt: string;
   expiresAt: string;
   myCoursesUrl: string;
+  buyCertsUrl: string;
 };
 
 export default function ApplicationApprovedEmail({
@@ -25,6 +26,7 @@ export default function ApplicationApprovedEmail({
   approvedAt,
   expiresAt,
   myCoursesUrl,
+  buyCertsUrl,
 }: ApplicationApprovedProps) {
   return (
     <BrandEmail
@@ -115,6 +117,22 @@ export default function ApplicationApprovedEmail({
           across course marketing materials, emails, and websites.
         </Text>
       </Section>
+      <Text
+        style={{
+          margin: "0 0 12px 0",
+          fontSize: 14,
+          lineHeight: 1.65,
+          color: emailColors.textMid,
+        }}
+      >
+        <strong style={{ color: emailColors.navy }}>
+          Your next step: add certificate bundles to your account.
+        </strong>{" "}
+        Attendees can only claim a certificate when your certificate balance is
+        above zero, so purchase a bundle before you share your attendee link or
+        QR code.
+      </Text>
+      <CtaButton href={buyCertsUrl} label="Buy Certificate Bundles →" />
       <CtaButton href={myCoursesUrl} label="Go to My Courses →" />
     </BrandEmail>
   );
