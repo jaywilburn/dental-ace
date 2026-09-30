@@ -1,0 +1,490 @@
+{
+  "_source": "Parsed from the 11 KLOwen course-application .docx files delivered 2026-08-28 (/Users/jasonwilburn/Downloads/Missing Courses Information and Course logos). Q1/Q2 = TF, Q3/Q4/Q5 = MC-4-options-with-correctIndex, per lib/forms/application/schemas.ts quizQuestionSchema + step4Schema. Deterministic repairs applied to source drift:",
+  "_repairs": [
+    "ACE-LEG-00120 (DA123) Q4: source lists 5 options (adds 'A, B, C are true'); dropped that 5th option to fit the 4-option contract. Answer key 'D' still points to 'Both A & B are true'.",
+    "ACE-LEG-00121 (DA124) Q3: source lists 5 options (adds 'None of these statements are true'); dropped that 5th option. Answer 'D' still points to 'A, B, C are true'.",
+    "ACE-LEG-00121 (DA124) Q5: source lists 5 options (adds 'A, B, C'); dropped that 5th option. Answer 'D' still points to 'A & B'.",
+    "ACE-LEG-00123 (DA259) Q4: source answer-options row contained partial question stem prefix; kept only the four bracket options.",
+    "ACE-LEG-00119 (DA122) omitted intentionally: source Q5 has no options at all (only an unrelated stem in the answer-key line). Admin should attach a Q5 via /admin/courses/<id>/quiz."
+  ],
+  "ACE-LEG-00113": {
+    "legacyCourseId": "DA112",
+    "quiz": [
+      {
+        "type": "TF",
+        "question": "All bracket systems are not optimized for individual patients.",
+        "correctAnswer": "True"
+      },
+      {
+        "type": "TF",
+        "question": "Recent 3D digital capabilities have not allowed orthodontists to develop sophisticated algorithms.",
+        "correctAnswer": "False"
+      },
+      {
+        "type": "MC",
+        "question": "Possibilities to create reverse fully computerized treatments will allow:",
+        "options": [
+          "The clinician to use optimized bracket systems",
+          "The practice staff better marketing outcomes",
+          "The practice to improve workflow",
+          "The clinician to become more popular"
+        ],
+        "correctIndex": 0
+      },
+      {
+        "type": "MC",
+        "question": "The following is not a learning objective of this course:",
+        "options": [
+          "Understand the concept of creating a virtual patient",
+          "Monitor treatment rapidly and efficiently",
+          "Develop realistic virtual treatment plans involving teeth and bony structures",
+          "Simplify archwire selection"
+        ],
+        "correctIndex": 3
+      },
+      {
+        "type": "MC",
+        "question": "Recent 3D digital capabilities have allowed us to:",
+        "options": [
+          "Create a more robust and accurate representation of the malocclusions to be treated",
+          "Have a thorough understanding of protocol intricacies presented with IDB",
+          "Understand the role of AI in orthodontics",
+          "Investigate and understand orthodontic trends"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  "ACE-LEG-00114": {
+    "legacyCourseId": "DA113",
+    "quiz": [
+      {
+        "type": "TF",
+        "question": "Jill Allen is an international orthodontic consultant dedicated to helping doctors achieve their dreams.",
+        "correctAnswer": "True"
+      },
+      {
+        "type": "TF",
+        "question": "Leadership and communication are imperative to success.",
+        "correctAnswer": "True"
+      },
+      {
+        "type": "MC",
+        "question": "This session covers the following topic:",
+        "options": [
+          "Artificial Intelligence",
+          "Ortho Practice Success",
+          "Clinical Photography",
+          "Trimline"
+        ],
+        "correctIndex": 1
+      },
+      {
+        "type": "MC",
+        "question": "This course's learning objective is:",
+        "options": [
+          "Understand the difference between personal and situational interactions",
+          "Owning your personality profile",
+          "Responsible growth",
+          "Rewards for staff"
+        ],
+        "correctIndex": 0
+      },
+      {
+        "type": "MC",
+        "question": "A primary objective of this course is:",
+        "options": [
+          "Teach staff how to perform better",
+          "Create a passionate, empowered team dedicated to the success of your practice",
+          "Create an affluent environment for patients",
+          "Teach practice staff professionalism"
+        ],
+        "correctIndex": 1
+      }
+    ]
+  },
+  "ACE-LEG-00115": {
+    "legacyCourseId": "DA114",
+    "quiz": [
+      {
+        "type": "TF",
+        "question": "AI and HI work together to promote better patient compliance.",
+        "correctAnswer": "True"
+      },
+      {
+        "type": "TF",
+        "question": "There are benefits in leveraging the augmented intelligence (AI + HI) approach to remote patient care.",
+        "correctAnswer": "True"
+      },
+      {
+        "type": "MC",
+        "question": "Patient demands around how they want to receive care have sparked the following:",
+        "options": [
+          "Understanding that AI and HI confuses patients and is not worth the investment",
+          "Your practice to not be as efficient and effective as possible",
+          "The growing use of remote monitoring technology in orthodontics and the buzz around artificial intelligence",
+          "Understanding that AI does not integrate into the remote patient care experience"
+        ],
+        "correctIndex": 2
+      },
+      {
+        "type": "MC",
+        "question": "The benefits of leveraging augmented intelligence in your practice are:",
+        "options": [
+          "Ensuring your clinical expertise is replaced",
+          "That AI will not promote better patient compliance and ensure accuracy with the treatment progression",
+          "How augmented intelligence in the remote care setting does not reinforce your clinical autonomy and build on your clinical confidence",
+          "Using a balanced combination of artificial intelligence with human insight"
+        ],
+        "correctIndex": 3
+      },
+      {
+        "type": "MC",
+        "question": "Human Intelligence will always take priority in your practice due to:",
+        "options": [
+          "The relationship building with staff and patients",
+          "AI not being very human like",
+          "Patients being intimidated by artificial intelligence",
+          "Only humans can smile with real teeth"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  "ACE-LEG-00116": {
+    "legacyCourseId": "DA116",
+    "quiz": [
+      {
+        "type": "TF",
+        "question": "When it comes to IDB, every step matters.",
+        "correctAnswer": "True"
+      },
+      {
+        "type": "TF",
+        "question": "Learning the right technique is not important.",
+        "correctAnswer": "False"
+      },
+      {
+        "type": "MC",
+        "question": "To improve patient experience, you must:",
+        "options": [
+          "Know their history",
+          "Make them comfortable",
+          "Be competent and confident",
+          "Follow all of the steps"
+        ],
+        "correctIndex": 2
+      },
+      {
+        "type": "MC",
+        "question": "Attendees will not practice which of the following?",
+        "options": [
+          "Loading brackets in a 3D printed IDB tray",
+          "Composite buttering technique",
+          "Tray removal",
+          "Bending wire"
+        ],
+        "correctIndex": 3
+      },
+      {
+        "type": "MC",
+        "question": "A main learning objective of this course is:",
+        "options": [
+          "Improve IDB delivery technique",
+          "Going from analog to digital",
+          "Marketing your practice",
+          "Leadership in orthodontics"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  "ACE-LEG-00117": {
+    "legacyCourseId": "DA117",
+    "quiz": [
+      {
+        "type": "TF",
+        "question": "In-office aligners are too expensive.",
+        "correctAnswer": "False"
+      },
+      {
+        "type": "TF",
+        "question": "Current technology provides today's orthodontist everything they need to get started at historically low costs.",
+        "correctAnswer": "True"
+      },
+      {
+        "type": "MC",
+        "question": "Modern software does not allow us to:",
+        "options": [
+          "Maintain quality",
+          "Reduce expense",
+          "Reduce delaying treatment",
+          "Perfect oral health"
+        ],
+        "correctIndex": 3
+      },
+      {
+        "type": "MC",
+        "question": "Current technology provides today's orthodontist everything they need to get started at historically low costs and...",
+        "options": [
+          "Manage their own aligner production facility",
+          "Start a dental practice",
+          "Utilize AI in the ortho space",
+          "Increase the number of ortho patients"
+        ],
+        "correctIndex": 0
+      },
+      {
+        "type": "MC",
+        "question": "The presentation did not introduce the following:",
+        "options": [
+          "The major steps of the digital workflow",
+          "How to use AI",
+          "The basics of setting up a digital lab",
+          "The basics of 3D printing"
+        ],
+        "correctIndex": 1
+      }
+    ]
+  },
+  "ACE-LEG-00118": {
+    "legacyCourseId": "DA120",
+    "quiz": [
+      {
+        "type": "TF",
+        "question": "Michelle Shimmin is an international lecturer, trainer and consultant who has been in the field of orthodontics since 1990.",
+        "correctAnswer": "True"
+      },
+      {
+        "type": "TF",
+        "question": "Understanding the role of your leadership can shape a positive practice culture and patient experience.",
+        "correctAnswer": "True"
+      },
+      {
+        "type": "MC",
+        "question": "Throughout this session, you have not:",
+        "options": [
+          "Learned how to write an effective standard operating procedure",
+          "Developed skills on working harder, not smarter",
+          "Come to an understanding of what a digital workflow is",
+          "Learned to identify the 'lanes' for your team"
+        ],
+        "correctIndex": 1
+      },
+      {
+        "type": "MC",
+        "question": "A benefit of digital technologies in the practice:",
+        "options": [
+          "Unlimited Wi-Fi",
+          "Patients see value in and request 'appointments on demand'",
+          "Being able to show family and friends your teeth online",
+          "Playing video games during your appointment"
+        ],
+        "correctIndex": 1
+      },
+      {
+        "type": "MC",
+        "question": "It is most important to focus on these specific digital technologies in ortho:",
+        "options": [
+          "Digital record keeping",
+          "Technologies available to promote and market our practice to the community",
+          "Technologies that help us internally to our practice",
+          "Technologies that have been voted most popular among Gen Z"
+        ],
+        "correctIndex": 1
+      }
+    ]
+  },
+  "ACE-LEG-00120": {
+    "legacyCourseId": "DA123",
+    "quiz": [
+      {
+        "type": "TF",
+        "question": "Remote monitoring can enhance and simplify day-to-day workflows for both patients and the practice team.",
+        "correctAnswer": "True"
+      },
+      {
+        "type": "TF",
+        "question": "Implementation of remote monitoring in practice workflows has to be a complex, difficult process because there are limited options for streamlining with this technology.",
+        "correctAnswer": "False"
+      },
+      {
+        "type": "MC",
+        "question": "Attendees will gain insight on the following:",
+        "options": [
+          "Patients don't like personalized treatment experience",
+          "Patients prefer to have lots of frequent office visits requiring them to take time out of school or off from work",
+          "Both A and B are true",
+          "Neither A nor B are true"
+        ],
+        "correctIndex": 3
+      },
+      {
+        "type": "MC",
+        "question": "Which of the following statements IS true?",
+        "options": [
+          "Remote monitoring can reduce the frequency of office visits",
+          "Remote monitoring can catch risk factors before they become serious",
+          "Remote monitoring doesn't improve patient experience and treatment outcomes",
+          "Both A and B are true"
+        ],
+        "correctIndex": 3
+      },
+      {
+        "type": "MC",
+        "question": "Real life examples from an in-office user-based perspective will provide the listener with:",
+        "options": [
+          "An outline with all of the steps on where to begin",
+          "Video interviews with patients",
+          "More frustration among the practice staff",
+          "None of the above"
+        ],
+        "correctIndex": 0
+      }
+    ]
+  },
+  "ACE-LEG-00121": {
+    "legacyCourseId": "DA124",
+    "quiz": [
+      {
+        "type": "TF",
+        "question": "Dental photography has been part of dental records for almost a century.",
+        "correctAnswer": "True"
+      },
+      {
+        "type": "TF",
+        "question": "Before the advent of the digital camera, taking photographic records was always easy and highly reliable.",
+        "correctAnswer": "False"
+      },
+      {
+        "type": "MC",
+        "question": "Which of the following statements is NOT true:",
+        "options": [
+          "In the past, it required a lot of expertise and experience to achieve good standardized dental records.",
+          "Since the 1990's, technology has simplified the process and dental photography became much simpler.",
+          "Digital photography has enhanced the value and strength of dental records.",
+          "A, B, and C are true."
+        ],
+        "correctIndex": 3
+      },
+      {
+        "type": "MC",
+        "question": "Which of the following statements IS true?",
+        "options": [
+          "Digital cameras may seem complex to maneuver at first.",
+          "Settings on digital cameras are too numerous and confusing to learn how to use.",
+          "Both A and B are true.",
+          "Neither A nor B are true."
+        ],
+        "correctIndex": 0
+      },
+      {
+        "type": "MC",
+        "question": "This course on dental photography focused on teaching:",
+        "options": [
+          "Which aspects of the dental record are important.",
+          "Clarifying what equipment to use to optimize the images.",
+          "Showing how to use digital photography to consistently obtain the best possible results.",
+          "A and B."
+        ],
+        "correctIndex": 3
+      }
+    ]
+  },
+  "ACE-LEG-00122": {
+    "legacyCourseId": "DA191",
+    "quiz": [
+      {
+        "type": "TF",
+        "question": "Early orthodontic evaluations can help identify growth and development concerns before they become more complex.",
+        "correctAnswer": "True"
+      },
+      {
+        "type": "TF",
+        "question": "Interceptive orthodontic treatment can sometimes reduce the need for extractions or surgery later in life.",
+        "correctAnswer": "True"
+      },
+      {
+        "type": "MC",
+        "question": "Which of the following are common reasons to refer a patient for an orthodontic consultation?",
+        "options": [
+          "Crowding or spacing concerns",
+          "Bite misalignment (overbite, underbite, crossbite)",
+          "Impacted or unerupted teeth",
+          "All of the above"
+        ],
+        "correctIndex": 3
+      },
+      {
+        "type": "MC",
+        "question": "At what age does the American Association of Orthodontists recommend children have their first orthodontic evaluation?",
+        "options": [
+          "Age 5",
+          "Age 7",
+          "Age 12",
+          "When all permanent teeth have erupted"
+        ],
+        "correctIndex": 1
+      },
+      {
+        "type": "MC",
+        "question": "How does collaboration between dental professionals and orthodontists benefit patients?",
+        "options": [
+          "Ensures patients receive timely and appropriate care",
+          "Helps create a comprehensive treatment plan for better long-term oral health",
+          "Allows for early intervention, potentially reducing treatment complexity",
+          "All of the above"
+        ],
+        "correctIndex": 3
+      }
+    ]
+  },
+  "ACE-LEG-00123": {
+    "legacyCourseId": "DA259",
+    "quiz": [
+      {
+        "type": "TF",
+        "question": "It is necessary to incorporate over-correction into KLOwen digital setups.",
+        "correctAnswer": "False"
+      },
+      {
+        "type": "TF",
+        "question": "Digital orthodontic setups are beneficial because they improve treatment planning, enhance visualization of tooth position and occlusal relationships, and provide precise customization for improved patient esthetics and function.",
+        "correctAnswer": "True"
+      },
+      {
+        "type": "MC",
+        "question": "What feature of the KLOwen bracket allows for better torque control?",
+        "options": [
+          "The bracket gate is stronger",
+          "The vertical slot dimension is smaller than most SL brackets",
+          "The surface area of the bracket is highly polished",
+          "The tie wings are more comfortable"
+        ],
+        "correctIndex": 1
+      },
+      {
+        "type": "MC",
+        "question": "When digitally treatment planning cases, what is the most important focus?",
+        "options": [
+          "Extraction pattern",
+          "Wire color",
+          "Tooth position",
+          "Ligature type"
+        ],
+        "correctIndex": 2
+      },
+      {
+        "type": "MC",
+        "question": "After comparing surface scans of the teeth before and after treatment, how closely did the actual result match the predicted result?",
+        "options": [
+          "Somewhat closely",
+          "Very closely",
+          "Not at all",
+          "Minimally"
+        ],
+        "correctIndex": 1
+      }
+    ]
+  }
+}
