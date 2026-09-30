@@ -1,9 +1,8 @@
 import Link from "next/link";
-import { z } from "zod";
 import { PageHeader } from "@/components/portal-shell";
 import { requireStaff } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
-import { quizQuestionSchema } from "@/lib/forms/application/schemas";
+import { hasCertificateQuiz, quizEditorPath } from "@/lib/admin/course-quiz-status";
 
 /*
   Approved courses history for the REVIEWER role. Lists every accredited
@@ -20,8 +19,6 @@ import { quizQuestionSchema } from "@/lib/forms/application/schemas";
   incl. pre-July-2026 SELECTIVE_INLINE) keep the standard editable "5 questions"
   status, so the discriminator is quiz shape, not eventId alone.
 */
-
-const quizArraySchema = z.array(quizQuestionSchema).length(5);
 
 export default async function ReviewerApprovedPage() {
   const user = await requireStaff("REVIEWER");
@@ -44,7 +41,7 @@ export default async function ReviewerApprovedPage() {
   const courses = await prisma.accreditedCourse.findMany({
     include: {
       company: { select: { name: true } },
-      application: { select: { reviewedBy: { select: { email: true } } } },
+      application: { select: { courseTitle: true, reviewedBy: { select: { email: true } } } },
     },
     orderBy: { approvedAt: "desc" },
   });
@@ -65,7 +62,7 @@ export default async function ReviewerApprovedPage() {
             <table className="w-full text-[12px]">
               <thead>
                 <tr className="border-b border-border bg-surface text-left text-[10px] uppercase tracking-wide text-text-muted">
-                  <th className="px-4 py-2 font-semibold">Course ID</th>
+                  <th className="px-4 py-2 font-semibold">Course</th>
                   <th className="px-4 py-2 font-semibold">Company</th>
                   <th className="px-4 py-2 font-semibold">Approved</th>
                   <th className="px-4 py-2 font-semibold">Expires</th>
@@ -76,11 +73,12 @@ export default async function ReviewerApprovedPage() {
               </thead>
               <tbody>
                 {courses.map((c) => {
-                  const hasQuiz = quizArraySchema.safeParse(c.quizQuestions).success;
+                  const hasQuiz = hasCertificateQuiz(c.quizQuestions);
                   return (
                     <tr key={c.id} className="border-b border-border last:border-b-0">
-                      <td className="px-4 py-2 font-mono text-[11px] text-navy">
-                        {c.courseIdNumber}
+                      <td className="px-4 py-2">
+                        <p className="font-medium text-navy">{c.application.courseTitle ?? "Untitled course"}</p>
+                        <p className="font-mono text-[11px] text-text-muted">{c.courseIdNumber}</p>
                       </td>
                       <td className="px-4 py-2 text-text-mid">{c.company.name}</td>
                       <td className="px-4 py-2 text-text-muted">
@@ -104,7 +102,7 @@ export default async function ReviewerApprovedPage() {
                             <span className="text-text-muted">5 questions</span>
                             {isAdmin ? (
                               <Link
-                                href={`/admin/courses/${c.id}/quiz`}
+                                href={quizEditorPath(c.id)}
                                 className="text-ace-dark underline"
                               >
                                 Edit
@@ -125,7 +123,7 @@ export default async function ReviewerApprovedPage() {
                             </span>
                             {isAdmin ? (
                               <Link
-                                href={`/admin/courses/${c.id}/quiz`}
+                                href={quizEditorPath(c.id)}
                                 className="text-ace-dark underline"
                               >
                                 Add quiz

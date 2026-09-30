@@ -6,17 +6,16 @@ import { QuizFields } from "@/components/application-form/steps/quiz-fields";
 import { QuizPreviewCard } from "@/components/application-form/detail-section";
 import { requireStaff } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
-import { quizQuestionSchema } from "@/lib/forms/application/schemas";
+import { certificateQuizSchema } from "@/lib/admin/course-quiz-status";
 import { saveCourseQuiz } from "@/lib/admin/course-quiz";
 
 /*
   ADMIN-only editor for the 5-question certificate quiz on an already-approved
   course. Exists because legacy-migrated courses arrived with an empty quiz,
   which keeps their public attendee link unavailable ("not configured for
-  certificates"). Reached from the Quiz column on /reviewer/approved.
+  certificates"). Reached from the Courses section on /admin/companies/[id], the admin
+  dashboard's missing-quiz alert, and the Quiz column on /reviewer/approved.
 */
-
-const quizArraySchema = z.array(quizQuestionSchema).length(5);
 
 export default async function AdminCourseQuizPage({
   params,
@@ -43,13 +42,13 @@ export default async function AdminCourseQuizPage({
       quizQuestions: true,
       attendeeLinkToken: true,
       eventId: true,
-      company: { select: { name: true } },
+      company: { select: { id: true, name: true } },
       application: { select: { courseTitle: true, ceHours: true } },
     },
   });
   if (!course) notFound();
 
-  const saved = quizArraySchema.safeParse(course.quizQuestions);
+  const saved = certificateQuizSchema.safeParse(course.quizQuestions);
   const title = course.application.courseTitle ?? `Course ${course.courseIdNumber}`;
   const dateFmt = { month: "short", day: "numeric", year: "numeric" } as const;
 
@@ -67,10 +66,10 @@ export default async function AdminCourseQuizPage({
           subtitle={`${course.courseIdNumber} · ${title}`}
           action={
             <Link
-              href="/reviewer/approved"
-              className="rounded-md border border-border bg-white px-3.5 py-2 text-[12px] font-semibold text-navy hover:bg-surface"
+              href={`/admin/companies/${course.company.id}#courses`}
+              className="whitespace-nowrap rounded-md border border-border bg-white px-3.5 py-2 text-[12px] font-semibold text-navy hover:bg-surface"
             >
-              Back to Approved Courses
+              Back to {course.company.name}
             </Link>
           }
         />
@@ -89,10 +88,10 @@ export default async function AdminCourseQuizPage({
         subtitle={`${course.courseIdNumber} · ${title}`}
         action={
           <Link
-            href="/reviewer/approved"
-            className="rounded-md border border-border bg-white px-3.5 py-2 text-[12px] font-semibold text-navy hover:bg-surface"
+            href={`/admin/companies/${course.company.id}#courses`}
+            className="whitespace-nowrap rounded-md border border-border bg-white px-3.5 py-2 text-[12px] font-semibold text-navy hover:bg-surface"
           >
-            Back to Approved Courses
+            Back to {course.company.name}
           </Link>
         }
       />
