@@ -228,6 +228,12 @@ enum AdminAuditAction {
   LETTER_SETTINGS_UPDATED
   COMPANY_RENAMED
   COURSE_QUIZ_UPDATED
+  // An admin renamed an accredited course. Written by lib/admin/course-rename.ts
+  // in the SAME transaction as the title change and its ProTrack cascade.
+  // targetUserId is null (the subject is a course, not a user); details carries
+  // companyId, companyName, courseId, courseIdNumber, oldTitle, newTitle and
+  // protrackCertsUpdated.
+  COURSE_RENAMED
   // A reviewer or admin reversed a REJECTED decision, putting the item back in
   // the queue. Written by lib/reviewer/reopen-actions.ts with targetUserId null
   // (the subject is an event/application, not a user); details carries the
