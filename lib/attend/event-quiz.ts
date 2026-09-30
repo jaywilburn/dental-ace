@@ -4,6 +4,7 @@ import { EventType, type Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { quizQuestionSchema, type QuizQuestion } from "@/lib/forms/application/schemas";
 import { sessionCourseInfoReadSchema } from "@/lib/forms/event/schemas";
+import { formatCeHours } from "@/lib/attend/format-ce-hours";
 import type {
   PublicQuestion,
   EventPublicForm,
@@ -36,6 +37,8 @@ const quizArray = z.array(quizQuestionSchema);
 
 export type EventForAttend = NonNullable<Awaited<ReturnType<typeof loadEventByToken>>>;
 export type EventSessionForAttend = EventForAttend["sessions"][number];
+/** The attendee PAGE shape: EventForAttend plus course applicationData (presenter names). */
+export type EventForAttendPage = NonNullable<Awaited<ReturnType<typeof loadEventPageByToken>>>;
 
 export type { PublicQuestion, EventPublicForm } from "@/lib/attend/event-form-items";
 
@@ -81,8 +84,37 @@ const SELECT = {
   },
 } satisfies Prisma.EventSelect;
 
+/*
+  The attendee page additionally reads each course's applicationData, but only
+  for presenter NAMES on course-backed selective forms. It is a full application
+  blob, so the public submit path (loadEventByToken) never selects it.
+*/
+const PAGE_SELECT = {
+  ...SELECT,
+  sessions: {
+    ...SELECT.sessions,
+    select: {
+      ...SELECT.sessions.select,
+      course: {
+        select: {
+          quizQuestions: true,
+          application: {
+            select: { courseTitle: true, ceHours: true, applicationData: true },
+          },
+        },
+      },
+    },
+  },
+} satisfies Prisma.EventSelect;
+
+/** Submit path: everything scoring needs, no application blobs. */
 export async function loadEventByToken(token: string) {
   return prisma.event.findUnique({ where: { attendeeLinkToken: token }, select: SELECT });
+}
+
+/** Attendee page: SELECT plus course applicationData for presenter names. */
+export async function loadEventPageByToken(token: string) {
+  return prisma.event.findUnique({ where: { attendeeLinkToken: token }, select: PAGE_SELECT });
 }
 
 function strip(q: QuizQuestion): PublicQuestion {
@@ -96,6 +128,43 @@ function firstCourseMc(session: EventSessionForAttend): QuizQuestion | null {
   const parsed = quizArray.safeParse(session.course?.quizQuestions);
   if (!parsed.success) return null;
   return parsed.data.find((q) => q.type === "MC") ?? null;
+}
+
+const PRESENTER_ROLE_ORDER = ["Primary Presenter", "Co-Presenter", "Moderator"];
+
+const presenterNamesSchema = z.object({
+  presenters: z
+    .array(z.object({ name: z.unknown(), role: z.unknown().optional() }).passthrough())
+    .optional(),
+});
+
+/**
+ * Presenter NAMES from a stored application blob (inline course_info or a
+ * course's application_data), ordered Primary, Co-Presenter, Moderator (stable
+ * within a role, unknown roles last), trimmed, blank-dropped and deduped. Only
+ * names ever leave this function: bio, experience, training, disclosure and
+ * creator contact stay server-side. Tolerant: any malformed shape yields [].
+ */
+export function presenterNames(data: unknown): string[] {
+  const parsed = presenterNamesSchema.safeParse(data ?? {});
+  if (!parsed.success || !parsed.data.presenters) return [];
+  const rank = (role: unknown) => {
+    const i = typeof role === "string" ? PRESENTER_ROLE_ORDER.indexOf(role) : -1;
+    return i === -1 ? PRESENTER_ROLE_ORDER.length : i;
+  };
+  const ordered = parsed.data.presenters
+    .map((p, idx) => ({ name: typeof p.name === "string" ? p.name.trim() : "", r: rank(p.role), idx }))
+    .filter((p) => p.name.length > 0)
+    .sort((a, b) => a.r - b.r || a.idx - b.idx);
+  const seen = new Set<string>();
+  const names: string[] = [];
+  for (const p of ordered) {
+    const k = p.name.toLowerCase();
+    if (seen.has(k)) continue;
+    seen.add(k);
+    names.push(p.name);
+  }
+  return names;
 }
 
 function inlineQuestion(session: EventSessionForAttend): QuizQuestion | null {
@@ -119,7 +188,7 @@ function isSelectiveType(t: EventType | null): boolean {
 }
 
 /** Shape the public (answer-stripped) form for the attendee page. */
-export function buildPublicForm(event: EventForAttend): EventPublicForm | null {
+export function buildPublicForm(event: EventForAttendPage): EventPublicForm | null {
   if (!event.eventType) return null;
   const courseBacked = sessionsCourseBacked(event);
 
@@ -145,18 +214,26 @@ export function buildPublicForm(event: EventForAttend): EventPublicForm | null {
           format: info.deliveryFormat,
         };
         const hasDetails = Object.values(details).some(Boolean);
+        const presenters = presenterNames(s.courseInfo);
+        const hours = s.durationHours ? Number(s.durationHours) : null;
         return {
           id: s.id,
           label: s.name ?? "Session",
-          sub: `${s.durationHours ? Number(s.durationHours).toFixed(1) : "?"} hrs`,
+          sub: formatCeHours(hours),
+          ...(hours !== null ? { hours } : {}),
           question: strip(q),
           ...(info.shortDescription ? { description: info.shortDescription } : {}),
           ...(hasDetails ? { details } : {}),
+          ...(presenters.length ? { presenters } : {}),
         };
       });
       return items.some((i) => i === null)
         ? null
-        : { mode: "selective", items: items as Exclude<(typeof items)[number], null>[] };
+        : {
+            mode: "selective",
+            items: items as Exclude<(typeof items)[number], null>[],
+            perSessionCredit: true,
+          };
     }
     // Per-course event with no attached courses — nothing to ask.
     return null;
@@ -170,18 +247,26 @@ export function buildPublicForm(event: EventForAttend): EventPublicForm | null {
   }
   const items = event.sessions.map((s) => {
     const q = firstCourseMc(s);
-    return q
-      ? {
-          id: s.id,
-          label: s.course?.application.courseTitle ?? "Course",
-          sub: `${s.course?.application.ceHours ? Number(s.course.application.ceHours).toFixed(1) : "?"} hrs`,
-          question: strip(q),
-        }
-      : null;
+    if (!q) return null;
+    const presenters = presenterNames(s.course?.application.applicationData);
+    const hours = s.course?.application.ceHours ? Number(s.course.application.ceHours) : null;
+    return {
+      id: s.id,
+      label: s.course?.application.courseTitle ?? "Course",
+      sub: formatCeHours(hours),
+      ...(hours !== null ? { hours } : {}),
+      question: strip(q),
+      ...(presenters.length ? { presenters } : {}),
+    };
   });
   return items.some((i) => i === null)
     ? null
-    : { mode: "selective", items: items as Exclude<(typeof items)[number], null>[] };
+    : {
+        mode: "selective",
+        items: items as Exclude<(typeof items)[number], null>[],
+        // Mirrors assembleForSubmit's perSessionCredit for this branch.
+        perSessionCredit: event.eventType === EventType.SELECTIVE_INLINE,
+      };
 }
 
 /**

@@ -2,6 +2,7 @@ import "server-only";
 import PDFDocument from "pdfkit";
 import { drawAadbSeal } from "./seal";
 import { courseFormatLabel } from "./course-format-label";
+import { formatCeHours } from "@/lib/attend/format-ce-hours";
 
 /*
   Event completion certificate (landscape). Sibling of lib/pdf/certificate.ts;
@@ -18,6 +19,12 @@ export type EventCertificateInput = {
   ceHours: number;
   completedAt: Date;
   sessions?: string[]; // attended session/course names (Opt 3/4)
+  /**
+   * CE hours per session, index-aligned with `sessions`. When present and the
+   * same length, each session prints as "Title (1 CE hour)"; otherwise titles
+   * print alone (older callers / mismatched input never mislabel a session).
+   */
+  sessionHours?: number[];
   deliveryMethod?: string | null;
   licenseNumber?: string | null;
 };
@@ -91,7 +98,7 @@ export async function renderEventCertificatePdf(
         .font("Helvetica")
         .fontSize(12)
         .text(
-          `${input.ceHours.toFixed(1)} CE hours · Completed ${formatDate(input.completedAt)}`,
+          `${formatCeHours(input.ceHours)} · Completed ${formatDate(input.completedAt)}`,
           0,
           304,
           { align: "center" },
@@ -105,42 +112,48 @@ export async function renderEventCertificatePdf(
 
       // Course Format line, matching the standard cert (lib/pdf/certificate.ts):
       // centered, TEXT_MID, Helvetica 12, sitting just below the CE hours line.
+      // License number only when the attendee supplied one.
       const formatLabel = courseFormatLabel(input.deliveryMethod);
-      if (formatLabel) {
-        doc
-          .fillColor(TEXT_MID)
-          .font("Helvetica")
-          .fontSize(12)
-          .text(`Course Format: ${formatLabel}`, 0, rowY, { align: "center" });
-        rowY += 22;
-      }
-
-      // License number, only when the attendee supplied one. Slightly tighter
-      // spacing (+20) than the format row so a wrapped sessions list below it
-      // still clears the seal's top edge.
       const licenseNumber = input.licenseNumber?.trim();
-      if (licenseNumber) {
-        doc
-          .fillColor(TEXT_MID)
-          .font("Helvetica")
-          .fontSize(12)
-          .text(`License No. ${licenseNumber}`, 0, rowY, { align: "center" });
+      const hasSessions = !!input.sessions && input.sessions.length > 0;
+      const formatText = formatLabel ? `Course Format: ${formatLabel}` : null;
+      const licenseText = licenseNumber ? `License No. ${licenseNumber}` : null;
+      doc.fillColor(TEXT_MID).font("Helvetica").fontSize(12);
+      if (hasSessions && formatText && licenseText) {
+        // With a sessions list to fit, share one row so the list (now with
+        // per-session hours) keeps enough height above the seal.
+        doc.text(`${formatText} · ${licenseText}`, 0, rowY, { align: "center" });
         rowY += 20;
+      } else {
+        if (formatText) {
+          doc.text(formatText, 0, rowY, { align: "center" });
+          rowY += 22;
+        }
+        // Slightly tighter spacing (+20) than the format row.
+        if (licenseText) {
+          doc.text(licenseText, 0, rowY, { align: "center" });
+          rowY += 20;
+        }
       }
 
-      if (input.sessions && input.sessions.length > 0) {
-        // Drop below the format/license lines when present so they never overlap.
+      if (hasSessions && input.sessions) {
+        // Drop below the format/license lines when present so they never
+        // overlap, and shrink (then clip) so the list never reaches the seal.
+        const text = sessionsLine(input.sessions, input.sessionHours);
+        const top = rowY + 2;
+        const fit = fitSessionsText(doc, text, SESSIONS_WIDTH(W), SEAL_TOP - SEAL_GAP - top);
         doc
           .fillColor(TEXT_MUTED)
           .font("Helvetica")
-          .fontSize(9.5)
-          .text(`Sessions completed: ${input.sessions.join(" · ")}`, 80, rowY + 2, {
+          .fontSize(fit.fontSize)
+          .text(text, (W - SESSIONS_WIDTH(W)) / 2, top, {
             align: "center",
-            width: W - 160,
+            width: SESSIONS_WIDTH(W),
+            ...(fit.clip ? { height: SEAL_TOP - SEAL_GAP - top, ellipsis: true } : {}),
           });
       }
 
-      drawAadbSeal(doc, { cx: W / 2, cy: 430, r: 38 });
+      drawAadbSeal(doc, { cx: W / 2, cy: SEAL_CY, r: SEAL_R });
 
       doc
         .fillColor(TEXT_MUTED)
@@ -158,6 +171,46 @@ export async function renderEventCertificatePdf(
       reject(err);
     }
   });
+}
+
+const SEAL_CY = 430;
+const SEAL_R = 38;
+/** Top edge of the seal; nothing above it may cross this y. */
+export const SEAL_TOP = SEAL_CY - SEAL_R;
+const SEAL_GAP = 4;
+const SESSIONS_WIDTH = (pageWidth: number) => pageWidth - 144;
+const SESSIONS_FONT_MAX = 9.5;
+const SESSIONS_FONT_MIN = 6;
+
+/**
+ * "Sessions completed: A (1 CE hour) · B (1.5 CE hours)". Hours are appended
+ * only when `hours` is index-aligned with `names` (same length).
+ */
+export function sessionsLine(names: string[], hours?: number[]): string {
+  const aligned = hours && hours.length === names.length;
+  const parts = names.map((n, i) => (aligned ? `${n} (${formatCeHours(hours[i])})` : n));
+  return `Sessions completed: ${parts.join(" · ")}`;
+}
+
+/**
+ * Largest Helvetica size (9.5pt down to 6pt, half-point steps) at which the
+ * sessions text fits in `maxHeight`. If even the minimum does not fit, returns
+ * the minimum with clip=true so the caller bounds the box (PDFKit ellipsis).
+ */
+export function fitSessionsText(
+  doc: PDFKit.PDFDocument,
+  text: string,
+  width: number,
+  maxHeight: number,
+): { fontSize: number; clip: boolean } {
+  doc.font("Helvetica");
+  for (let size = SESSIONS_FONT_MAX; size >= SESSIONS_FONT_MIN; size -= 0.5) {
+    doc.fontSize(size);
+    if (doc.heightOfString(text, { width, align: "center" }) <= maxHeight) {
+      return { fontSize: size, clip: false };
+    }
+  }
+  return { fontSize: SESSIONS_FONT_MIN, clip: true };
 }
 
 function formatDate(d: Date): string {

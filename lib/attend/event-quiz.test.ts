@@ -133,6 +133,30 @@ describe("buildPublicForm — SELECTIVE_INLINE (lightweight inline sessions)", (
     }
   });
 
+  it("labels each session's CE hours unambiguously and flags per-session credit", () => {
+    const form = buildPublicForm(inlineSelectiveEvent());
+    if (!form || form.mode !== "selective") throw new Error("expected selective form");
+    expect(form.items.map((i) => i.sub)).toEqual(["1.5 CE hours", "2 CE hours", "0.5 CE hours"]);
+    expect(form.items.map((i) => i.hours)).toEqual([1.5, 2, 0.5]);
+    expect(form.perSessionCredit).toBe(true);
+  });
+
+  it("uses the singular for a 1-hour session and a placeholder when hours are missing", () => {
+    const event = baseEvent({
+      eventType: EventType.SELECTIVE_INLINE,
+      sessions: [
+        { id: "s1", position: 0, name: "One", durationHours: 1, question: mc(0), course: null },
+        { id: "s2", position: 1, name: "Unset", durationHours: null, question: mc(0), course: null },
+      ],
+    });
+    const form = buildPublicForm(event);
+    if (!form || form.mode !== "selective") throw new Error("expected selective form");
+    expect(form.items[0].sub).toBe("1 CE hour");
+    expect(form.items[0].hours).toBe(1);
+    expect(form.items[1].sub).toBe("? CE hours");
+    expect(form.items[1]).not.toHaveProperty("hours");
+  });
+
   it("sessions without course info carry no description or details (pre-July-2026 back-compat)", () => {
     const form = buildPublicForm(inlineSelectiveEvent());
     if (!form || form.mode !== "selective") throw new Error("expected selective form");
@@ -236,12 +260,113 @@ describe("buildPublicForm — SELECTIVE_INLINE (lightweight inline sessions)", (
       category: "Scientific",
       format: "LIVE In Person",
     });
-    // No creator/presenter/answer data leaks into the public payload.
+    // Presenter NAMES ship; nothing else from creator/presenter/answers does.
+    expect(item.presenters).toEqual(["Dr. Jane Doe"]);
     expect(item.question).not.toHaveProperty("correctIndex");
     expect(item).not.toHaveProperty("creatorName");
-    expect(item).not.toHaveProperty("presenters");
     expect(item).not.toHaveProperty("courseInfo");
-    expect(JSON.stringify(item)).not.toContain("Jane Doe");
+    const json = JSON.stringify(item);
+    expect(json).not.toContain("jane@example.com");
+    expect(json).not.toContain("Program Director");
+    expect(json).not.toContain("Two decades");
+    expect(json).not.toContain("20 years");
+    expect(json).not.toContain("4 hours");
+    expect(json).not.toContain("None");
+  });
+
+  it("orders presenters Primary, Co-Presenter, Moderator (stable), trimmed, deduped, blanks dropped", () => {
+    const presenter = (name: string, role: string) => ({
+      name,
+      role,
+      commercialDisclosure: "SECRET-DISCLOSURE",
+      experience: "SECRET-EXPERIENCE",
+      training: "SECRET-TRAINING",
+      bio: "SECRET-BIO",
+    });
+    const event = baseEvent({
+      eventType: EventType.SELECTIVE_INLINE,
+      sessions: [
+        {
+          id: "s1",
+          position: 0,
+          name: "Session A",
+          durationHours: 1,
+          question: mc(0, "About A?"),
+          course: null,
+          courseInfo: {
+            courseTitle: "Session A",
+            presenters: [
+              presenter("Mod One", "Moderator"),
+              presenter("  Co One  ", "Co-Presenter"),
+              presenter("Primary One", "Primary Presenter"),
+              presenter("Co Two", "Co-Presenter"),
+              presenter("   ", "Co-Presenter"),
+              presenter("co one", "Moderator"),
+              presenter("Primary Two", "Primary Presenter"),
+            ],
+          },
+        },
+      ],
+    });
+    const form = buildPublicForm(event);
+    if (!form || form.mode !== "selective") throw new Error("expected selective form");
+    const item = form.items[0];
+    expect(item.presenters).toEqual(["Primary One", "Primary Two", "Co One", "Co Two", "Mod One"]);
+    expect(JSON.stringify(form)).not.toContain("SECRET");
+  });
+
+  it("legacy course info without presenters (or a malformed list) omits presenters without crashing", () => {
+    const event = baseEvent({
+      eventType: EventType.SELECTIVE_INLINE,
+      sessions: [
+        { id: "s1", position: 0, name: "A", durationHours: 1, question: mc(0), course: null, courseInfo: { courseTitle: "A" } },
+        { id: "s2", position: 1, name: "B", durationHours: 1, question: mc(0), course: null, courseInfo: null },
+        { id: "s3", position: 2, name: "C", durationHours: 1, question: mc(0), course: null, courseInfo: { presenters: "oops" } },
+        { id: "s4", position: 3, name: "D", durationHours: 1, question: mc(0), course: null, courseInfo: { presenters: [] } },
+      ],
+    });
+    const form = buildPublicForm(event);
+    if (!form || form.mode !== "selective") throw new Error("expected selective form");
+    expect(form.items).toHaveLength(4);
+    for (const item of form.items) expect(item).not.toHaveProperty("presenters");
+  });
+});
+
+describe("buildPublicForm — SELECTIVE_PER_COURSE presenters", () => {
+  it("reads presenter names from each course's application data, names only", () => {
+    const withPresenters = courseSession("c1", "Course One", 1, 0);
+    (withPresenters.course.application as Record<string, unknown>).applicationData = {
+      presenters: [
+        { name: "Dr. Co", role: "Co-Presenter", bio: "SECRET-BIO" },
+        { name: "Dr. Lead", role: "Primary Presenter", experience: "SECRET-EXP" },
+      ],
+      creatorEmail: "SECRET@example.com",
+    };
+    const legacy = courseSession("c2", "Course Two", 2, 1); // no applicationData
+    const event = baseEvent({
+      eventType: EventType.SELECTIVE_PER_COURSE,
+      sessions: [withPresenters, legacy],
+    });
+    const form = buildPublicForm(event);
+    if (!form || form.mode !== "selective") throw new Error("expected selective form");
+    expect(form.items[0].presenters).toEqual(["Dr. Lead", "Dr. Co"]);
+    expect(form.items[1]).not.toHaveProperty("presenters");
+    expect(JSON.stringify(form)).not.toContain("SECRET");
+  });
+});
+
+describe("buildPublicForm — course-backed selective CE hours", () => {
+  it("labels course hours and flags per-session credit only for SELECTIVE_INLINE", () => {
+    const sessions = [courseSession("c1", "Course One", 1, 0), courseSession("c2", "Course Two", 2.5, 3)];
+    const perCourse = buildPublicForm(baseEvent({ eventType: EventType.SELECTIVE_PER_COURSE, sessions }));
+    if (!perCourse || perCourse.mode !== "selective") throw new Error("expected selective form");
+    expect(perCourse.items.map((i) => i.sub)).toEqual(["1 CE hour", "2.5 CE hours"]);
+    expect(perCourse.items.map((i) => i.hours)).toEqual([1, 2.5]);
+    expect(perCourse.perSessionCredit).toBe(false);
+
+    const inline = buildPublicForm(baseEvent({ eventType: EventType.SELECTIVE_INLINE, sessions }));
+    if (!inline || inline.mode !== "selective") throw new Error("expected selective form");
+    expect(inline.perSessionCredit).toBe(true);
   });
 });
 

@@ -21,23 +21,40 @@ export type EventFormItemDetails = {
 export type EventFormItem = {
   id: string;
   label: string;
+  /** Display line under the title, e.g. "1 CE hour" (lib/attend/format-ce-hours). */
   sub: string;
+  /** The session's CE hours when known (review-step list + selected total). */
+  hours?: number;
   question: PublicQuestion;
   /** Short description shown under the title (sessions with course info). */
   description?: string;
   /** Extra fields behind the "View details" expander on the select step. */
   details?: EventFormItemDetails;
+  /** Presenter NAMES only (never bio/disclosure), Primary first. */
+  presenters?: string[];
 };
 
 export type EventPublicForm =
   | { mode: "full"; questions: PublicQuestion[] }
-  | { mode: "selective"; items: EventFormItem[] };
+  | {
+      mode: "selective";
+      items: EventFormItem[];
+      /**
+       * SELECTIVE_INLINE: each session is credited on its own answer, so the
+       * selected total is a maximum. Absent/false: one overall pass threshold.
+       */
+      perSessionCredit?: boolean;
+    };
 
 export type ActiveQuizItem = {
   key: string;
   /** Session/course title shown above the question (selective modes only). */
   label: string | null;
   question: PublicQuestion;
+  /** Presenter names for the session (selective modes only, when known). */
+  presenters?: string[];
+  /** The session's CE hours (selective modes only, when known). */
+  hours?: number;
 };
 
 /**
@@ -59,5 +76,20 @@ export function activeQuizItems(
   }
   return form.items
     .filter((it) => selectedIds.includes(it.id))
-    .map((it) => ({ key: it.id, label: it.label, question: it.question }));
+    .map((it) => ({
+      key: it.id,
+      label: it.label,
+      question: it.question,
+      ...(it.presenters?.length ? { presenters: it.presenters } : {}),
+      ...(typeof it.hours === "number" ? { hours: it.hours } : {}),
+    }));
+}
+
+/**
+ * Sum of the known CE hours across the active (selected) items. This is the
+ * MAXIMUM the attendee can earn: SELECTIVE_INLINE credits only the sessions
+ * whose question is answered correctly.
+ */
+export function selectedHoursTotal(items: ActiveQuizItem[]): number {
+  return items.reduce((sum, it) => sum + (it.hours ?? 0), 0);
 }
