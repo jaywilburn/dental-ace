@@ -7,6 +7,8 @@ import { adjustAppCredits, adjustCertBalance } from "@/lib/admin/billing-overrid
 import { txnLabel } from "@/lib/billing/transaction-labels";
 import { renameCompany } from "@/lib/admin/company-rename";
 import { memberDisplayName, pointOfContactId } from "@/lib/admin/company-members";
+import { hasCertificateQuiz, quizEditorPath } from "@/lib/admin/course-quiz-status";
+import { cn } from "@/lib/utils";
 
 export default async function AdminCompanyDetailPage({
   params,
@@ -31,11 +33,28 @@ export default async function AdminCompanyDetailPage({
         select: { id: true, email: true, firstName: true, lastName: true, staffRole: true, createdAt: true },
       },
       billingTransactions: { orderBy: { createdAt: "desc" }, take: 15 },
+      // Standalone courses only: event sessions author their question through
+      // the event. Superseded rows were replaced by a renewal.
+      accreditedCourses: {
+        where: { eventId: null, supersededAt: null },
+        orderBy: { approvedAt: "desc" },
+        select: {
+          id: true, courseIdNumber: true, expiresAt: true, certsIssuedCount: true,
+          quizQuestions: true, application: { select: { courseTitle: true } },
+        },
+      },
     },
   });
   if (!company) notFound();
 
   const pocId = pointOfContactId(company.users);
+  const now = new Date();
+  const courses = company.accreditedCourses.map((c) => ({
+    ...c,
+    hasQuiz: hasCertificateQuiz(c.quizQuestions),
+    expired: c.expiresAt < now,
+  }));
+  const needsQuiz = courses.filter((c) => !c.hasQuiz && !c.expired).length;
 
   return (
     <>
@@ -73,6 +92,74 @@ export default async function AdminCompanyDetailPage({
           <p className="font-serif text-2xl font-bold text-navy tabular-nums">{company.totalCertsIssued}</p>
         </div>
       </div>
+
+      <section id="courses" aria-labelledby="courses-heading" className="mt-5 overflow-hidden rounded-lg border border-border bg-white">
+        <div className="border-b border-border px-4 py-3">
+          <h2 id="courses-heading" className="text-[12px] font-semibold text-navy">Courses</h2>
+          <p className="text-pretty text-[11px] text-text-muted">
+            Attendees can only claim a certificate for a course that has a 5-question certificate quiz.
+          </p>
+        </div>
+        {needsQuiz > 0 ? (
+          <div className="border-b border-amber-200 bg-amber-50 px-4 py-3">
+            <p className="text-[12px] font-semibold text-amber-900 tabular-nums">
+              {needsQuiz} active course{needsQuiz === 1 ? " needs" : "s need"} a certificate quiz
+            </p>
+            <p className="mt-0.5 text-pretty text-[12px] text-amber-800">
+              Until a quiz is added, the attendee link and QR code show &ldquo;not configured for
+              certificates.&rdquo; Use Add quiz to enter the provider&apos;s 5 questions. The link works as soon as
+              the quiz is saved.
+            </p>
+          </div>
+        ) : null}
+        {courses.length === 0 ? (
+          <p className="px-4 py-6 text-center text-[12px] text-text-muted">No accredited courses yet.</p>
+        ) : (
+          <ul className="divide-y divide-border">
+            {courses.map((c) => (
+              <li
+                key={c.id}
+                className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+              >
+                <div className="min-w-0">
+                  <p className="text-pretty text-[13px] font-medium text-navy">
+                    {c.application.courseTitle ?? "Untitled course"}
+                  </p>
+                  <p className="mt-0.5 text-[11px] text-text-muted tabular-nums">
+                    <span className="font-mono">{c.courseIdNumber}</span>
+                    {" · "}
+                    {c.expired ? "Expired" : "Expires"}{" "}
+                    {c.expiresAt.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                    {" · "}
+                    {c.certsIssuedCount} cert{c.certsIssuedCount === 1 ? "" : "s"} issued
+                  </p>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  <span
+                    className={cn(
+                      "inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold leading-none",
+                      c.hasQuiz ? "bg-emerald-50 text-emerald-700" : "bg-amber-100 text-amber-800",
+                    )}
+                  >
+                    {c.hasQuiz ? "Quiz ready" : "No quiz"}
+                  </span>
+                  <Link
+                    href={quizEditorPath(c.id)}
+                    className={cn(
+                      "inline-flex min-h-9 items-center rounded-md px-3 text-[12px] font-semibold sm:min-h-8",
+                      c.hasQuiz
+                        ? "border border-border bg-white text-navy hover:bg-surface"
+                        : "bg-navy text-white hover:bg-navy/90",
+                    )}
+                  >
+                    {c.hasQuiz ? "Edit quiz" : "Add quiz"}
+                  </Link>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
 
       {company.contactEmail || company.addressLine1 ? (
         <div className="mt-5 rounded-lg border border-border bg-white p-4">
