@@ -104,12 +104,14 @@ export async function submitEventAttendance(input: unknown): Promise<EventAttend
   let certHours = assembled.hours;
   let certSessionIds = assembled.attendedSessionIds;
   let certSessionNames = assembled.sessionNames;
+  let certSessionHours = assembled.sessionHours;
   if (assembled.perSessionCredit) {
     const credit = creditSessions(scored.correct, assembled.sessionHours);
     passed = credit.passed;
     certHours = credit.creditedHours;
     certSessionIds = credit.creditedIndices.map((i) => assembled.attendedSessionIds[i]);
     certSessionNames = credit.creditedIndices.map((i) => assembled.sessionNames[i]);
+    certSessionHours = credit.creditedIndices.map((i) => assembled.sessionHours[i]);
   }
 
   // FAIL — record the attempt; never touch the balance. The failed row keeps
@@ -190,6 +192,9 @@ export async function submitEventAttendance(input: unknown): Promise<EventAttend
       // Credited sessions only on the per-session-credit path; otherwise the
       // attended list (unchanged for the other types).
       sessions: certSessionNames,
+      // Index-aligned with certSessionNames (empty for full types, where the
+      // sessions list is empty too).
+      sessionHours: certSessionHours,
       // Matches the deliveryMethod written to the event cert row
       // (event-issue.ts / the FAIL path above): the attendee's chosen format.
       deliveryMethod: certFormat,

@@ -216,6 +216,10 @@ export const sessionCourseInfoReadSchema = z
     publicProtectionStatement: z.string().optional(),
     courseObjectives: z.string().optional(),
     courseOutline: z.string().optional(),
+    // Tolerant: pre-July-2026 rows carry no presenters; only name/role are read.
+    presenters: z
+      .array(z.object({ name: z.string(), role: z.string().optional() }).passthrough())
+      .optional(),
   })
   .passthrough();
 export type SessionCourseInfoRead = z.infer<typeof sessionCourseInfoReadSchema>;

@@ -3,7 +3,12 @@
 import { useState } from "react";
 import { submitEventAttendance, type EventAttendResult } from "@/lib/attend/event-actions";
 import { COURSE_FORMATS } from "@/lib/forms/application/schemas";
-import { activeQuizItems, type EventPublicForm } from "@/lib/attend/event-form-items";
+import {
+  activeQuizItems,
+  selectedHoursTotal,
+  type EventPublicForm,
+} from "@/lib/attend/event-form-items";
+import { formatCeHours } from "@/lib/attend/format-ce-hours";
 import { JurisdictionOptions } from "@/components/jurisdiction-options";
 import { ErrorSummary, FieldError, toDisplayErrors } from "@/components/attend/form-errors";
 
@@ -48,6 +53,7 @@ export function EventAttendeeForm({
   courseFormatDefault: CourseFormat;
 }) {
   const selective = form.mode === "selective";
+  const perSessionCredit = form.mode === "selective" && form.perSessionCredit === true;
   const [step, setStep] = useState(0);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -300,6 +306,7 @@ export function EventAttendeeForm({
                 />
                 <span>
                   <span className="font-medium text-slate-900">{it.label}</span>
+                  <PresentedBy names={it.presenters} className="block text-xs text-slate-600" />
                   <span className="block text-xs text-slate-500">{it.sub}</span>
                 </span>
               </label>
@@ -346,7 +353,7 @@ export function EventAttendeeForm({
 
       {stage === "quiz" && (
         <section className="space-y-5">
-          {active.map(({ key, label, question: q }) => (
+          {active.map(({ key, label, presenters, question: q }) => (
             <fieldset key={key} className="space-y-2">
               <legend className="text-sm font-medium text-slate-900">
                 {label ? (
@@ -354,6 +361,7 @@ export function EventAttendeeForm({
                     {label}
                   </span>
                 ) : null}
+                <PresentedBy names={presenters} className="mb-1 block text-xs font-normal text-slate-600" />
                 {q.question}
               </legend>
               {q.type === "TF"
@@ -390,6 +398,39 @@ export function EventAttendeeForm({
             <div>{courseFormat}</div>
             <div>Completed {completedOn}</div>
             {selective ? <div>{active.length} session{active.length === 1 ? "" : "s"} attended</div> : null}
+            {selective && active.length > 0 ? (
+              <>
+                <ul className="mt-2 space-y-1.5 border-t border-slate-200 pt-2">
+                  {active.map(({ key, label, presenters, hours }) => (
+                    <li key={key} className="flex items-start justify-between gap-3">
+                      <span className="min-w-0">
+                        <span className="font-medium text-slate-900">{label}</span>
+                        <PresentedBy names={presenters} className="block text-xs text-slate-600" />
+                      </span>
+                      <span className="shrink-0 text-xs text-slate-500">{formatCeHours(hours)}</span>
+                    </li>
+                  ))}
+                </ul>
+                {/* Per-session credit: only correctly answered sessions are
+                    credited, so the sum of the selected sessions is a ceiling,
+                    not a promise. Otherwise one overall pass earns it all. */}
+                <div className="mt-2 border-t border-slate-200 pt-2">
+                  <div className="flex items-start justify-between gap-3">
+                    <span className="font-medium text-slate-900">
+                      {perSessionCredit ? "Maximum available" : "Total if you pass"}
+                    </span>
+                    <span className="shrink-0 font-medium text-slate-900">
+                      {formatCeHours(selectedHoursTotal(active))}
+                    </span>
+                  </div>
+                  {perSessionCredit ? (
+                    <p className="mt-1 text-xs text-slate-500">
+                      Your certificate includes the hours for each session whose question you answer correctly.
+                    </p>
+                  ) : null}
+                </div>
+              </>
+            ) : null}
           </div>
           <NavButtons onBack={() => setStep(selective ? 3 : 2)} onNext={onSubmit} nextLabel={submitting ? "Submitting…" : "Submit"} nextDisabled={submitting} />
         </section>
@@ -457,6 +498,12 @@ function Field({
       <FieldError messages={error} />
     </label>
   );
+}
+
+/** "Presented by A, B" line; renders nothing when no presenter names are known. */
+function PresentedBy({ names, className }: { names?: string[]; className?: string }) {
+  if (!names || names.length === 0) return null;
+  return <span className={className}>Presented by {names.join(", ")}</span>;
 }
 
 function Option({ label, selected, onSelect }: { label: string; selected: boolean; onSelect: () => void }) {

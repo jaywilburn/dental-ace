@@ -264,6 +264,7 @@ describe("submitEventAttendance — SELECTIVE_INLINE per-session credit", () => 
     const pdfArgs = renderEventCertificatePdf.mock.calls[0][0];
     expect(pdfArgs.ceHours).toBe(1.5);
     expect(pdfArgs.sessions).toEqual(["Session A"]);
+    expect(pdfArgs.sessionHours).toEqual([1.5]);
   });
 
   it("all wrong: fails with the existing fail UX and records the attended attempt", async () => {
@@ -322,6 +323,7 @@ describe("submitEventAttendance — SELECTIVE_INLINE per-session credit", () => 
     const pdfArgs = renderEventCertificatePdf.mock.calls[0][0];
     expect(pdfArgs.ceHours).toBe(0.5);
     expect(pdfArgs.sessions).toEqual(["Session C"]);
+    expect(pdfArgs.sessionHours).toEqual([0.5]);
   });
 
   it("all correct: passes with the full attended sum", async () => {
@@ -340,5 +342,6 @@ describe("submitEventAttendance — SELECTIVE_INLINE per-session credit", () => 
     const pdfArgs = renderEventCertificatePdf.mock.calls[0][0];
     expect(pdfArgs.ceHours).toBe(3.5);
     expect(pdfArgs.sessions).toEqual(["Session A", "Session B"]);
+    expect(pdfArgs.sessionHours).toEqual([1.5, 2]);
   });
 });

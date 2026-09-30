@@ -1,7 +1,8 @@
 import { z } from "zod";
-import { loadEventByToken, buildPublicForm } from "@/lib/attend/event-quiz";
+import { loadEventPageByToken, buildPublicForm } from "@/lib/attend/event-quiz";
 import { COURSE_FORMATS } from "@/lib/forms/application/schemas";
 import { EventAttendeeForm } from "@/components/attend/event-attendee-form";
+import { formatCeHours } from "@/lib/attend/format-ce-hours";
 
 /*
   Public event attendee entry. Fails closed: invalid token, unapproved/expired
@@ -36,7 +37,7 @@ export default async function AttendEventPage({
     return <Notice title="Event not found" body="This certificate link is not valid." />;
   }
 
-  const event = await loadEventByToken(token);
+  const event = await loadEventPageByToken(token);
   if (!event || event.status !== "APPROVED") {
     return <Notice title="Event not found" body="This certificate link is not valid." />;
   }
@@ -64,7 +65,7 @@ export default async function AttendEventPage({
       <h1 className="text-xl font-semibold text-slate-900">{event.name}</h1>
       <p className="mt-1 text-sm text-slate-600">
         {form.mode === "full"
-          ? `${totalHours.toFixed(1)} CE hours`
+          ? formatCeHours(totalHours)
           : "Select the sessions you attended to claim your certificate"}
       </p>
       <EventAttendeeForm
