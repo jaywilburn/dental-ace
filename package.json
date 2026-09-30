@@ -17,6 +17,7 @@
     "import:pearl-quiz": "tsx scripts/import-pearl-legacy-quiz.ts",
     "import:new-companies": "tsx scripts/import-new-companies.ts",
     "reconcile:certs": "tsx scripts/reconcile-cert-balances.ts",
+    "attach:klowen-quizzes": "tsx scripts/attach-klowen-missing-quizzes.ts",
     "backfill:course-expirations": "tsx scripts/backfill-legacy-course-expirations.ts",
     "backfill:course-assets": "tsx scripts/backfill-legacy-course-assets.ts",
     "provision:legacy": "tsx scripts/provision-legacy-accounts.ts",
