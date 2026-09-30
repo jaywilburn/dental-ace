@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { adjustAppCredits, adjustCertBalance } from "@/lib/admin/billing-overrides";
 import { txnLabel } from "@/lib/billing/transaction-labels";
 import { renameCompany } from "@/lib/admin/company-rename";
+import { renameCourse } from "@/lib/admin/course-rename";
 import { memberDisplayName, pointOfContactId } from "@/lib/admin/company-members";
 import { hasCertificateQuiz, quizEditorPath } from "@/lib/admin/course-quiz-status";
 import { cn } from "@/lib/utils";
@@ -63,7 +64,9 @@ export default async function AdminCompanyDetailPage({
         <div className="mb-4 rounded-md border border-emerald-400 bg-emerald-50 px-4 py-2.5 text-[13px] text-emerald-700">
           {ok === "renamed"
             ? "Company name updated."
-            : ok === "credits"
+            : ok === "course-renamed"
+              ? "Course title updated."
+              : ok === "credits"
               ? "Application credits updated."
               : ok === "balance"
                 ? "Certificate balance updated."
@@ -117,44 +120,74 @@ export default async function AdminCompanyDetailPage({
         ) : (
           <ul className="divide-y divide-border">
             {courses.map((c) => (
-              <li
-                key={c.id}
-                className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
-              >
-                <div className="min-w-0">
-                  <p className="text-pretty text-[13px] font-medium text-navy">
-                    {c.application.courseTitle ?? "Untitled course"}
-                  </p>
-                  <p className="mt-0.5 text-[11px] text-text-muted tabular-nums">
-                    <span className="font-mono">{c.courseIdNumber}</span>
-                    {" · "}
-                    {c.expired ? "Expired" : "Expires"}{" "}
-                    {c.expiresAt.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
-                    {" · "}
-                    {c.certsIssuedCount} cert{c.certsIssuedCount === 1 ? "" : "s"} issued
-                  </p>
+              <li key={c.id} className="px-4 py-3">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0">
+                    <p className="text-pretty text-[13px] font-medium text-navy">
+                      {c.application.courseTitle ?? "Untitled course"}
+                    </p>
+                    <p className="mt-0.5 text-[11px] text-text-muted tabular-nums">
+                      <span className="font-mono">{c.courseIdNumber}</span>
+                      {" · "}
+                      {c.expired ? "Expired" : "Expires"}{" "}
+                      {c.expiresAt.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                      {" · "}
+                      {c.certsIssuedCount} cert{c.certsIssuedCount === 1 ? "" : "s"} issued
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 flex-wrap items-center gap-2">
+                    <span
+                      className={cn(
+                        "inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold leading-none",
+                        c.hasQuiz ? "bg-emerald-50 text-emerald-700" : "bg-amber-100 text-amber-800",
+                      )}
+                    >
+                      {c.hasQuiz ? "Quiz ready" : "No quiz"}
+                    </span>
+                    <Link
+                      href={quizEditorPath(c.id)}
+                      className={cn(
+                        "inline-flex min-h-9 items-center rounded-md px-3 text-[12px] font-semibold sm:min-h-8",
+                        c.hasQuiz
+                          ? "border border-border bg-white text-navy hover:bg-surface"
+                          : "bg-navy text-white hover:bg-navy/90",
+                      )}
+                    >
+                      {c.hasQuiz ? "Edit quiz" : "Add quiz"}
+                    </Link>
+                  </div>
                 </div>
-                <div className="flex shrink-0 items-center gap-2">
-                  <span
-                    className={cn(
-                      "inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold leading-none",
-                      c.hasQuiz ? "bg-emerald-50 text-emerald-700" : "bg-amber-100 text-amber-800",
-                    )}
-                  >
-                    {c.hasQuiz ? "Quiz ready" : "No quiz"}
-                  </span>
-                  <Link
-                    href={quizEditorPath(c.id)}
-                    className={cn(
-                      "inline-flex min-h-9 items-center rounded-md px-3 text-[12px] font-semibold sm:min-h-8",
-                      c.hasQuiz
-                        ? "border border-border bg-white text-navy hover:bg-surface"
-                        : "bg-navy text-white hover:bg-navy/90",
-                    )}
-                  >
-                    {c.hasQuiz ? "Edit quiz" : "Add quiz"}
-                  </Link>
-                </div>
+                {/* No-JS disclosure: this page is a server component, so the rename
+                    form opens with a native <details> instead of client state. */}
+                <details className="group mt-2">
+                  <summary className="inline-flex min-h-9 cursor-pointer list-none items-center rounded-md border border-border bg-white px-3 text-[12px] font-semibold text-navy hover:bg-surface sm:min-h-8 [&::-webkit-details-marker]:hidden">
+                    <span className="group-open:hidden">Rename</span>
+                    <span className="hidden group-open:inline">Cancel rename</span>
+                  </summary>
+                  <form action={renameCourse} className="mt-3 space-y-3 rounded-md border border-border bg-surface p-3">
+                    <input type="hidden" name="courseId" value={c.id} />
+                    <label className="block text-[12px] font-semibold text-navy">
+                      New title
+                      <input
+                        type="text"
+                        name="title"
+                        defaultValue={c.application.courseTitle ?? ""}
+                        required
+                        minLength={3}
+                        maxLength={200}
+                        className="mt-1 w-full rounded-md border border-border bg-white px-3 py-2 text-[13px] font-normal"
+                      />
+                    </label>
+                    <p className="text-pretty text-[11px] text-text-muted">
+                      Updates the title everywhere it appears, including the approval letter and ProTrack
+                      records synced from this course. Certificates already downloaded are not reissued. The
+                      change is recorded in the audit log.
+                    </p>
+                    <button type="submit" className="rounded-md bg-navy px-3 py-1.5 text-[12px] font-semibold text-white">
+                      Save title
+                    </button>
+                  </form>
+                </details>
               </li>
             ))}
           </ul>
