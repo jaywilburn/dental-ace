@@ -16,6 +16,8 @@ export type CertificateIssuedProps = {
   completedAt: string;
   verifyUrl: string;
   claimUrl: string;
+  /** Corrected certificate: tells the attendee earlier copies are superseded. */
+  replacesPrevious?: boolean;
 };
 
 export default function CertificateIssuedEmail({
@@ -27,6 +29,7 @@ export default function CertificateIssuedEmail({
   completedAt,
   verifyUrl,
   claimUrl,
+  replacesPrevious,
 }: CertificateIssuedProps) {
   return (
     <BrandEmail
@@ -47,6 +50,20 @@ export default function CertificateIssuedEmail({
         You passed the course quiz and earned your continuing-education
         certificate. Your certificate PDF is attached to this email.
       </Text>
+      {replacesPrevious ? (
+        <Text
+          style={{
+            margin: "0 0 14px 0",
+            fontSize: 14,
+            lineHeight: 1.65,
+            color: emailColors.textMid,
+          }}
+        >
+          This certificate replaces any certificate previously issued to you for
+          this event. It lists every session you completed. Please discard the
+          earlier copies.
+        </Text>
+      ) : null}
       <DetailGrid
         rows={[
           { label: "Course Title", value: courseTitle },
