@@ -8,6 +8,12 @@ import type { SubmitConfirmCopy } from "@/lib/attend/submit-confirm";
   opened with showModal(), so focus is trapped and Escape closes it without a
   dependency. Escape and "Not yet" both call onCancel; nothing is submitted
   until the attendee presses the confirm button.
+
+  Browsers without modal <dialog> support (iOS Safari before 15.4) have no
+  showModal(); calling it would throw and take the whole form down at the last
+  step. There the same content is shown in the page flow below the review
+  instead: `hidden` keeps it out of sight until it is wanted, because such a
+  browser renders an unknown <dialog> element as ordinary visible content.
 */
 export function SubmitConfirmDialog({
   copy,
@@ -26,19 +32,26 @@ export function SubmitConfirmDialog({
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    if (open && !el.open) {
-      el.showModal();
+    const modal = typeof el.showModal === "function";
+    if (open) {
+      if (!modal) el.setAttribute("open", "");
+      else if (!el.open) el.showModal();
       // showModal focuses the first button (confirm). Start on the safe one so
       // a double press of Enter on Submit cannot confirm by accident.
       cancelRef.current?.focus();
+    } else if (!modal) {
+      el.removeAttribute("open");
+    } else if (el.open) {
+      el.close();
     }
-    if (!open && el.open) el.close();
   }, [open]);
 
   return (
     <dialog
       ref={ref}
+      hidden={!open}
       aria-labelledby="submit-confirm-title"
+      aria-describedby="submit-confirm-body"
       // Escape fires "cancel"; keep React state as the single source of truth.
       onCancel={(e) => {
         e.preventDefault();
@@ -49,11 +62,13 @@ export function SubmitConfirmDialog({
       <h2 id="submit-confirm-title" className="text-base font-semibold text-slate-900">
         {copy.title}
       </h2>
-      {copy.body.map((line) => (
-        <p key={line} className="mt-2 text-sm text-slate-700">
-          {line}
-        </p>
-      ))}
+      <div id="submit-confirm-body">
+        {copy.body.map((line) => (
+          <p key={line} className="mt-2 text-sm text-slate-700">
+            {line}
+          </p>
+        ))}
+      </div>
       <div className="mt-5 flex flex-col gap-2">
         <button
           type="button"

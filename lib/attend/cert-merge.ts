@@ -68,3 +68,48 @@ export function planCertMerge(opts: {
     contentChanged,
   };
 }
+
+export type CertMergeWrite =
+  | { kind: "delete"; ids: string[]; passed: boolean }
+  | { kind: "update"; id: string; email: string; sessionIds: string[]; ceHours: number; score: number };
+
+/**
+ * The database writes for a batch of merges, in the only safe order.
+ *
+ * issued_certificates_event_attendee_uq (sql-migrations/0014) allows one
+ * passing certificate per (event, lower(email)) and is checked per statement.
+ * The kept certificate often sits under the SECOND email while the duplicate
+ * sits under the primary one, so every delete must land before any kept
+ * certificate is moved to its primary email.
+ */
+export function orderMergeWrites(
+  items: { plan: CertMergePlan; primaryEmail: string; failedIds: string[] }[],
+): CertMergeWrite[] {
+  return [
+    { kind: "delete", ids: items.flatMap((i) => i.failedIds), passed: false },
+    { kind: "delete", ids: items.flatMap((i) => i.plan.absorbIds), passed: true },
+    ...items.map(
+      (i): CertMergeWrite => ({
+        kind: "update",
+        id: i.plan.keepId,
+        email: i.primaryEmail.toLowerCase(),
+        sessionIds: i.plan.sessionIds,
+        ceHours: i.plan.ceHours,
+        score: i.plan.score,
+      }),
+    ),
+  ];
+}
+
+/**
+ * Certificates whose ProTrack claim (ce_certificates row) would go wrong if
+ * one existed: a deleted certificate orphans its claim, and a kept certificate
+ * that changes hours or moves email leaves its claim stale or on the wrong
+ * account. The merge refuses to run while any of these is claimed.
+ */
+export function claimSensitiveIds(items: { plan: CertMergePlan; emailChanged: boolean }[]): string[] {
+  return items.flatMap((i) => [
+    ...i.plan.absorbIds,
+    ...(i.plan.contentChanged || i.emailChanged ? [i.plan.keepId] : []),
+  ]);
+}

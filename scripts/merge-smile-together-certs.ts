@@ -25,9 +25,14 @@
 
   Usage:
     pnpm merge:smile-together-certs                  dry run: print the plan, write nothing
+    pnpm merge:smile-together-certs --rehearse       run the real transaction, then roll it back
     pnpm merge:smile-together-certs --apply          database changes + PDFs
+    pnpm merge:smile-together-certs --send-emails --test-to=<you>   send every email to yourself first
     pnpm merge:smile-together-certs --send-emails    email corrected certificates (after --apply)
     pnpm merge:smile-together-certs --send-emails --only=<primary email>   one recipient (retry)
+
+  Each real email carries a Resend idempotency key tied to the certificate id,
+  so re-running --send-emails within 24 hours cannot deliver a second copy.
 
   BACKUP_DIR overrides where the backup lands (default: logic/, gitignored).
   MERGE_ADMIN_EMAIL overrides the accountable admin (default jay@wilburncreative.com).
@@ -39,11 +44,18 @@ import { join } from "node:path";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { AdminAuditAction, BillingTransactionType, Prisma, PrismaClient } from "@prisma/client";
 import { Resend } from "resend";
-import { planCertMerge, type CertMergePlan, type MergeSession } from "@/lib/attend/cert-merge";
+import {
+  claimSensitiveIds,
+  orderMergeWrites,
+  planCertMerge,
+  type CertMergePlan,
+  type MergeSession,
+} from "@/lib/attend/cert-merge";
 import { balanceAdjustmentSummary, validateCertBalanceAdjustment } from "@/lib/admin/override-rules";
 import { renderEventCertificatePdf } from "@/lib/pdf/event-certificate";
 import { signCertClaimToken } from "@/lib/protrack/cert-claim-token";
 import CertificateIssuedEmail from "@/emails/certificate-issued";
+import { parseMergeArgs } from "./merge-smile-together-args";
 
 config({ path: ".env.local" });
 
@@ -53,6 +65,9 @@ const EVENT_ID = "4905d814-89e8-4dda-bc77-0954c37db0c2";
 const BASE_URL = "https://www.dentalace.org";
 const CERTS_BUCKET = process.env.SUPABASE_STORAGE_BUCKET_CERTS ?? "certificates";
 const DEFAULT_ADMIN_EMAIL = "jay@wilburncreative.com";
+
+/** Thrown at the end of a --rehearse transaction so every statement runs and nothing commits. */
+class RehearsalRollback extends Error {}
 
 type Entry = {
   label: string;
@@ -238,12 +253,8 @@ function printPlan(resolved: Resolved[], sessions: MergeSession[]): void {
 }
 
 async function main(): Promise<void> {
-  const args = process.argv.slice(2);
-  const apply = args.includes("--apply");
-  const sendEmails = args.includes("--send-emails");
-  const onlyArg = args.find((a) => a.startsWith("--only="));
-  const only = onlyArg ? onlyArg.slice("--only=".length).toLowerCase() : null;
-  if (apply && sendEmails) throw new Error("Run --apply first, check the result, then run --send-emails on its own.");
+  const { mode, only, testTo } = parseMergeArgs(process.argv.slice(2));
+  const rehearse = mode === "rehearse";
 
   const dbUrl = process.env.DATABASE_URL;
   if (!dbUrl) throw new Error("DATABASE_URL is not set");
@@ -275,7 +286,6 @@ async function main(): Promise<void> {
 
   const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: dbUrl }) });
   try {
-    const mode = apply ? "APPLY" : sendEmails ? "SEND EMAILS" : "dry run";
     console.log(`Target DB: ${new URL(dbUrl).host}  |  mode: ${mode}`);
 
     const event = await prisma.event.findUniqueOrThrow({
@@ -307,14 +317,22 @@ async function main(): Promise<void> {
     const deleteFailedIds = resolved.flatMap((r) => r.failed.map((f) => f.id));
     const pending = resolved.filter((r) => r.hasWork);
 
-    // A deleted certificate that someone already claimed into ProTrack would
-    // orphan that ProTrack record (the FK is ON DELETE SET NULL). Refuse.
-    const claimed = await prisma.ceCertificate.count({
-      where: { issuedCertificateId: { in: deletePassedIds } },
-    });
-    if (claimed > 0) {
-      throw new Error(`${claimed} certificate(s) marked for deletion are claimed in ProTrack. Resolve those by hand first.`);
-    }
+    // A ProTrack claim on a certificate this run deletes, grows or moves to
+    // another email would end up orphaned, stale or on the wrong account (see
+    // claimSensitiveIds). Refuse here, and again under the lock before writing.
+    const sensitiveIds = claimSensitiveIds(pending);
+    const assertUnclaimed = async (client: Prisma.TransactionClient | PrismaClient): Promise<void> => {
+      const claims = await client.ceCertificate.findMany({
+        where: { issuedCertificateId: { in: sensitiveIds } },
+        select: { issuedCertificateId: true },
+      });
+      if (claims.length > 0) {
+        throw new Error(
+          `Already claimed in ProTrack: ${claims.map((c) => c.issuedCertificateId).join(", ")}. Resolve those by hand first; nothing was written.`,
+        );
+      }
+    };
+    await assertUnclaimed(prisma);
 
     printPlan(resolved, sessions);
     console.log(
@@ -336,12 +354,12 @@ async function main(): Promise<void> {
         licenseNumber: row.licenseNumber,
       });
 
-    if (!apply && !sendEmails) {
-      console.log("\nDry run only. Re-run with --apply to write.");
+    if (mode === "dry-run") {
+      console.log("\nDry run only. Re-run with --rehearse to prove the transaction, then --apply to write.");
       return;
     }
 
-    if (apply) {
+    if (mode === "apply" || rehearse) {
       const adminEmail = process.env.MERGE_ADMIN_EMAIL || DEFAULT_ADMIN_EMAIL;
       const admin = await prisma.user.findUnique({
         where: { email: adminEmail },
@@ -350,99 +368,122 @@ async function main(): Promise<void> {
       if (!admin || admin.staffRole !== "ADMIN") throw new Error(`${adminEmail} is not an ADMIN account.`);
 
       if (pending.length > 0) {
-        const backupPath = join(
-          process.env.BACKUP_DIR ?? join(process.cwd(), "logic"),
-          `smile-together-cert-merge-backup-${Date.now()}.json`,
-        );
-        writeFileSync(
-          backupPath,
-          JSON.stringify(resolved.flatMap((r) => [...r.passed, ...r.failed]), null, 2),
-        );
-        console.log(`\nBackup written: ${backupPath}`);
-
-        await prisma.$transaction(async (tx) => {
-          await tx.$executeRaw`select id from public.companies where id = ${event.companyId}::uuid for update`;
-          const company = await tx.company.findUniqueOrThrow({
-            where: { id: event.companyId },
-            select: { name: true, certBalance: true },
-          });
-
-          for (const r of pending) {
-            await tx.issuedCertificate.update({
-              where: { id: r.keep.id },
-              data: {
-                attendeeEmail: r.entry.primaryEmail.toLowerCase(),
-                attendedSessionIds: r.plan.sessionIds as unknown as Prisma.InputJsonValue,
-                ceHours: new Prisma.Decimal(r.plan.ceHours),
-                score: r.plan.score,
-              },
-            });
-          }
-
-          const removedFailed = await tx.issuedCertificate.deleteMany({
-            where: { id: { in: deleteFailedIds }, eventId: EVENT_ID, passed: false },
-          });
-          const removedPassed = await tx.issuedCertificate.deleteMany({
-            where: { id: { in: deletePassedIds }, eventId: EVENT_ID, passed: true },
-          });
-          if (removedPassed.count !== deletePassedIds.length || removedFailed.count !== deleteFailedIds.length) {
-            throw new Error("Row counts changed since the plan was built. Nothing was written; re-run the dry run.");
-          }
-
-          // Refund exactly what was deleted in THIS transaction.
-          const delta = removedPassed.count;
-          if (delta > 0) {
-            const v = validateCertBalanceAdjustment(delta, company.certBalance);
-            if (!v.ok) throw new Error(`Credit refund rejected: ${v.error}`);
-            await tx.company.update({
-              where: { id: event.companyId },
-              data: { certBalance: { increment: delta }, totalCertsIssued: { decrement: delta } },
-            });
-            await tx.event.update({
-              where: { id: EVENT_ID },
-              data: { certsIssuedCount: { decrement: delta } },
-            });
-            await tx.billingTransaction.create({
-              data: {
-                companyId: event.companyId,
-                type: BillingTransactionType.ADMIN_OVERRIDE_CERTS,
-                quantity: delta,
-                amountCents: 0,
-                performedById: admin.id,
-              },
-            });
-            // Same row shape as recordAdminAction (lib/admin/audit.ts), which
-            // cannot be imported here: it loads the app Prisma client.
-            await tx.adminAuditLog.create({
-              data: {
-                actorUserId: admin.id,
-                targetUserId: null,
-                action: AdminAuditAction.COMPANY_BALANCE_ADJUSTED,
-                summary: balanceAdjustmentSummary({
-                  field: "certBalance",
-                  delta,
-                  before: company.certBalance,
-                  companyName: company.name,
-                }),
-                details: {
-                  reason: "Duplicate event certificates merged onto one email (scripts/merge-smile-together-certs.ts)",
-                  eventId: EVENT_ID,
-                  deletedCertificateIds: deletePassedIds,
-                  keptCertificateIds: pending.map((r) => r.keep.id),
-                },
-              },
-            });
-          }
-          console.log(
-            `Applied: ${pending.length} certificate(s) updated, ${removedPassed.count} passing + ${removedFailed.count} failed row(s) deleted, ${delta} credit(s) returned.`,
+        if (!rehearse) {
+          const backupPath = join(
+            process.env.BACKUP_DIR ?? join(process.cwd(), "logic"),
+            `smile-together-cert-merge-backup-${Date.now()}.json`,
           );
-        });
+          writeFileSync(
+            backupPath,
+            JSON.stringify(resolved.flatMap((r) => [...r.passed, ...r.failed]), null, 2),
+          );
+          console.log(`\nBackup written: ${backupPath}`);
+        }
+
+        try {
+          await prisma.$transaction(
+            async (tx) => {
+              await tx.$executeRaw`select id from public.companies where id = ${event.companyId}::uuid for update`;
+              const company = await tx.company.findUniqueOrThrow({
+                where: { id: event.companyId },
+                select: { name: true, certBalance: true },
+              });
+              await assertUnclaimed(tx);
+
+              // Deletes first, then the moves: see orderMergeWrites.
+              const removed = { passed: 0, failed: 0 };
+              const writes = orderMergeWrites(
+                pending.map((r) => ({
+                  plan: r.plan,
+                  primaryEmail: r.entry.primaryEmail,
+                  failedIds: r.failed.map((f) => f.id),
+                })),
+              );
+              for (const w of writes) {
+                if (w.kind === "delete") {
+                  const res = await tx.issuedCertificate.deleteMany({
+                    where: { id: { in: w.ids }, eventId: EVENT_ID, passed: w.passed },
+                  });
+                  if (res.count !== w.ids.length) {
+                    throw new Error("Row counts changed since the plan was built. Nothing was written; re-run the dry run.");
+                  }
+                  removed[w.passed ? "passed" : "failed"] = res.count;
+                } else {
+                  await tx.issuedCertificate.update({
+                    where: { id: w.id },
+                    data: {
+                      attendeeEmail: w.email,
+                      attendedSessionIds: w.sessionIds as unknown as Prisma.InputJsonValue,
+                      ceHours: new Prisma.Decimal(w.ceHours),
+                      score: w.score,
+                    },
+                  });
+                }
+              }
+
+              // Refund exactly what was deleted in THIS transaction.
+              const delta = removed.passed;
+              if (delta > 0) {
+                const v = validateCertBalanceAdjustment(delta, company.certBalance);
+                if (!v.ok) throw new Error(`Credit refund rejected: ${v.error}`);
+                await tx.company.update({
+                  where: { id: event.companyId },
+                  data: { certBalance: { increment: delta }, totalCertsIssued: { decrement: delta } },
+                });
+                await tx.event.update({
+                  where: { id: EVENT_ID },
+                  data: { certsIssuedCount: { decrement: delta } },
+                });
+                await tx.billingTransaction.create({
+                  data: {
+                    companyId: event.companyId,
+                    type: BillingTransactionType.ADMIN_OVERRIDE_CERTS,
+                    quantity: delta,
+                    amountCents: 0,
+                    performedById: admin.id,
+                  },
+                });
+                // Same row shape as recordAdminAction (lib/admin/audit.ts), which
+                // cannot be imported here: it loads the app Prisma client.
+                await tx.adminAuditLog.create({
+                  data: {
+                    actorUserId: admin.id,
+                    targetUserId: null,
+                    action: AdminAuditAction.COMPANY_BALANCE_ADJUSTED,
+                    summary: balanceAdjustmentSummary({
+                      field: "certBalance",
+                      delta,
+                      before: company.certBalance,
+                      companyName: company.name,
+                    }),
+                    details: {
+                      reason: "Duplicate event certificates merged onto one email (scripts/merge-smile-together-certs.ts)",
+                      eventId: EVENT_ID,
+                      deletedCertificateIds: deletePassedIds,
+                      keptCertificateIds: pending.map((r) => r.keep.id),
+                    },
+                  },
+                });
+              }
+              console.log(
+                `${rehearse ? "Rehearsed" : "Applied"}: ${pending.length} certificate(s) updated, ${removed.passed} passing + ${removed.failed} failed row(s) deleted, ${delta} credit(s) returned.`,
+              );
+              if (rehearse) throw new RehearsalRollback();
+            },
+            { timeout: 30_000, maxWait: 10_000 },
+          );
+        } catch (err) {
+          if (!(err instanceof RehearsalRollback)) throw err;
+          console.log("Rehearsal passed: every statement succeeded under the row lock, then the transaction was rolled back. Nothing changed.");
+          return;
+        }
 
         for (const id of deletePassedIds) await deletePdf(`${id}.pdf`);
         console.log(`Removed ${deletePassedIds.length} superseded PDF(s) from storage.`);
       } else {
         console.log("\nNo database changes pending.");
       }
+      if (rehearse) return;
 
       // Re-render from current rows for everyone flagged notify. Deterministic
       // and upsert, so a re-run after a failed upload simply finishes the job.
@@ -469,8 +510,10 @@ async function main(): Promise<void> {
       (e) => e.notify && (only === null || e.primaryEmail.toLowerCase() === only),
     );
     if (recipients.length === 0) throw new Error("No recipients match.");
+    if (testTo) console.log(`\nTEST SEND: every email below goes to ${testTo}, not to the attendee.`);
 
     let checkedClaimLink = false;
+    const failures: string[] = [];
     for (const entry of recipients) {
       const r = await resolveEntry(prisma, entry, sessions);
       const row = r.keep;
@@ -479,7 +522,8 @@ async function main(): Promise<void> {
       // The token is signed with the LOCAL SESSION_SECRET. Production rejects
       // it (redirect to /login?error=cert_claim) if the secrets differ, so
       // prove one link before anything is sent. A valid link behaves exactly
-      // as it would when the attendee clicks it.
+      // as it would when the attendee clicks it: if a ProTrack account already
+      // owns that primary email, this attaches the certificate to it.
       if (!checkedClaimLink) {
         const res = await fetch(claimUrl, { redirect: "manual" });
         const location = res.headers.get("location") ?? "";
@@ -509,15 +553,34 @@ async function main(): Promise<void> {
         replacesPrevious: true,
       };
       const pdf = await renderFor(r, row);
-      const { error } = await resend.emails.send({
-        from,
-        to: entry.primaryEmail,
-        subject: CertificateIssuedEmail.subject(props),
-        react: CertificateIssuedEmail(props),
-        attachments: [{ filename: `${event.eventIdNumber ?? "event"}-certificate.pdf`, content: pdf }],
-      });
-      if (error) throw new Error(`Send failed for ${entry.primaryEmail}: ${error.message}. Retry with --only=${entry.primaryEmail}`);
-      console.log(`Sent: ${entry.label} <${entry.primaryEmail}>  ${r.plan.ceHours} h`);
+      const subject = CertificateIssuedEmail.subject(props);
+      try {
+        const { error } = await resend.emails.send(
+          {
+            from,
+            to: testTo ?? entry.primaryEmail,
+            subject: testTo ? `[TEST for ${entry.primaryEmail}] ${subject}` : subject,
+            react: CertificateIssuedEmail(props),
+            // base64, as lib/email/send.ts does.
+            attachments: [
+              { filename: `${event.eventIdNumber ?? "event"}-certificate.pdf`, content: pdf.toString("base64") },
+            ],
+          },
+          // One real delivery per certificate: a re-run inside Resend's 24 hour
+          // window is answered from the first send instead of mailing again.
+          testTo ? undefined : { idempotencyKey: `smile-merge-${row.id}` },
+        );
+        if (error) throw new Error(error.message);
+        console.log(`Sent: ${entry.label} <${testTo ?? entry.primaryEmail}>  ${r.plan.ceHours} h`);
+      } catch (err) {
+        failures.push(entry.primaryEmail);
+        console.error(`FAILED: ${entry.label} <${entry.primaryEmail}>: ${(err as Error).message}`);
+      }
+    }
+    console.log(`\n${recipients.length - failures.length} sent, ${failures.length} failed.`);
+    if (failures.length > 0) {
+      console.log(`Retry each with: pnpm merge:smile-together-certs --send-emails --only=<email>\n  ${failures.join("\n  ")}`);
+      process.exitCode = 1;
     }
   } finally {
     await prisma.$disconnect();
