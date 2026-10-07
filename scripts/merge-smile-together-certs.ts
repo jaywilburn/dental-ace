@@ -69,6 +69,18 @@ const DEFAULT_ADMIN_EMAIL = "jay@wilburncreative.com";
 /** Thrown at the end of a --rehearse transaction so every statement runs and nothing commits. */
 class RehearsalRollback extends Error {}
 
+/** Every Smile Together session, in event order (positions 0-7). */
+const ALL_SESSION_IDS = [
+  "54fdb850-2e5a-4e82-b7da-a6cfa1e4dfa6",
+  "17937f1c-fb4b-40d1-a554-1ff109a669d2",
+  "46e56de6-2faa-43a9-bc87-adb7a968dde0",
+  "7727e6e7-3f09-4254-a3ec-a873371f594f",
+  "8c4e4809-4c01-4da1-9217-cfd5299cd046",
+  "959c0bc0-bc78-4880-bf0e-70f1e8be1249",
+  "1b6cd7b1-23f6-4742-97f3-de5f833e6611",
+  "b25c7009-95e1-4d75-a3f0-515f104b2d4a",
+];
+
 type Entry = {
   label: string;
   /** The first email the person used on the event. The merged cert lands here. */
@@ -132,16 +144,17 @@ const MANIFEST: Entry[] = [
     addSessionIds: [],
     notify: false,
   },
-  // The three attendees from the original report used one email only. They stay
-  // no-ops until Task 6 fills addSessionIds and flips notify.
+  // The three attendees from the original report used one email only and were
+  // locked out after their first session. Jay's decision 2026-10-07: credit the
+  // full event to each of them.
   {
     label: "Marifer Martinez-Lujan",
     primaryEmail: "marifermtz@hotmail.com",
     emails: ["marifermtz@hotmail.com"],
     passedCertIds: ["fadda181-5810-4d1c-9d40-7f94f382255f"],
     failedCertIds: [],
-    addSessionIds: [],
-    notify: false,
+    addSessionIds: ALL_SESSION_IDS,
+    notify: true,
   },
   {
     label: "Eileen Huynh",
@@ -149,8 +162,8 @@ const MANIFEST: Entry[] = [
     emails: ["ekhuynh15@gmail.com"],
     passedCertIds: ["3bc774e2-e63f-4be7-aa62-7a95620d79f7"],
     failedCertIds: [],
-    addSessionIds: [],
-    notify: false,
+    addSessionIds: ALL_SESSION_IDS,
+    notify: true,
   },
   {
     label: "Shaymaa Mohsin",
@@ -158,8 +171,8 @@ const MANIFEST: Entry[] = [
     emails: ["shaymaa.mohsin@yahoo.com"],
     passedCertIds: ["95f823c5-48fd-407b-9b55-3d7f9bd6e276"],
     failedCertIds: [],
-    addSessionIds: [],
-    notify: false,
+    addSessionIds: ALL_SESSION_IDS,
+    notify: true,
   },
 ];
 
