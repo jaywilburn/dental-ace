@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { submitEventAttendance, type EventAttendResult } from "@/lib/attend/event-actions";
 import { COURSE_FORMATS } from "@/lib/forms/application/schemas";
 import {
@@ -11,6 +11,8 @@ import {
 import { formatCeHours } from "@/lib/attend/format-ce-hours";
 import { JurisdictionOptions } from "@/components/jurisdiction-options";
 import { ErrorSummary, FieldError, toDisplayErrors } from "@/components/attend/form-errors";
+import { SubmitConfirmDialog } from "@/components/attend/submit-confirm-dialog";
+import { submitConfirmCopy } from "@/lib/attend/submit-confirm";
 
 type CourseFormat = (typeof COURSE_FORMATS)[number];
 
@@ -73,6 +75,10 @@ export function EventAttendeeForm({
   const [answers, setAnswers] = useState<Record<string, Answer>>({});
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<EventAttendResult | null>(null);
+  // Selective events confirm before the one-and-only submission (null = no
+  // confirmation step for this mode).
+  const confirmCopy = submitConfirmCopy(form.mode);
+  const [confirmOpen, setConfirmOpen] = useState(false);
   // Server-side validation errors keyed by field. Non-empty only after an
   // "invalid" submit; the form stays mounted so the attendee can fix and retry.
   const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
@@ -102,7 +108,14 @@ export function EventAttendeeForm({
 
   const allAnswered = active.length > 0 && active.every((a) => answers[a.key]);
 
+  // Re-entrancy guard. The confirm dialog's button is not covered by the
+  // Submit button's disabled state, so a double press would send two
+  // submissions and the second would answer "already certified" over the pass.
+  const submitInFlight = useRef(false);
+
   async function onSubmit() {
+    if (submitInFlight.current) return;
+    submitInFlight.current = true;
     setSubmitting(true);
     setFieldErrors({});
     try {
@@ -135,6 +148,7 @@ export function EventAttendeeForm({
       }
       setResult(res);
     } finally {
+      submitInFlight.current = false;
       setSubmitting(false);
     }
   }
@@ -432,9 +446,20 @@ export function EventAttendeeForm({
               </>
             ) : null}
           </div>
-          <NavButtons onBack={() => setStep(selective ? 3 : 2)} onNext={onSubmit} nextLabel={submitting ? "Submitting…" : "Submit"} nextDisabled={submitting} />
+          <NavButtons onBack={() => setStep(selective ? 3 : 2)} onNext={confirmCopy ? () => setConfirmOpen(true) : onSubmit} nextLabel={submitting ? "Submitting…" : "Submit"} nextDisabled={submitting} />
         </section>
       )}
+      {confirmCopy ? (
+        <SubmitConfirmDialog
+          copy={confirmCopy}
+          open={confirmOpen}
+          onCancel={() => setConfirmOpen(false)}
+          onConfirm={() => {
+            setConfirmOpen(false);
+            void onSubmit();
+          }}
+        />
+      ) : null}
     </div>
   );
 }
