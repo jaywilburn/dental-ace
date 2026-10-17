@@ -15,13 +15,16 @@ export function FormLabel({
   children,
   hint,
   required,
+  htmlFor,
 }: {
   children: React.ReactNode;
   hint?: string;
   required?: boolean;
+  /** The control's id, so clicking the label focuses it and AT reads it. */
+  htmlFor?: string;
 }) {
   return (
-    <label className="mb-1.5 block text-[11px] font-semibold text-text-mid">
+    <label htmlFor={htmlFor} className="mb-1.5 block text-[11px] font-semibold text-text-mid">
       {children}
       {required ? <span className="ml-1 text-red-500">*</span> : null}
       {hint ? (

@@ -3,8 +3,13 @@ import { z } from "zod";
 import { EventType, type Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { quizQuestionSchema, type QuizQuestion } from "@/lib/forms/application/schemas";
-import { sessionCourseInfoReadSchema } from "@/lib/forms/event/schemas";
+import {
+  inlineQuestionReadSchema,
+  sessionCourseInfoReadSchema,
+  type EventQuizQuestion,
+} from "@/lib/forms/event/schemas";
 import { formatCeHours } from "@/lib/attend/format-ce-hours";
+import { parseStoredSurvey, type SurveyQuestion } from "@/lib/events/survey-schemas";
 import type {
   PublicQuestion,
   EventPublicForm,
@@ -25,7 +30,9 @@ import type {
     MC question per course. FULL coverage asks all; SELECTIVE asks the attended.
   - Legacy FULL_EVENT_QUIZ (no sessions): the 5 event-level questions (eventData.quiz).
   - SELECTIVE_INLINE (courseId null) — the current lightweight model (and its
-    pre-July twin): one question per attended inline session.
+    pre-July twin): one question per attended inline session. This is the ONLY
+    branch that can yield an attendance-code (CODE) question; course quizzes
+    and the legacy event quiz are read with the TF/MC-only quiz schema.
 
   SELECTIVE_INLINE events (either branch) credit per session: a correct answer
   earns that session's hours, a wrong one drops the session from the
@@ -43,7 +50,7 @@ export type EventForAttendPage = NonNullable<Awaited<ReturnType<typeof loadEvent
 export type { PublicQuestion, EventPublicForm } from "@/lib/attend/event-form-items";
 
 export type AssembledQuiz = {
-  questions: QuizQuestion[]; // WITH answers — never sent to the client
+  questions: EventQuizQuestion[]; // WITH answers (and codes) — never sent to the client
   hours: number;
   attendedSessionIds: string[];
   sessionNames: string[];
@@ -64,7 +71,10 @@ const SELECT = {
   totalHours: true,
   expiresAt: true,
   eventData: true,
-  company: { select: { certBalance: true } },
+  // Attendee survey (events.survey), shown only when the company has surveys
+  // switched on. Ungraded: never part of scoring (see activeSurvey).
+  survey: true,
+  company: { select: { certBalance: true, surveyEnabled: true } },
   sessions: {
     orderBy: { position: "asc" as const },
     select: {
@@ -117,10 +127,36 @@ export async function loadEventPageByToken(token: string) {
   return prisma.event.findUnique({ where: { attendeeLinkToken: token }, select: PAGE_SELECT });
 }
 
-function strip(q: QuizQuestion): PublicQuestion {
-  return q.type === "TF"
-    ? { type: "TF", question: q.question }
-    : { type: "MC", question: q.question, options: q.options };
+/**
+ * The survey an attendee of this event answers, or null when there is none:
+ * the company's survey feature is off, or the event has no (valid) questions.
+ * The ONE gate shared by the attendee page and the submit action, so the page
+ * never shows a survey the server would ignore, or vice versa.
+ */
+export function activeSurvey(event: {
+  survey: unknown;
+  company: { surveyEnabled?: boolean | null };
+}): SurveyQuestion[] | null {
+  if (event.company.surveyEnabled !== true) return null;
+  const questions = parseStoredSurvey(event.survey);
+  return questions.length > 0 ? questions : null;
+}
+
+/** Answer-stripped copy for the public page. Exhaustive: a new question type
+ *  must decide here what it may reveal. CODE ships its prompt only. */
+export function strip(q: EventQuizQuestion): PublicQuestion {
+  switch (q.type) {
+    case "TF":
+      return { type: "TF", question: q.question };
+    case "MC":
+      return { type: "MC", question: q.question, options: q.options };
+    case "CODE":
+      return { type: "CODE", question: q.question };
+    default: {
+      const never: never = q;
+      throw new Error(`Unknown question type: ${JSON.stringify(never)}`);
+    }
+  }
 }
 
 /** First multiple-choice question of a course's stored quiz, or null. */
@@ -167,8 +203,8 @@ export function presenterNames(data: unknown): string[] {
   return names;
 }
 
-function inlineQuestion(session: EventSessionForAttend): QuizQuestion | null {
-  const parsed = quizQuestionSchema.safeParse(session.question);
+function inlineQuestion(session: EventSessionForAttend): EventQuizQuestion | null {
+  const parsed = inlineQuestionReadSchema.safeParse(session.question);
   return parsed.success ? parsed.data : null;
 }
 
@@ -321,7 +357,7 @@ export function assembleForSubmit(
   if (new Set(selectedSessionIds).size !== selectedSessionIds.length) return null;
   const useInline = event.eventType === EventType.SELECTIVE_INLINE && !courseBacked;
   const byId = new Map(event.sessions.map((s) => [s.id, s]));
-  const questions: QuizQuestion[] = [];
+  const questions: EventQuizQuestion[] = [];
   const sessionNames: string[] = [];
   const sessionHours: number[] = [];
   for (const id of selectedSessionIds) {

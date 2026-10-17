@@ -147,6 +147,12 @@ describe("attendeeSubmissionSchema", () => {
   it("rejects a non-email", () => {
     expect(attendeeSubmissionSchema.safeParse({ ...valid, attendeeEmail: "nope" }).success).toBe(false);
   });
+
+  it("rejects an attendance-code answer (CODE is event-only)", () => {
+    const answers = [...valid.answers];
+    answers[2] = { type: "CODE", answer: "ABCD" } as unknown as (typeof answers)[number];
+    expect(attendeeSubmissionSchema.safeParse({ ...valid, answers }).success).toBe(false);
+  });
 });
 
 describe("flattenFieldErrors", () => {

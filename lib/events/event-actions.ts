@@ -18,7 +18,9 @@ import {
   qualifierSchema,
   eventQuizSchema,
   isInlineSessionComplete,
-  mcQuestionSchema,
+  inlineSessionQuestionSchema,
+  codeEntries,
+  inlineSessionCodeIssues,
   attachedCoursesSchema,
   deriveEventType,
   isEventOnly,
@@ -28,6 +30,7 @@ import {
   type EventData,
   type EventSessionApplicationData,
 } from "@/lib/forms/event/schemas";
+import { duplicateCodeIds } from "@/lib/attend/attendance-code";
 import { sendEmail } from "@/lib/email/send";
 import ApplicationSubmittedEmail from "@/emails/application-submitted";
 import {
@@ -142,16 +145,22 @@ export type EventDraft = {
     name: string | null;
     durationHours: number | null;
     position: number;
-    // Inline MC question (SELECTIVE_INLINE lightweight sessions); parse with
-    // mcQuestionSchema at the call site. Null for course-backed sessions.
+    // Inline question (SELECTIVE_INLINE lightweight sessions): MC or attendance
+    // code; parse with inlineSessionQuestionSchema at the call site. Null for
+    // course-backed sessions.
     question: unknown;
     // Per-session Course Information (step1 shape); parse with
     // sessionCourseInfoReadSchema at the call site. Null for course-backed
     // sessions and rows saved before July 2026.
     courseInfo: unknown;
-    // Course info + question both pass their strict schemas (submit gate).
+    // Course info + question both pass their strict schemas (submit gate)
+    // and the question has no event-level code issue (inlineSessionCodeIssues).
     // Course-backed sessions report true (their info lives on the course).
     complete: boolean;
+    // Why an otherwise complete session cannot be submitted (a duplicate
+    // attendance code, or codes switched off), shown next to "Incomplete".
+    // Null when there is no such issue.
+    issue: string | null;
   }>;
   // Inline event-scoped session applications (event-only full-course path).
   sessionApplications: Array<{
@@ -177,6 +186,7 @@ export async function getEventDraft(eventId: string): Promise<EventDraft | null>
       creditChargedAt: true,
       submittedAt: true,
       reviewerNotes: true,
+      company: { select: { attendanceCodesEnabled: true } },
       sessions: {
         orderBy: { position: "asc" },
         select: {
@@ -196,6 +206,10 @@ export async function getEventDraft(eventId: string): Promise<EventDraft | null>
     },
   });
   if (!row) return null;
+  const codeIssues = inlineSessionCodeIssues(
+    row.sessions.filter((s) => s.courseId === null),
+    row.company.attendanceCodesEnabled,
+  );
   return {
     id: row.id,
     name: row.name,
@@ -206,11 +220,15 @@ export async function getEventDraft(eventId: string): Promise<EventDraft | null>
     creditChargedAt: row.creditChargedAt,
     submittedAt: row.submittedAt,
     reviewerNotes: row.reviewerNotes,
-    sessions: row.sessions.map((s) => ({
-      ...s,
-      durationHours: s.durationHours ? Number(s.durationHours) : null,
-      complete: s.courseId !== null || isInlineSessionComplete(s),
-    })),
+    sessions: row.sessions.map((s) => {
+      const issue = codeIssues.get(s.id) ?? null;
+      return {
+        ...s,
+        durationHours: s.durationHours ? Number(s.durationHours) : null,
+        complete: s.courseId !== null || (isInlineSessionComplete(s) && issue === null),
+        issue,
+      };
+    }),
     sessionApplications: row.sessionApplications.map((a) => {
       const data = (a.applicationData as Record<string, unknown> | null) ?? {};
       return {
@@ -471,7 +489,7 @@ export async function submitEvent(formData: FormData) {
   const draft = await prisma.event.findFirst({
     where: { id: eventId, companyId, status: "DRAFT" },
     include: {
-      company: { select: { name: true } },
+      company: { select: { name: true, attendanceCodesEnabled: true } },
       sessions: {
         orderBy: { position: "asc" },
         select: {
@@ -534,7 +552,7 @@ export async function submitEvent(formData: FormData) {
       (s) =>
         s.name &&
         s.durationHours !== null &&
-        mcQuestionSchema.safeParse(s.question).success,
+        inlineSessionQuestionSchema.safeParse(s.question).success,
     );
     if (!wellFormed) {
       redirect(
@@ -556,6 +574,30 @@ export async function submitEvent(formData: FormData) {
         withEventId(
           `${ROUTES.sessions}?error=validation&detail=${encodeURIComponent(
             "Each session needs its full course information before you can submit.",
+          )}`,
+          eventId,
+        ),
+      );
+    }
+    // Attendance codes: the question step echoes a CODE question back even
+    // when it was rejected (feature off, or a code another session already
+    // uses), and an echoed CODE question is schema-valid. Re-check both here.
+    const codes = codeEntries(inline);
+    if (codes.length > 0 && !draft.company.attendanceCodesEnabled) {
+      redirect(
+        withEventId(
+          `${ROUTES.sessions}?error=validation&detail=${encodeURIComponent(
+            "Attendance codes are not turned on for your organization. Change those sessions to a multiple choice question.",
+          )}`,
+          eventId,
+        ),
+      );
+    }
+    if (duplicateCodeIds(codes).size > 0) {
+      redirect(
+        withEventId(
+          `${ROUTES.sessions}?error=validation&detail=${encodeURIComponent(
+            "Two sessions use the same attendance code. Give each session its own code.",
           )}`,
           eventId,
         ),

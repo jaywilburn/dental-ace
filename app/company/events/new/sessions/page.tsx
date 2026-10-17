@@ -116,6 +116,7 @@ export default async function EventSessionsPage({
                       ) : (
                         <span className="font-semibold text-orange-600">⚠ Incomplete</span>
                       )}
+                      {s.issue ? <span className="text-orange-600">{" · "}{s.issue}</span> : null}
                     </p>
                   </div>
                   <div className="flex shrink-0 items-center gap-3 text-[12px]">

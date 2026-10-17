@@ -75,6 +75,8 @@ export const APPLICATION_FIELD_LABELS: Record<string, string> = {
   option_2: "Answer 3",
   option_3: "Answer 4",
   correctIndex: "Correct answer",
+  // Attendance-code question (SELECTIVE_INLINE, when the company has codes on)
+  code: "Attendance code",
 
   // Five-question quiz (standalone wizard + admin editor)
   quiz: "Quiz",

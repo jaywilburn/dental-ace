@@ -10,6 +10,15 @@ import {
   isInlineFullCourse,
   inlineSessionSchema,
   isInlineSessionComplete,
+  codeQuestionSchema,
+  inlineSessionQuestionSchema,
+  inlineQuestionReadSchema,
+  inlineSessionCode,
+  codeEntries,
+  inlineSessionCodeIssues,
+  readInlineSessionQuestion,
+  CODES_DISABLED_REASON,
+  DUPLICATE_CODE_REASON,
   sessionCourseInfoSchema,
   sessionApplicationSchema,
   eventSessionApplicationSchema,
@@ -18,7 +27,7 @@ import {
   eventStep1Schema,
   EVENT_OUTLINE_MAX,
 } from "@/lib/forms/event/schemas";
-import { applicationDataReadSchema } from "@/lib/forms/application/schemas";
+import { applicationDataReadSchema, quizQuestionSchema } from "@/lib/forms/application/schemas";
 
 describe("deriveEventType", () => {
   it("maps the two qualifier answers to the four types", () => {
@@ -211,6 +220,66 @@ describe("isInlineSessionComplete", () => {
         question: { ...MC_QUESTION, options: ["a", "", "c", "d"] },
       }),
     ).toBe(false);
+  });
+});
+
+const CODE_QUESTION = {
+  type: "CODE",
+  question: "Enter the attendance code announced during this session.",
+  code: "AADB-2026",
+} as const;
+
+describe("codeQuestionSchema (attendance code)", () => {
+  it("accepts a prompt and a code, trimming the code", () => {
+    expect(codeQuestionSchema.parse({ ...CODE_QUESTION, code: "  AADB-2026 " }).code).toBe("AADB-2026");
+  });
+  it("needs at least 4 characters after removing spaces", () => {
+    expect(codeQuestionSchema.safeParse({ ...CODE_QUESTION, code: "ABCD" }).success).toBe(true);
+    expect(codeQuestionSchema.safeParse({ ...CODE_QUESTION, code: "A B C" }).success).toBe(false);
+    expect(codeQuestionSchema.safeParse({ ...CODE_QUESTION, code: "" }).success).toBe(false);
+  });
+  it("caps the code at 100 characters", () => {
+    expect(codeQuestionSchema.safeParse({ ...CODE_QUESTION, code: "x".repeat(100) }).success).toBe(true);
+    expect(codeQuestionSchema.safeParse({ ...CODE_QUESTION, code: "x".repeat(101) }).success).toBe(false);
+  });
+  it("requires a prompt of 5 to 500 characters", () => {
+    expect(codeQuestionSchema.safeParse({ ...CODE_QUESTION, question: "Code" }).success).toBe(false);
+    expect(codeQuestionSchema.safeParse({ ...CODE_QUESTION, question: "x".repeat(501) }).success).toBe(false);
+  });
+});
+
+describe("inline session question union", () => {
+  it("accepts MC and CODE, rejects TF", () => {
+    expect(inlineSessionQuestionSchema.safeParse(MC_QUESTION).success).toBe(true);
+    expect(inlineSessionQuestionSchema.safeParse(CODE_QUESTION).success).toBe(true);
+    expect(
+      inlineSessionQuestionSchema.safeParse({ type: "TF", question: "Is it true?", correctAnswer: "True" }).success,
+    ).toBe(false);
+  });
+  it("reads TF, MC and CODE on the attendee side", () => {
+    expect(inlineQuestionReadSchema.safeParse(MC_QUESTION).success).toBe(true);
+    expect(inlineQuestionReadSchema.safeParse(CODE_QUESTION).success).toBe(true);
+    expect(
+      inlineQuestionReadSchema.safeParse({ type: "TF", question: "Is it true?", correctAnswer: "True" }).success,
+    ).toBe(true);
+  });
+  it("is not part of the shared course quiz schema", () => {
+    expect(quizQuestionSchema.safeParse(CODE_QUESTION).success).toBe(false);
+  });
+  it("inlineSessionCode returns the code of a valid CODE question only", () => {
+    expect(inlineSessionCode(CODE_QUESTION)).toBe("AADB-2026");
+    expect(inlineSessionCode(MC_QUESTION)).toBeNull();
+    expect(inlineSessionCode({ ...CODE_QUESTION, code: "ab" })).toBeNull();
+    expect(inlineSessionCode(null)).toBeNull();
+  });
+  it("counts a CODE session as complete", () => {
+    expect(isInlineSessionComplete({ courseInfo: FULL_SESSION, question: CODE_QUESTION })).toBe(true);
+    expect(
+      isInlineSessionComplete({ courseInfo: FULL_SESSION, question: { ...CODE_QUESTION, code: "" } }),
+    ).toBe(false);
+  });
+  it("accepts a CODE question in inlineSessionSchema", () => {
+    expect(inlineSessionSchema.safeParse({ courseInfo: FULL_SESSION, question: CODE_QUESTION }).success).toBe(true);
   });
 });
 
@@ -496,5 +565,66 @@ describe("eventOrgFields", () => {
       adminEmail: undefined,
       adminPhone: undefined,
     });
+  });
+});
+
+describe("codeEntries / inlineSessionCodeIssues", () => {
+  const code = (c: string) => ({ ...CODE_QUESTION, code: c });
+  const MC = {
+    type: "MC",
+    question: "Which option is correct?",
+    options: ["A", "B", "C", "D"],
+    correctIndex: 0,
+  };
+  const sessions = [
+    { id: "s1", question: code("AADB-2026") },
+    { id: "s2", question: MC },
+    { id: "s3", question: code(" aadb - 2026 ") },
+    { id: "s4", question: code("OTHER1") },
+    { id: "s5", question: { type: "CODE", question: "Too short", code: "x" } },
+  ];
+
+  it("lists only valid CODE questions", () => {
+    expect(codeEntries(sessions).map((e) => e.id)).toEqual(["s1", "s3", "s4"]);
+    expect(codeEntries(sessions)[0]).toEqual({ id: "s1", code: "AADB-2026" });
+  });
+
+  it("flags sessions sharing a code (after normalisation) when codes are on", () => {
+    expect(inlineSessionCodeIssues(sessions, true)).toEqual(
+      new Map([
+        ["s1", DUPLICATE_CODE_REASON],
+        ["s3", DUPLICATE_CODE_REASON],
+      ]),
+    );
+  });
+
+  it("flags every CODE session when attendance codes are off", () => {
+    expect(inlineSessionCodeIssues(sessions, false)).toEqual(
+      new Map([
+        ["s1", CODES_DISABLED_REASON],
+        ["s3", CODES_DISABLED_REASON],
+        ["s4", CODES_DISABLED_REASON],
+      ]),
+    );
+  });
+
+  it("has no issues for MC-only events", () => {
+    expect(inlineSessionCodeIssues([{ id: "s2", question: MC }], false).size).toBe(0);
+  });
+});
+
+describe("readInlineSessionQuestion", () => {
+  it("reads CODE, MC and legacy TF questions", () => {
+    expect(readInlineSessionQuestion(CODE_QUESTION)).toEqual(CODE_QUESTION);
+    const mc = { type: "MC", question: "Which option is correct?", options: ["A", "B", "C", "D"], correctIndex: 2 };
+    expect(readInlineSessionQuestion(mc)).toEqual(mc);
+    const tf = { type: "TF", question: "Fluoride strengthens enamel.", correctAnswer: "True" };
+    expect(readInlineSessionQuestion(tf)).toEqual(tf);
+  });
+  it("returns null for missing or malformed questions", () => {
+    expect(readInlineSessionQuestion(null)).toBeNull();
+    expect(readInlineSessionQuestion({})).toBeNull();
+    expect(readInlineSessionQuestion({ type: "CODE", question: "Enter the code here.", code: "" })).toBeNull();
+    expect(readInlineSessionQuestion({ type: "MC", question: "Which one?", options: [] })).toBeNull();
   });
 });

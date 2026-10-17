@@ -1,8 +1,10 @@
 import { describe, it, expect } from "vitest";
 import { EventType } from "@prisma/client";
 import {
+  activeSurvey,
   assembleForSubmit,
   buildPublicForm,
+  strip,
   type EventForAttend,
 } from "@/lib/attend/event-quiz";
 
@@ -415,5 +417,96 @@ describe("FULL_EVENT_QUIZ (course-backed, single MC per session)", () => {
     expect(a!.perSessionCredit).toBe(false);
     expect(a!.passPct).toBe(0.7);
     expect(a!.hours).toBe(10); // baseEvent totalHours
+  });
+});
+
+describe("attendance codes (CODE inline questions)", () => {
+  const code = (c: string) => ({
+    type: "CODE" as const,
+    question: "Enter the attendance code announced during this session.",
+    code: c,
+  });
+  function codeEvent(): EventForAttend {
+    return baseEvent({
+      eventType: EventType.SELECTIVE_INLINE,
+      sessions: [
+        { id: "s1", position: 0, name: "Session A", durationHours: 1, question: mc(0, "About A?"), course: null },
+        { id: "s2", position: 1, name: "Session B", durationHours: 2, question: code("SECRET-42"), course: null },
+      ],
+    });
+  }
+
+  it("strip never leaks the code", () => {
+    const stripped = strip(code("SECRET-42"));
+    expect(stripped).toEqual({ type: "CODE", question: "Enter the attendance code announced during this session." });
+    expect(JSON.stringify(stripped)).not.toContain("SECRET");
+  });
+
+  it("the public form carries no code anywhere", () => {
+    const form = buildPublicForm(codeEvent());
+    expect(form?.mode).toBe("selective");
+    expect(JSON.stringify(form)).not.toContain("SECRET");
+    if (form?.mode === "selective") {
+      expect(form.items[1].question).toEqual({
+        type: "CODE",
+        question: "Enter the attendance code announced during this session.",
+      });
+    }
+  });
+
+  it("the submit assembly keeps the code for scoring", () => {
+    const a = assembleForSubmit(codeEvent(), ["s1", "s2"]);
+    expect(a!.questions[1]).toEqual(code("SECRET-42"));
+    expect(a!.perSessionCredit).toBe(true);
+  });
+
+  it("never reads a CODE question from a course quiz (course-backed sessions)", () => {
+    const ev = baseEvent({
+      eventType: EventType.SELECTIVE_PER_COURSE,
+      sessions: [
+        {
+          id: "c1",
+          position: 0,
+          name: null,
+          durationHours: null,
+          question: null,
+          course: { quizQuestions: [code("SECRET-42")], application: { courseTitle: "C", ceHours: 1 } },
+        },
+      ],
+    });
+    expect(assembleForSubmit(ev, ["c1"])).toBeNull();
+  });
+
+  it("an invalid stored code makes the inline event unassemblable", () => {
+    const ev = baseEvent({
+      eventType: EventType.SELECTIVE_INLINE,
+      sessions: [{ id: "s1", position: 0, name: "A", durationHours: 1, question: code("ab"), course: null }],
+    });
+    expect(assembleForSubmit(ev, ["s1"])).toBeNull();
+  });
+});
+
+describe("activeSurvey", () => {
+  const QUESTION = {
+    id: "f0f0f0f0-0000-4000-8000-000000000001",
+    type: "SINGLE_CHOICE",
+    prompt: "Satisfied?",
+    required: true,
+    options: ["Yes", "No"],
+  };
+
+  it("returns the questions when the company flag is on and the survey has questions", () => {
+    expect(activeSurvey({ survey: [QUESTION], company: { surveyEnabled: true } })).toEqual([QUESTION]);
+  });
+  it("is null when the company has surveys switched off, even with questions", () => {
+    expect(activeSurvey({ survey: [QUESTION], company: { surveyEnabled: false } })).toBeNull();
+    expect(activeSurvey({ survey: [QUESTION], company: {} })).toBeNull();
+  });
+  it("is null when the survey is empty, missing or malformed", () => {
+    expect(activeSurvey({ survey: [], company: { surveyEnabled: true } })).toBeNull();
+    expect(activeSurvey({ survey: null, company: { surveyEnabled: true } })).toBeNull();
+    expect(
+      activeSurvey({ survey: [{ ...QUESTION, options: ["Only one"] }], company: { surveyEnabled: true } }),
+    ).toBeNull();
   });
 });

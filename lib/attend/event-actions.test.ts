@@ -34,13 +34,20 @@ vi.mock("@/lib/email/send", () => ({ sendEmail }));
 vi.mock("@/lib/pdf/event-certificate", () => ({ renderEventCertificatePdf }));
 vi.mock("@/lib/storage", () => ({ uploadToStorage }));
 vi.mock("@/lib/protrack/cert-claim-token", () => ({ signCertClaimToken }));
-vi.mock("@/lib/attend/event-quiz", () => ({ loadEventByToken, assembleForSubmit }));
+// Loading + assembly are stubbed; activeSurvey stays REAL so the survey gate
+// (company flag + stored definition) is exercised as shipped.
+vi.mock("@/lib/attend/event-quiz", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/attend/event-quiz")>()),
+  loadEventByToken,
+  assembleForSubmit,
+}));
 vi.mock("@/lib/prisma", () => ({ prisma: prismaMock }));
 vi.mock("next/headers", () => ({
   headers: vi.fn(async () => ({ get: () => "127.0.0.1" })),
 }));
 
 import { submitEventAttendance } from "@/lib/attend/event-actions";
+import { SURVEY_STALE_MESSAGE, parseStoredSurvey, surveyVersion } from "@/lib/events/survey-schemas";
 
 // One MC question; the passing answer selects the correct index (0.7 * 1 -> 1/1).
 const ASSEMBLED = {
@@ -148,7 +155,7 @@ describe("submitEventAttendance — certificate email recipient + hardening", ()
   it("emails the exact entered address (casing preserved) with the PDF attached", async () => {
     const result = await submitEventAttendance(buildInput());
 
-    expect(result).toEqual({ status: "passed", certificateId: "cert-evt-123" });
+    expect(result).toEqual({ status: "passed", certificateId: "cert-evt-123", creditedSessionIds: [] });
     expect(sendEmail).toHaveBeenCalledTimes(1);
 
     const arg = sendEmail.mock.calls[0][0];
@@ -182,7 +189,7 @@ describe("submitEventAttendance — certificate email recipient + hardening", ()
 
     const result = await submitEventAttendance(buildInput());
 
-    expect(result).toEqual({ status: "passed", certificateId: "cert-evt-123" });
+    expect(result).toEqual({ status: "passed", certificateId: "cert-evt-123", creditedSessionIds: [] });
     expect(sendEmail).toHaveBeenCalledTimes(1);
 
     const arg = sendEmail.mock.calls[0][0];
@@ -212,7 +219,7 @@ describe("submitEventAttendance — certificate email recipient + hardening", ()
       buildInput({ courseFormat: undefined, token: "55555555-5555-5555-5555-555555555555" }),
     );
 
-    expect(result).toEqual({ status: "passed", certificateId: "cert-evt-123" });
+    expect(result).toEqual({ status: "passed", certificateId: "cert-evt-123", creditedSessionIds: [] });
     expect(renderEventCertificatePdf.mock.calls[0][0].deliveryMethod).toBe("LIVE In Person");
   });
 
@@ -260,7 +267,7 @@ describe("submitEventAttendance — SELECTIVE_INLINE per-session credit", () => 
       }),
     );
 
-    expect(result).toEqual({ status: "passed", certificateId: "cert-evt-123" });
+    expect(result).toEqual({ status: "passed", certificateId: "cert-evt-123", creditedSessionIds: [S1] });
     const pdfArgs = renderEventCertificatePdf.mock.calls[0][0];
     expect(pdfArgs.ceHours).toBe(1.5);
     expect(pdfArgs.sessions).toEqual(["Session A"]);
@@ -319,7 +326,7 @@ describe("submitEventAttendance — SELECTIVE_INLINE per-session credit", () => 
       }),
     );
 
-    expect(result).toEqual({ status: "passed", certificateId: "cert-evt-123" });
+    expect(result).toEqual({ status: "passed", certificateId: "cert-evt-123", creditedSessionIds: [S3] });
     const pdfArgs = renderEventCertificatePdf.mock.calls[0][0];
     expect(pdfArgs.ceHours).toBe(0.5);
     expect(pdfArgs.sessions).toEqual(["Session C"]);
@@ -338,10 +345,250 @@ describe("submitEventAttendance — SELECTIVE_INLINE per-session credit", () => 
       }),
     );
 
-    expect(result).toEqual({ status: "passed", certificateId: "cert-evt-123" });
+    expect(result).toEqual({ status: "passed", certificateId: "cert-evt-123", creditedSessionIds: [S1, S2] });
     const pdfArgs = renderEventCertificatePdf.mock.calls[0][0];
     expect(pdfArgs.ceHours).toBe(3.5);
     expect(pdfArgs.sessions).toEqual(["Session A", "Session B"]);
     expect(pdfArgs.sessionHours).toEqual([1.5, 2]);
+  });
+});
+
+describe("submitEventAttendance — attendance codes (CODE sessions)", () => {
+  // Session A asks an MC question, session B an attendance code. Scoring runs
+  // for real: the typed code is matched with codesMatch (case and spaces
+  // ignored), and only matching sessions are credited.
+  const ASSEMBLED_CODES = {
+    ...ASSEMBLED_PER_SESSION,
+    questions: [
+      ASSEMBLED_PER_SESSION.questions[0],
+      { type: "CODE", question: "Enter the attendance code.", code: "AbC 12" },
+    ],
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    prismaMock.issuedCertificate.findMany.mockResolvedValue([]);
+    prismaMock.issuedCertificate.update.mockResolvedValue({});
+    prismaMock.$transaction.mockResolvedValue("cert-evt-123");
+    renderEventCertificatePdf.mockResolvedValue(Buffer.from("EVT-PDF-BYTES"));
+    uploadToStorage.mockResolvedValue({ storagePath: "cert-evt-123.pdf" });
+    sendEmail.mockResolvedValue(undefined);
+    signCertClaimToken.mockReturnValue("signed-token");
+    mockEvent();
+    assembleForSubmit.mockReturnValue(ASSEMBLED_CODES);
+  });
+
+  it("credits a session whose typed code matches after normalising", async () => {
+    const result = await submitEventAttendance(
+      buildInput({
+        token: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        selectedSessionIds: [S1, S2],
+        answers: [
+          { type: "MC", answer: 0 },
+          { type: "CODE", answer: " abc12 " },
+        ],
+      }),
+    );
+    expect(result).toEqual({ status: "passed", certificateId: "cert-evt-123", creditedSessionIds: [S1, S2] });
+    expect(renderEventCertificatePdf.mock.calls[0][0].ceHours).toBe(3.5);
+  });
+
+  it("drops a session with a mistyped code and reports which sessions were credited", async () => {
+    const result = await submitEventAttendance(
+      buildInput({
+        token: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+        selectedSessionIds: [S1, S2],
+        answers: [
+          { type: "MC", answer: 0 },
+          { type: "CODE", answer: "ABC13" },
+        ],
+      }),
+    );
+    expect(result).toEqual({ status: "passed", certificateId: "cert-evt-123", creditedSessionIds: [S1] });
+    const pdfArgs = renderEventCertificatePdf.mock.calls[0][0];
+    expect(pdfArgs.ceHours).toBe(1.5);
+    expect(pdfArgs.sessions).toEqual(["Session A"]);
+  });
+
+  it("rejects an over-long code answer at the boundary without loading the event", async () => {
+    const result = await submitEventAttendance(
+      buildInput({
+        selectedSessionIds: [S1, S2],
+        answers: [
+          { type: "MC", answer: 0 },
+          { type: "CODE", answer: "x".repeat(101) },
+        ],
+      }),
+    );
+    expect(result.status).toBe("invalid");
+    expect(loadEventByToken).not.toHaveBeenCalled();
+  });
+});
+
+describe("submitEventAttendance — host survey", () => {
+  const Q_SINGLE = "d1d1d1d1-0000-4000-8000-000000000001";
+  const Q_MULTI = "d1d1d1d1-0000-4000-8000-000000000002";
+  const Q_LONG = "d1d1d1d1-0000-4000-8000-000000000003";
+  const SURVEY = [
+    { id: Q_SINGLE, type: "SINGLE_CHOICE", prompt: "Satisfied?", required: true, options: ["Yes", "No"] },
+    { id: Q_MULTI, type: "MULTI_CHOICE", prompt: "Roles?", required: false, options: ["Attendee", "Speaker", "Other"] },
+    { id: Q_LONG, type: "LONG_TEXT", prompt: "Comments?", required: false },
+  ];
+
+  function mockSurveyEvent(surveyEnabled: boolean) {
+    loadEventByToken.mockResolvedValue({
+      id: "event-1",
+      companyId: "company-1",
+      name: "Big Live Event",
+      eventIdNumber: "ACE-EVT-1",
+      status: "APPROVED",
+      expiresAt: new Date(Date.now() + 864e5),
+      survey: SURVEY,
+      company: { certBalance: 10, surveyEnabled },
+    });
+    assembleForSubmit.mockReturnValue(ASSEMBLED);
+  }
+
+  let tokenSeq = 0;
+  // A fresh token per call: the in-memory rate limiter allows 5 per token.
+  const nextToken = () => `eeeeeeee-eeee-4eee-8eee-${String(++tokenSeq).padStart(12, "0")}`;
+  // The version the attendee form posts for the survey it rendered.
+  const VERSION = surveyVersion(parseStoredSurvey(SURVEY));
+  const surveyInput = (survey: Record<string, unknown>, overrides: Record<string, unknown> = {}) =>
+    buildInput({ token: nextToken(), survey, surveyVersion: VERSION, ...overrides });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    prismaMock.issuedCertificate.findMany.mockResolvedValue([]);
+    prismaMock.issuedCertificate.update.mockResolvedValue({});
+    renderEventCertificatePdf.mockResolvedValue(Buffer.from("EVT-PDF-BYTES"));
+    uploadToStorage.mockResolvedValue({ storagePath: "cert-evt-123.pdf" });
+    sendEmail.mockResolvedValue(undefined);
+    signCertClaimToken.mockReturnValue("signed-token");
+  });
+
+  it("a missing required answer returns invalid keyed by question and writes no attempt", async () => {
+    mockSurveyEvent(true);
+    prismaMock.$transaction.mockResolvedValue("cert-evt-123");
+
+    const result = await submitEventAttendance(surveyInput({ [Q_LONG]: "Great event" }));
+
+    expect(result.status).toBe("invalid");
+    if (result.status !== "invalid") return;
+    expect(Object.keys(result.fieldErrors)).toEqual([`survey.${Q_SINGLE}`]);
+    // Validated after the attempt decision but before any write: no row, no cert.
+    expect(prismaMock.issuedCertificate.findMany).toHaveBeenCalledTimes(1);
+    expect(prismaMock.issuedCertificate.create).not.toHaveBeenCalled();
+    expect(prismaMock.$transaction).not.toHaveBeenCalled();
+  });
+
+  it("an already certified attendee gets their status, not a survey error", async () => {
+    mockSurveyEvent(true);
+    prismaMock.issuedCertificate.findMany.mockResolvedValue([{ passed: true }]);
+    const result = await submitEventAttendance(surveyInput({ [Q_SINGLE]: "Maybe" }));
+    expect(result).toEqual({ status: "already_certified" });
+    expect(prismaMock.issuedCertificate.create).not.toHaveBeenCalled();
+  });
+
+  it("a locked out attendee gets their status, not a stale survey error", async () => {
+    mockSurveyEvent(true);
+    prismaMock.issuedCertificate.findMany.mockResolvedValue([{ passed: false }, { passed: false }]);
+    const result = await submitEventAttendance(surveyInput({}, { surveyVersion: "stale" }));
+    expect(result).toEqual({ status: "locked_out" });
+    expect(prismaMock.issuedCertificate.create).not.toHaveBeenCalled();
+  });
+
+  it("a survey edited after the page loaded asks for a reload before checking answers", async () => {
+    mockSurveyEvent(true);
+    // An option the attendee could not fix: removed from the current survey.
+    const result = await submitEventAttendance(
+      surveyInput({ [Q_SINGLE]: "Maybe" }, { surveyVersion: "0badc0de" }),
+    );
+    expect(result).toEqual({ status: "invalid", fieldErrors: { survey: [SURVEY_STALE_MESSAGE] } });
+    expect(prismaMock.issuedCertificate.create).not.toHaveBeenCalled();
+    expect(prismaMock.$transaction).not.toHaveBeenCalled();
+  });
+
+  it("answers posted without a version (an older page) also ask for a reload", async () => {
+    mockSurveyEvent(true);
+    const result = await submitEventAttendance(
+      buildInput({ token: nextToken(), survey: { [Q_SINGLE]: "Yes" } }),
+    );
+    expect(result).toEqual({ status: "invalid", fieldErrors: { survey: [SURVEY_STALE_MESSAGE] } });
+    expect(prismaMock.issuedCertificate.create).not.toHaveBeenCalled();
+  });
+
+  it("an option not in the survey is rejected without an attempt", async () => {
+    mockSurveyEvent(true);
+    const result = await submitEventAttendance(surveyInput({ [Q_SINGLE]: "Maybe" }));
+    expect(result.status).toBe("invalid");
+    if (result.status !== "invalid") return;
+    expect(result.fieldErrors[`survey.${Q_SINGLE}`]?.length).toBeGreaterThan(0);
+    expect(prismaMock.issuedCertificate.create).not.toHaveBeenCalled();
+  });
+
+  it("saves the answer snapshots on a failed attempt", async () => {
+    mockSurveyEvent(true);
+    const result = await submitEventAttendance(
+      surveyInput(
+        { [Q_SINGLE]: "No", [Q_MULTI]: ["Speaker", "Attendee"], [Q_LONG]: "  " },
+        { answers: [{ type: "MC", answer: 1 }] },
+      ),
+    );
+
+    expect(result.status).toBe("failed");
+    const row = prismaMock.issuedCertificate.create.mock.calls[0][0].data;
+    expect(row.surveyResponses).toEqual([
+      { questionId: Q_SINGLE, type: "SINGLE_CHOICE", prompt: "Satisfied?", value: "No" },
+      // Option order, not click order; the blank optional answer is omitted.
+      { questionId: Q_MULTI, type: "MULTI_CHOICE", prompt: "Roles?", value: ["Attendee", "Speaker"] },
+    ]);
+  });
+
+  it("saves the answer snapshots on the issued certificate when the attendee passes", async () => {
+    mockSurveyEvent(true);
+    // Run the real transaction body against a mock tx so issueEventCertificateTx
+    // writes the cert row we can inspect.
+    const tx = {
+      $executeRaw: vi.fn(async () => 1),
+      issuedCertificate: {
+        findFirst: vi.fn(async () => null),
+        create: vi.fn<(args: { data: Record<string, unknown> }) => Promise<{ id: string }>>(
+          async () => ({ id: "cert-evt-123" }),
+        ),
+      },
+      company: {
+        findUniqueOrThrow: vi.fn(async () => ({ certBalance: 10 })),
+        update: vi.fn(async () => ({})),
+      },
+      event: { update: vi.fn(async () => ({})) },
+    };
+    prismaMock.$transaction.mockImplementation(async (fn: (t: typeof tx) => unknown) => fn(tx));
+
+    const result = await submitEventAttendance(
+      surveyInput({ [Q_SINGLE]: "Yes", [Q_LONG]: " Loved it " }),
+    );
+
+    expect(result).toEqual({ status: "passed", certificateId: "cert-evt-123", creditedSessionIds: [] });
+    expect(tx.issuedCertificate.create.mock.calls[0][0].data.surveyResponses).toEqual([
+      { questionId: Q_SINGLE, type: "SINGLE_CHOICE", prompt: "Satisfied?", value: "Yes" },
+      { questionId: Q_LONG, type: "LONG_TEXT", prompt: "Comments?", value: "Loved it" },
+    ]);
+  });
+
+  it("ignores posted answers when the company has surveys switched off", async () => {
+    mockSurveyEvent(false);
+    const result = await submitEventAttendance(
+      buildInput({
+        token: nextToken(),
+        answers: [{ type: "MC", answer: 1 }],
+        // Would fail validation (required answer missing) if the survey were active.
+        survey: { [Q_LONG]: "Should not be stored" },
+      }),
+    );
+
+    expect(result.status).toBe("failed");
+    const row = prismaMock.issuedCertificate.create.mock.calls[0][0].data;
+    expect(row).not.toHaveProperty("surveyResponses");
   });
 });

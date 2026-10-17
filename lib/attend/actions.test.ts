@@ -190,6 +190,21 @@ describe("submitAttendance — certificate email recipient + hardening", () => {
     }
   });
 
+  it("rejects an attendance-code answer on the single-course flow without touching the DB", async () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const answers = buildInput().answers as unknown[];
+      const result = await submitAttendance(
+        buildInput({ answers: [{ type: "CODE", answer: "ABCD" }, ...answers.slice(1)] }),
+      );
+      expect(result.status).toBe("invalid");
+      expect(prismaMock.accreditedCourse.findUnique).not.toHaveBeenCalled();
+      expect(prismaMock.issuedCertificate.create).not.toHaveBeenCalled();
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
   it("falls back to the course's declared format when courseFormat is absent (stale client)", async () => {
     // Unique token: the unmocked in-memory rate limiter allows 5 per token.
     const result = await submitAttendance(

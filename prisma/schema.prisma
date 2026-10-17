@@ -245,6 +245,15 @@ enum AdminAuditAction {
   // subject is a company, not a user); details carries companyId, companyName,
   // which balance moved, the delta, and the before/after values.
   COMPANY_BALANCE_ADJUSTED
+  // An admin turned a per-company feature on or off. Written by
+  // lib/admin/company-features.ts in the SAME transaction as the flag change.
+  // targetUserId is null; details carries companyId, companyName, feature,
+  // from and to.
+  COMPANY_FEATURE_CHANGED
+  // An admin edited an event's attendee survey on the provider's behalf.
+  // targetUserId is null; details carries companyId, companyName, eventId,
+  // eventName and the question counts.
+  EVENT_SURVEY_UPDATED
 }
 
 model AdminAuditLog {
@@ -326,6 +335,12 @@ model Company {
   // Provenance key for the one-time legacy Google Sheet / Typeform import
   // (scripts/migrate-legacy.ts). Null for every natively-created company.
   legacyId                    Int?      @unique @map("legacy_id")
+  // Admin-gated features (toggled on /admin/companies/[id], audited as
+  // COMPANY_FEATURE_CHANGED). surveyEnabled shows the custom attendee survey on
+  // this company's event links; attendanceCodesEnabled lets SELECTIVE_INLINE
+  // sessions ask for a typed attendance code instead of an MC question.
+  surveyEnabled               Boolean   @default(false) @map("survey_enabled")
+  attendanceCodesEnabled      Boolean   @default(false) @map("attendance_codes_enabled")
   createdAt                   DateTime  @default(now()) @map("created_at")
 
   users               User[]
@@ -469,6 +484,10 @@ model Event {
   // decision 2026-07-29). Never cleared, including by a staff reopen.
   creditChargedAt   DateTime?         @map("credit_charged_at")
   certsIssuedCount  Int               @default(0) @map("certs_issued_count")
+  // Ungraded attendee survey (lib/events/survey-schemas.ts). Its own column, not
+  // eventData: it is not accreditation content, stays editable after approval,
+  // and wizard saves must never clobber it. Null = no survey.
+  survey            Json?
   createdAt         DateTime          @default(now()) @map("created_at")
 
   sessions           EventSession[]
@@ -546,6 +565,9 @@ model IssuedCertificate {
   // (e.g. LEGACY-DA255-00001). Unique, so re-running the importer is idempotent.
   // Null for every natively-issued certificate.
   legacyCertNumber String?         @unique @map("legacy_cert_number")
+  // Event survey answers, each a {questionId, type, prompt, value} snapshot so
+  // exports survive later question edits. Null when no survey was shown.
+  surveyResponses Json?            @map("survey_responses")
   issuedAt       DateTime          @default(now()) @map("issued_at")
 
   ceCertificate CeCertificate? // Phase 2: the ProTrack copy once auto-synced

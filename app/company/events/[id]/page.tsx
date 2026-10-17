@@ -27,6 +27,11 @@ import {
   DetailSection,
   QuizPreviewCard,
 } from "@/components/application-form/detail-section";
+import { SessionQuestion } from "@/components/events/session-question";
+import { SurveyEditor } from "@/components/events/survey-editor";
+import { saveCompanyEventSurvey } from "@/lib/events/survey-actions";
+import { parseStoredSurvey } from "@/lib/events/survey-schemas";
+import { surveyResponseCounts } from "@/lib/events/survey-response-counts";
 import type { ApplicationStatus, EventType } from "@prisma/client";
 
 /*
@@ -34,20 +39,23 @@ import type { ApplicationStatus, EventType } from "@prisma/client";
   readable after submission (drafts resume through the wizard). Tabbed via
   ?tab= links (server-rendered, no client JS): Event Details (summary + the
   event-level application), Courses (each session's course information), and
-  Assets (attendee link, QR, approval letter, marketing logo once approved).
+  Assets (attendee link, QR, approval letter, marketing logo once approved),
+  and Survey (the optional attendee survey editor, only when the company has
+  event surveys turned on; ?tab=survey falls back to Event Details otherwise).
   Viewing never touches credits; guarded by the DentalACE entitlement plus the
   company-ownership check in the query.
 */
 
 const idSchema = z.string().uuid();
 
-const TABS = ["details", "courses", "assets"] as const;
+const TABS = ["details", "courses", "assets", "survey"] as const;
 type Tab = (typeof TABS)[number];
 
 const TAB_LABEL: Record<Tab, string> = {
   details: "Event Details",
   courses: "Courses",
   assets: "Assets",
+  survey: "Survey",
 };
 
 const TYPE_LABEL: Record<EventType, string> = {
@@ -63,8 +71,6 @@ const STATUS_STYLE: Record<ApplicationStatus, string> = {
   APPROVED: "bg-green-100 text-green-700",
   REJECTED: "bg-red-100 text-red-700",
 };
-
-type StoredQuestion = { question?: string; options?: string[]; correctIndex?: number };
 
 function fmtDate(d: Date | null): string | null {
   return d
@@ -82,7 +88,7 @@ export default async function CompanyEventDetailPage({
   const user = await requireDentalAce();
   const { id } = await params;
   const { tab: rawTab } = await searchParams;
-  const tab: Tab = (TABS as readonly string[]).includes(rawTab ?? "")
+  const requestedTab: Tab = (TABS as readonly string[]).includes(rawTab ?? "")
     ? (rawTab as Tab)
     : "details";
 
@@ -92,7 +98,7 @@ export default async function CompanyEventDetailPage({
   const event = await prisma.event.findFirst({
     where: { id: parsedId.data, companyId: user.companyId },
     include: {
-      company: { select: { name: true } },
+      company: { select: { name: true, surveyEnabled: true } },
       sessions: {
         orderBy: { position: "asc" },
         include: {
@@ -113,6 +119,13 @@ export default async function CompanyEventDetailPage({
   if (!event) notFound();
   // Drafts resume through the wizard, same as the list's Continue button.
   if (event.status === "DRAFT") redirect(`/company/events/new?eventId=${event.id}`);
+
+  // The Survey tab exists only while the company has event surveys on.
+  const tabs = TABS.filter((t) => t !== "survey" || event.company.surveyEnabled);
+  const tab: Tab = tabs.includes(requestedTab) ? requestedTab : "details";
+  const survey = tab === "survey" ? parseStoredSurvey(event.survey) : [];
+  const surveyResponses =
+    tab === "survey" ? ((await surveyResponseCounts([event.id])).get(event.id) ?? 0) : 0;
 
   const data = (event.eventData as Record<string, unknown>) ?? {};
   const orgRows = organizationRows(eventOrgFields(event.eventData));
@@ -171,7 +184,7 @@ export default async function CompanyEventDetailPage({
       />
 
       <nav className="mb-5 flex gap-1 border-b border-border" aria-label="Event sections">
-        {TABS.map((t) => (
+        {tabs.map((t) => (
           <Link
             key={t}
             href={`/company/events/${event.id}?tab=${t}`}
@@ -337,7 +350,6 @@ export default async function CompanyEventDetailPage({
               </p>
               <ul className="space-y-3">
                 {inlineSessions.map((s) => {
-                  const q = (s.question as StoredQuestion | null) ?? {};
                   // New sessions carry the full front-half application; parse it
                   // as such, else fall back to the legacy step1-only slice.
                   const full = applicationDataReadSchema
@@ -374,25 +386,7 @@ export default async function CompanyEventDetailPage({
                           This session predates per-session course information.
                         </p>
                       )}
-                      {q.question ? (
-                        <div className="mt-2">
-                          <p className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">
-                            Question
-                          </p>
-                          <p className="mt-1 text-text-mid">{q.question}</p>
-                          <ol className="mt-1 list-inside list-decimal text-text-muted">
-                            {(q.options ?? []).map((opt, i) => (
-                              <li
-                                key={i}
-                                className={i === q.correctIndex ? "font-semibold text-green-700" : ""}
-                              >
-                                {opt}
-                                {i === q.correctIndex ? " ✓" : ""}
-                              </li>
-                            ))}
-                          </ol>
-                        </div>
-                      ) : null}
+                      <SessionQuestion question={s.question} label />
                     </li>
                   );
                 })}
@@ -488,6 +482,33 @@ export default async function CompanyEventDetailPage({
               Assets become available after this event is approved.
             </div>
           )}
+        </div>
+      ) : null}
+      {tab === "survey" ? (
+        <div className="space-y-4">
+          <div className="rounded-lg border border-border bg-white p-5 text-[12px]">
+            <h2 className="text-balance text-[13px] font-semibold text-navy">Attendee survey</h2>
+            <p className="mt-1 max-w-prose text-pretty text-text-mid">
+              The survey is optional and ungraded. Attendees see it on the event link after the
+              quiz, and their answers never affect their score or credit hours. You can edit it at
+              any time; changes apply to attendees who open the link afterwards.
+            </p>
+            <div className="mt-4 flex flex-col gap-3 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-text-mid">
+                <span className="font-semibold text-navy tabular-nums">{surveyResponses}</span>{" "}
+                {surveyResponses === 1 ? "attendee has" : "attendees have"} responded
+              </p>
+              <a
+                href={`/api/company/events/${event.id}/survey-export`}
+                className="inline-flex min-h-9 items-center justify-center rounded-md border border-border bg-white px-3 text-[12px] font-semibold text-navy hover:bg-surface"
+              >
+                Download responses (CSV)
+              </a>
+            </div>
+          </div>
+          <div className="rounded-lg border border-border bg-white p-5">
+            <SurveyEditor eventId={event.id} initial={survey} action={saveCompanyEventSurvey} />
+          </div>
         </div>
       ) : null}
     </>

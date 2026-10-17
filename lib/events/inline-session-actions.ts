@@ -9,8 +9,10 @@ import { prisma } from "@/lib/prisma";
 import { step3Schema } from "@/lib/forms/application/schemas";
 import {
   sessionCourseInfoSchema,
-  mcQuestionSchema,
+  inlineSessionQuestionSchema,
+  codeEntries,
 } from "@/lib/forms/event/schemas";
+import { duplicateCodeIds } from "@/lib/attend/attendance-code";
 import {
   courseInfoRawFromForm,
   creatorRawFromForm,
@@ -34,7 +36,8 @@ import { normalizeFormText } from "@/lib/forms/normalize";
 
   Parallels lib/events/session-actions.ts (the FULL_EVENT_QUIZ full-course
   sub-wizard) but targets event_sessions JSONB instead of course_applications,
-  and ends in a single MC question rather than a 5-question quiz.
+  and ends in a single question (MC, or an attendance code when the company has
+  that feature on) rather than a 5-question quiz.
 */
 
 const SESSIONS_LIST = "/company/events/new/sessions";
@@ -283,30 +286,65 @@ export async function saveInlineSessionPresenters(formData: FormData) {
   redirect(sessionStep(sessionId, "question"));
 }
 
+/*
+  The question step posts `questionType` (MC unless "CODE"). An attendance code
+  is accepted only when the company has attendance codes on (checked here on
+  the server; the picker is just UI) and only when no other session in the
+  event uses the same code after normalisation. Every failure still writes the
+  raw question back (echo) and redirects to the step:
+    ?error=validation      schema failure or duplicate code (the page re-derives both)
+    ?error=codes_disabled  CODE posted while the feature is off
+  An echoed duplicate or flag-off CODE question is schema-valid, so submitEvent
+  re-checks both before the event can leave DRAFT.
+*/
 export async function saveInlineSessionQuestion(formData: FormData) {
   const sessionId = String(formData.get("sessionId") ?? "");
   if (!sessionId) throw new Error("Missing sessionId");
   const companyId = await customerCompanyId();
 
-  const question = {
-    type: "MC" as const,
-    question: normalizeFormText(formData.get("question")),
-    options: [0, 1, 2, 3].map((j) => normalizeFormText(formData.get(`option_${j}`))),
-    correctIndex: Number(formData.get("correctIndex") ?? 0),
-  };
-  const result = mcQuestionSchema.safeParse(question);
+  const isCode = formData.get("questionType") === "CODE";
+  const question = isCode
+    ? {
+        type: "CODE" as const,
+        question: normalizeFormText(formData.get("question")),
+        code: normalizeFormText(formData.get("code")),
+      }
+    : {
+        type: "MC" as const,
+        question: normalizeFormText(formData.get("question")),
+        options: [0, 1, 2, 3].map((j) => normalizeFormText(formData.get(`option_${j}`))),
+        correctIndex: Number(formData.get("correctIndex") ?? 0),
+      };
+  const result = inlineSessionQuestionSchema.safeParse(question);
 
-  // `question` is a full overwrite (no JSONB merge), so the ownership predicate
-  // goes straight on the write: one round-trip, no TOCTOU window. On failure we
-  // still write, echoing the raw question so the step page can re-render it and
-  // re-derive the errors instead of blanking the form.
-  const echo = result.success ? null : sanitizeEcho(question);
-  const value = echo ? echo.value : result.data;
   const owned = await prisma.eventSession.findFirst({
     where: { id: sessionId, courseId: null, event: { companyId, status: "DRAFT" } },
-    select: { eventId: true },
+    select: {
+      eventId: true,
+      event: { select: { company: { select: { attendanceCodesEnabled: true } } } },
+    },
   });
   if (!owned) throw new Error("Session not found");
+
+  let failure: "validation" | "codes_disabled" | null = result.success ? null : "validation";
+  if (isCode && !owned.event.company.attendanceCodesEnabled) {
+    failure = "codes_disabled";
+  } else if (result.success && result.data.type === "CODE") {
+    const siblings = await prisma.eventSession.findMany({
+      where: { eventId: owned.eventId, courseId: null, id: { not: sessionId } },
+      select: { id: true, question: true },
+    });
+    if (duplicateCodeIds([...codeEntries(siblings), { id: sessionId, code: result.data.code }]).has(sessionId)) {
+      failure = "validation";
+    }
+  }
+
+  // `question` is a full overwrite (no JSONB merge), so the ownership predicate
+  // goes straight on the write. On failure we still write, echoing the raw
+  // question so the step page can re-render it and re-derive the errors
+  // instead of blanking the form.
+  const echo = failure ? sanitizeEcho(question) : null;
+  const value = echo ? echo.value : result.data;
   const res = await prisma.eventSession.updateMany({
     where: {
       id: sessionId,
@@ -318,9 +356,9 @@ export async function saveInlineSessionQuestion(formData: FormData) {
   if (res.count === 0) throw new Error("Session not found");
 
   if (echo) {
-    redirect(
-      `${sessionStep(sessionId, "question")}?error=${echo.truncated ? "too_long" : "validation"}`,
-    );
+    const code = echo.truncated ? "too_long" : failure;
+    // Keep the chosen type on the URL so the page re-renders the same form.
+    redirect(`${sessionStep(sessionId, "question")}?error=${code}${isCode ? "&type=CODE" : ""}`);
   }
 
   revalidatePath(SESSIONS_LIST);
