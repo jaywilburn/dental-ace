@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import { submitEventAttendance, type EventAttendResult } from "@/lib/attend/event-actions";
-import { submitEventSurveyOnly, type EventSurveyOnlyResult } from "@/lib/attend/event-survey-actions";
+import { submitEventSurveyOnly } from "@/lib/attend/event-survey-actions";
 import { deriveStages, firstFailingStep, stageOfField } from "@/lib/attend/event-stages";
 import { COURSE_FORMATS } from "@/lib/forms/application/schemas";
 import {
@@ -48,7 +48,11 @@ export type { EventPublicForm };
   certificate flow above and submits the survey answers with it; No asks for
   name + email only and submits the survey alone (submitEventSurveyOnly): no
   certificate, no cert credit, no attempt. Survey answers survive switching
-  Yes/No and a quiz retake, and never affect credit.
+  Yes/No and a quiz retake, and never affect credit. When certificates are
+  unavailable (ceAvailable false: the host is out of cert credits or the event
+  has no certificate form) the CE question is skipped and every attendee takes
+  the No-CE path. Only "recorded" ends the No-CE path; a rate-limited or
+  inactive result shows next to Submit with every answer kept.
 
   SELECTIVE_INLINE sessions may ask for an attendance code instead of an MC
   answer (a typed text input). A passed submission cannot be retaken, so the
@@ -67,19 +71,36 @@ function isAnswered(a: Answer | undefined): boolean {
   return a.type === "CODE" ? a.answer.trim().length > 0 : true;
 }
 
+// Stand-in certificate form when none can be claimed: the certificate stages
+// never render then (deriveStages skips them), so it is never shown.
+const NO_CERTIFICATE_FORM: EventPublicForm = { mode: "full", questions: [] };
+
+/** The two submit outcomes that leave the attendee nothing to fix but to wait or stop. */
+type UnavailableStatus = "rate_limited" | "event_inactive";
+
 export function EventAttendeeForm({
   token,
-  form,
+  form: certForm,
+  ceAvailable: ceAvailableProp,
   survey,
   courseFormatDefault,
 }: {
   token: string;
   eventName: string;
-  form: EventPublicForm;
+  /** The certificate form, or null when none can be claimed right now. */
+  form: EventPublicForm | null;
+  /**
+   * False when no certificate can be claimed right now (no cert balance, or no
+   * certificate form). Only rendered with an active survey: the form then
+   * skips the CE question and records the survey only.
+   */
+  ceAvailable: boolean;
   /** The host's ungraded survey, or null when the event has none active. */
   survey: SurveyQuestion[] | null;
   courseFormatDefault: CourseFormat;
 }) {
+  const ceAvailable = ceAvailableProp && certForm !== null;
+  const form = certForm ?? NO_CERTIFICATE_FORM;
   const selective = form.mode === "selective";
   const perSessionCredit = form.mode === "selective" && form.perSessionCredit === true;
   const [step, setStep] = useState(0);
@@ -105,9 +126,14 @@ export function EventAttendeeForm({
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<EventAttendResult | null>(null);
   // Survey-first events only: the attendee's answer to "Do you need CE
-  // credit?" (null until answered), and the No-CE submit's outcome.
-  const [needsCe, setNeedsCe] = useState<boolean | null>(null);
-  const [surveyOnlyResult, setSurveyOnlyResult] = useState<EventSurveyOnlyResult | null>(null);
+  // credit?" (null until answered). Without certificates there is no choice:
+  // the No-CE path is the only one.
+  const [needsCeAnswer, setNeedsCe] = useState<boolean | null>(null);
+  const needsCe = ceAvailable ? needsCeAnswer : false;
+  // The No-CE submit's outcome: recorded ends the flow; a rate-limited or
+  // inactive result shows next to Submit with the form (and answers) kept.
+  const [surveyRecorded, setSurveyRecorded] = useState(false);
+  const [surveyOnlyIssue, setSurveyOnlyIssue] = useState<UnavailableStatus | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   // Server-side validation errors keyed by field. Non-empty only after an
   // "invalid" submit; the form stays mounted so the attendee can fix and retry.
@@ -136,7 +162,7 @@ export function EventAttendeeForm({
 
   // Stage flow: optional stages appear only when this form has them.
   const surveyQuestions = survey && survey.length > 0 ? survey : null;
-  const steps = deriveStages({ selective, hasSurvey: surveyQuestions !== null, needsCe });
+  const steps = deriveStages({ selective, hasSurvey: surveyQuestions !== null, needsCe, ceAvailable });
   const stage = steps[step];
   const goNext = () => setStep((s) => Math.min(s + 1, steps.length - 1));
   const goBack = () => setStep((s) => Math.max(s - 1, 0));
@@ -227,6 +253,7 @@ export function EventAttendeeForm({
     submitInFlight.current = true;
     setSubmitting(true);
     setFieldErrors({});
+    setSurveyOnlyIssue(null);
     try {
       const res = await submitEventSurveyOnly({
         token,
@@ -242,7 +269,8 @@ export function EventAttendeeForm({
         if (failing !== null) setStep(failing);
         return;
       }
-      setSurveyOnlyResult(res);
+      if (res.status === "recorded") setSurveyRecorded(true);
+      else setSurveyOnlyIssue(res.status);
     } finally {
       submitInFlight.current = false;
       setSubmitting(false);
@@ -258,9 +286,27 @@ export function EventAttendeeForm({
     );
   }
 
-  if (surveyOnlyResult) {
-    return <SurveyOnlyResultView result={surveyOnlyResult} />;
+  if (surveyRecorded) {
+    return <Banner tone="ok" title="Thanks, your responses were recorded." body="You can close this page." />;
   }
+
+  // Never rendered by the page (it blocks without certificates or a survey).
+  if (!ceAvailable && !surveyQuestions) {
+    return <Banner tone="warn" title="Certificates unavailable" body="Certificates are not available for this event right now." />;
+  }
+
+  // Name + email, shared by the certificate identity step and the No-CE contact step.
+  const nameEmailFields = (
+    <NameEmailFields
+      name={name}
+      email={email}
+      errors={fieldErrors}
+      onChange={(field, value) => {
+        (field === "attendeeName" ? setName : setEmail)(value);
+        clearFieldError(field);
+      }}
+    />
+  );
 
   if (result) {
     return (
@@ -326,28 +372,19 @@ export function EventAttendeeForm({
 
       {stage === "contact" && (
         <section className="space-y-3">
+          {!ceAvailable ? (
+            <p className="text-pretty text-sm text-slate-700">
+              Certificates are not available for this event right now. Your survey answers will still be recorded.
+            </p>
+          ) : null}
           <p className="text-pretty text-sm text-slate-700">
             Enter your name and email so the event host knows who responded.
           </p>
-          <Field
-            label="Full name"
-            value={name}
-            onChange={(v) => {
-              setName(v);
-              clearFieldError("attendeeName");
-            }}
-            error={fieldErrors.attendeeName}
-          />
-          <Field
-            label="Email"
-            value={email}
-            onChange={(v) => {
-              setEmail(v);
-              clearFieldError("attendeeEmail");
-            }}
-            type="email"
-            error={fieldErrors.attendeeEmail}
-          />
+          {nameEmailFields}
+          {/* Next to Submit, with the form kept: the attendee can wait and retry. */}
+          {surveyOnlyIssue ? (
+            <UnavailableBanner status={surveyOnlyIssue} subject="responses" inline />
+          ) : null}
           <NavButtons
             onBack={goBack}
             onNext={onSurveyOnlySubmit}
@@ -359,25 +396,7 @@ export function EventAttendeeForm({
 
       {stage === "identity" && (
         <section className="space-y-3">
-          <Field
-            label="Full name"
-            value={name}
-            onChange={(v) => {
-              setName(v);
-              clearFieldError("attendeeName");
-            }}
-            error={fieldErrors.attendeeName}
-          />
-          <Field
-            label="Email"
-            value={email}
-            onChange={(v) => {
-              setEmail(v);
-              clearFieldError("attendeeEmail");
-            }}
-            type="email"
-            error={fieldErrors.attendeeEmail}
-          />
+          {nameEmailFields}
           <label className="block text-sm">
             <span className="text-slate-700">Date you completed the event</span>
             <input
@@ -765,25 +784,34 @@ function ResultView({
     case "balance_exhausted":
       return <Banner tone="warn" title="Certificates unavailable" body="The host has run out of certificate credits." />;
     case "event_inactive":
-      return <Banner tone="warn" title="Event unavailable" body="This event is no longer accepting certificate claims." />;
     case "rate_limited":
-      return <Banner tone="warn" title="Too many attempts" body="Please wait a few minutes and try again." />;
+      return <UnavailableBanner status={result.status} subject="certificate claims" />;
     default:
       return <Banner tone="warn" title="Check your entries" body="Some details were missing or invalid." />;
   }
 }
 
-function SurveyOnlyResultView({ result }: { result: EventSurveyOnlyResult }) {
-  switch (result.status) {
-    case "recorded":
-      return <Banner tone="ok" title="Thanks, your responses were recorded." body="You can close this page." />;
-    case "rate_limited":
-      return <Banner tone="warn" title="Too many attempts" body="Please wait a few minutes and try again." />;
-    case "event_inactive":
-      return <Banner tone="warn" title="Event unavailable" body="This event is no longer accepting responses." />;
-    default:
-      return <Banner tone="warn" title="Check your entries" body="Some details were missing or invalid." />;
-  }
+/**
+ * Rate-limited / inactive, the ONE rendering shared by the certificate result
+ * and the No-CE contact step (inline there, next to Submit, form kept).
+ */
+function UnavailableBanner({
+  status,
+  subject,
+  inline = false,
+}: {
+  status: UnavailableStatus;
+  /** What the event no longer accepts, e.g. "certificate claims". */
+  subject: string;
+  inline?: boolean;
+}) {
+  const role = inline ? "alert" : undefined;
+  const className = inline ? "" : undefined;
+  return status === "rate_limited" ? (
+    <Banner tone="warn" title="Too many attempts" body="Please wait a few minutes and try again." role={role} className={className} />
+  ) : (
+    <Banner tone="warn" title="Event unavailable" body={`This event is no longer accepting ${subject}.`} role={role} className={className} />
+  );
 }
 
 function SessionList({ title, note, items }: { title: string; note?: string; items: ActiveQuizItem[] }) {
@@ -836,6 +864,32 @@ function Field({
   );
 }
 
+/** Full name + email, shared by the identity (certificate) and contact (No-CE) steps. */
+function NameEmailFields({
+  name,
+  email,
+  errors,
+  onChange,
+}: {
+  name: string;
+  email: string;
+  errors: Record<string, string[]>;
+  onChange: (field: "attendeeName" | "attendeeEmail", value: string) => void;
+}) {
+  return (
+    <>
+      <Field label="Full name" value={name} onChange={(v) => onChange("attendeeName", v)} error={errors.attendeeName} />
+      <Field
+        label="Email"
+        value={email}
+        onChange={(v) => onChange("attendeeEmail", v)}
+        type="email"
+        error={errors.attendeeEmail}
+      />
+    </>
+  );
+}
+
 /** "Presented by A, B" line; renders nothing when no presenter names are known. */
 function PresentedBy({ names, className }: { names?: string[]; className?: string }) {
   if (!names || names.length === 0) return null;
@@ -861,9 +915,22 @@ function NavButtons({ onBack, onNext, nextDisabled, nextLabel = "Next" }: { onBa
   );
 }
 
-function Banner({ tone, title, body }: { tone: "ok" | "warn"; title: string; body: string }) {
+function Banner({
+  tone,
+  title,
+  body,
+  role,
+  className = "mt-6",
+}: {
+  tone: "ok" | "warn";
+  title: string;
+  body: string;
+  role?: "alert";
+  /** Spacing; the result views sit below the page header (mt-6). */
+  className?: string;
+}) {
   return (
-    <div className={`mt-6 rounded-lg border p-4 ${tone === "ok" ? "border-green-200 bg-green-50" : "border-amber-200 bg-amber-50"}`}>
+    <div role={role} className={`${className} rounded-lg border p-4 ${tone === "ok" ? "border-green-200 bg-green-50" : "border-amber-200 bg-amber-50"}`}>
       <h2 className="text-base font-semibold text-slate-900">{title}</h2>
       <p className="mt-1 text-sm text-slate-700">{body}</p>
     </div>

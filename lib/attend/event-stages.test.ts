@@ -54,6 +54,26 @@ describe("deriveStages", () => {
     ]);
   });
 
+  it("skips the CE question and goes straight to contact when certificates are unavailable", () => {
+    for (const needsCe of [null, true, false]) {
+      for (const selective of [true, false]) {
+        expect(deriveStages({ selective, hasSurvey: true, needsCe, ceAvailable: false })).toEqual([
+          "survey",
+          "contact",
+        ]);
+      }
+    }
+  });
+
+  it("keeps the certificate flow when certificates are unavailable but there is no survey (the page blocks)", () => {
+    expect(deriveStages({ selective: false, hasSurvey: false, needsCe: null, ceAvailable: false })).toEqual([
+      "identity",
+      "affirm",
+      "quiz",
+      "review",
+    ]);
+  });
+
   it("keeps the survey and CE question at the same indices across answers", () => {
     for (const needsCe of [null, true, false]) {
       const steps = deriveStages({ selective: false, hasSurvey: true, needsCe });
@@ -92,6 +112,11 @@ describe("firstFailingStep", () => {
   it("keeps No-CE name and email errors on the contact step", () => {
     const steps = deriveStages({ selective: false, hasSurvey: true, needsCe: false });
     expect(firstFailingStep(steps, { attendeeEmail: ["x"] }, false)).toBe(2);
+  });
+  it("keeps name and email errors on the contact step when certificates are unavailable", () => {
+    const steps = deriveStages({ selective: true, hasSurvey: true, needsCe: false, ceAvailable: false });
+    expect(firstFailingStep(steps, { attendeeName: ["x"] }, false)).toBe(1);
+    expect(firstFailingStep(steps, { [`survey.${Q}`]: ["x"], attendeeEmail: ["y"] }, false)).toBe(0);
   });
   it("returns null when no error maps to a stage here", () => {
     const steps = deriveStages({ selective: false, hasSurvey: false, needsCe: null });

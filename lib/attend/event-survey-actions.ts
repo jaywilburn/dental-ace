@@ -21,13 +21,15 @@ import {
   row; never a certificate, never a cert credit, never an attempt, so the
   lockout counts in submitEventAttendance are untouched.
 
-  Gates mirror the certificate submit: the same shared rate-limit bucket, the
-  same approved + unexpired event check (no cert-balance check: nothing is
-  issued), then the survey must still be active and match the version the page
-  rendered (a survey switched off or edited while the page was open asks for a
-  reload), then validateSurveyResponses. A submission with every optional
-  question skipped is still recorded (responses = []): the attendee identified
-  themselves, and the export lists them with blank answers.
+  Gates mirror the certificate submit: the same rate-limit window and limit in
+  its OWN bucket (lib/attend/event-rate-limit.ts, so No-CE traffic never uses
+  up the certificate budget), the same approved + unexpired event check (no
+  cert-balance check: nothing is issued), then the survey must still be active
+  and match the version the page rendered (a survey switched off or edited
+  while the page was open asks for a reload), then validateSurveyResponses.
+  Like the certificate path, a submission with every optional question skipped
+  stores nothing (no row, so counts and the export only include attendees who
+  actually answered) but still reports "recorded".
 
   Repeat submissions from one email are allowed; the export reports the latest.
 */
@@ -48,7 +50,7 @@ export async function submitEventSurveyOnly(input: unknown): Promise<EventSurvey
   }
   const sub = parsed.data;
 
-  const limit = await eventAttendRateLimit(sub.token);
+  const limit = await eventAttendRateLimit(sub.token, "survey");
   if (!limit.ok) return { status: "rate_limited", retryAfterMs: limit.retryAfterMs };
 
   const event = await loadEventByToken(sub.token);
@@ -69,12 +71,15 @@ export async function submitEventSurveyOnly(input: unknown): Promise<EventSurvey
     return { status: "invalid", fieldErrors };
   }
 
+  // All-optional and all skipped: nothing to store (matches the certificate path).
+  if (checked.responses.length === 0) return { status: "recorded" };
+
   await prisma.eventSurveyResponse.create({
     data: {
       eventId: event.id,
       attendeeName: sub.attendeeName,
       // Lowercased like issued_certificates.attendee_email, so the export and
-      // counts merge both sources on one key.
+      // counts dedupe on one key.
       attendeeEmail: sub.attendeeEmail.toLowerCase(),
       responses: checked.responses as Prisma.InputJsonValue,
     },

@@ -12,20 +12,24 @@ import {
 
   Answers come from two sources: certificate attempts
   (issued_certificates.survey_responses) and No-CE survey-only submissions
-  (event_survey_responses, from attendees who said they do not need CE). One
-  row per attendee (email, case-insensitive) with answers in either source.
+  (event_survey_responses, from attendees who said they do not need CE). The
+  two are NEVER merged: a No-CE submission is public and unverified (anyone
+  can type any email), so it must never replace or fill a certificate
+  attendee's answers.
 
-  - An attendee with any certificate attempt reports that attempt's Submitted
+  - Certificate attendees: one row per email (case-insensitive) with an
+    answered attempt. It reports that attendee's reported attempt's Submitted
     at / Name / License states / Result / Hours: the passed one if there is
     one, else the most recent. It may itself carry no answers (a retake after
     a survey edit, or a pass that was never shown a survey) and still reports
-    as passed. Callers pass every attempt of each exported attendee
+    as passed, with the answers of the attendee's most recent answered
+    ATTEMPT. Callers pass every attempt of each exported attendee
     (lib/events/survey-export-response.ts), not just the answered ones, or a
     pass without answers would read "Not passed".
-  - An attendee with only survey-only rows reports the latest one: Result
-    "No CE requested", License states and Hours credited blank.
-  - Either way the answers come from that attendee's most recent answered row
-    across BOTH sources (issued_at vs created_at).
+  - Survey-only respondents: separate rows, one per email WITHIN the
+    survey-only submissions (latest wins), even when the same email also has
+    a certificate row. Result "No CE requested", License states and Hours
+    credited blank.
 
   Columns are the fixed attendee fields, then the CURRENT survey questions in
   order (header = prompt), then any question no longer in the survey that the
@@ -89,13 +93,16 @@ export type SurveyExportAttendee = {
   responses: unknown;
 };
 
-const emailKey = (email: string) => email.trim().toLowerCase();
+/** The one email key used to dedupe attendees, shared by the export and the response counts. */
+export function normalizeEmailKey(email: string): string {
+  return email.trim().toLowerCase();
+}
 
 /** The reported attempt per attendee, newest first. */
 export function pickReportedRows<T extends SurveyExportCertRow>(rows: readonly T[]): T[] {
   const byEmail = new Map<string, T>();
   for (const row of rows) {
-    const key = emailKey(row.attendeeEmail);
+    const key = normalizeEmailKey(row.attendeeEmail);
     const current = byEmail.get(key);
     if (
       !current ||
@@ -109,32 +116,29 @@ export function pickReportedRows<T extends SurveyExportCertRow>(rows: readonly T
 }
 
 /**
-  Every exported attendee, newest submission first: certificate attendees
-  (reported attempt) and survey-only attendees (latest submission), each with
-  the answers from their most recent answered row in either source.
-  Attendees with no answered row anywhere are left out.
+  Every exported row, newest submission first: certificate attendees
+  (reported attempt, answers from their latest answered attempt; attendees
+  with no answered attempt are left out) and, separately, survey-only
+  respondents (latest submission per email). The sources never share answers.
 */
 export function mergeExportedAttendees(
   certRows: readonly SurveyExportCertRow[],
   surveyOnlyRows: readonly SurveyExportSurveyOnlyRow[] = [],
 ): SurveyExportAttendee[] {
+  // Certificate answers come from certificate attempts only.
   const latestAnswers = new Map<string, { at: number; responses: unknown }>();
-  const offer = (email: string, at: Date, responses: unknown) => {
-    const key = emailKey(email);
-    const current = latestAnswers.get(key);
-    if (!current || at.getTime() > current.at) latestAnswers.set(key, { at: at.getTime(), responses });
-  };
   for (const row of certRows) {
-    if (hasSurveyResponses(row)) offer(row.attendeeEmail, row.issuedAt, row.surveyResponses);
+    if (!hasSurveyResponses(row)) continue;
+    const key = normalizeEmailKey(row.attendeeEmail);
+    const current = latestAnswers.get(key);
+    if (!current || row.issuedAt.getTime() > current.at) {
+      latestAnswers.set(key, { at: row.issuedAt.getTime(), responses: row.surveyResponses });
+    }
   }
-  for (const row of surveyOnlyRows) offer(row.attendeeEmail, row.createdAt, row.responses);
 
   const out: SurveyExportAttendee[] = [];
-  const certEmails = new Set<string>();
   for (const reported of pickReportedRows(certRows)) {
-    const key = emailKey(reported.attendeeEmail);
-    certEmails.add(key);
-    const answers = latestAnswers.get(key);
+    const answers = latestAnswers.get(normalizeEmailKey(reported.attendeeEmail));
     if (!answers) continue;
     out.push({
       submittedAt: reported.issuedAt,
@@ -147,11 +151,11 @@ export function mergeExportedAttendees(
     });
   }
 
-  // Survey-only attendees: the latest submission per email with no attempt.
+  // Survey-only respondents: the latest submission per email, deduped among
+  // survey-only rows only (a certificate row for the same email is separate).
   const surveyOnlyLatest = new Map<string, SurveyExportSurveyOnlyRow>();
   for (const row of surveyOnlyRows) {
-    const key = emailKey(row.attendeeEmail);
-    if (certEmails.has(key)) continue;
+    const key = normalizeEmailKey(row.attendeeEmail);
     const current = surveyOnlyLatest.get(key);
     if (!current || row.createdAt.getTime() > current.createdAt.getTime()) surveyOnlyLatest.set(key, row);
   }

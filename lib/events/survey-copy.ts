@@ -58,3 +58,16 @@ export function appendCopiedQuestions<T>(
     added: source.length,
   };
 }
+
+/**
+ * The source the copy control acts on: the remembered selection while it is
+ * still offered, else the first source (a refreshed list can drop the
+ * remembered id). Derived at render AND in the handler, so the select and
+ * the button always agree. undefined only when there are no sources.
+ */
+export function effectiveCopySource<T extends { eventId: string }>(
+  sources: readonly T[],
+  selectedId: string,
+): T | undefined {
+  return sources.find((s) => s.eventId === selectedId) ?? sources[0];
+}

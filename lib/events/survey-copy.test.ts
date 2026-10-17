@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { appendCopiedQuestions, stripSurveyQuestionId, type CopiedSurveyQuestion } from "@/lib/events/survey-copy";
+import {
+  appendCopiedQuestions,
+  effectiveCopySource,
+  stripSurveyQuestionId,
+  type CopiedSurveyQuestion,
+} from "@/lib/events/survey-copy";
 import type { SurveyQuestion } from "@/lib/events/survey-schemas";
 
 const ID1 = "11111111-1111-4111-8111-111111111111";
@@ -89,5 +94,20 @@ describe("appendCopiedQuestions", () => {
       room: 0,
       needed: 1,
     });
+  });
+});
+
+describe("effectiveCopySource", () => {
+  const a = { eventId: ID1, label: "2025 Annual Meeting" };
+  const b = { eventId: ID2, label: "2024 Annual Meeting" };
+  it("keeps the selection while it is still offered", () => {
+    expect(effectiveCopySource([a, b], ID2)).toBe(b);
+  });
+  it("falls back to the first source when the selected id is gone (stale)", () => {
+    expect(effectiveCopySource([a, b], ID3)).toBe(a);
+    expect(effectiveCopySource([a], "")).toBe(a);
+  });
+  it("returns undefined when there are no sources", () => {
+    expect(effectiveCopySource([], ID1)).toBeUndefined();
   });
 });

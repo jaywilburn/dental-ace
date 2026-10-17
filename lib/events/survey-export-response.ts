@@ -14,18 +14,21 @@ import {
   routes (app/api/{company,admin}/events/[id]/survey-export). The routes own
   auth, ownership and the surveyEnabled flag; this loads and shapes the rows.
 
-  Two sources, merged per email by lib/events/survey-export.ts: certificate
-  attempts with answers, and No-CE survey-only submissions
-  (event_survey_responses). It loads EVERY attempt of each attendee who
-  answered in either source, not only the answered rows: the reported attempt
+  Two sources, reported separately by lib/events/survey-export.ts:
+  certificate attempts with answers, and No-CE survey-only submissions
+  (event_survey_responses). A survey-only row never fills or replaces a
+  certificate attendee's answers (it is public and unverified), so attempts
+  are loaded only for emails that answered ON AN ATTEMPT. It loads EVERY
+  attempt of those attendees, not only the answered rows: the reported attempt
   (passed wins) can carry no answers, and dropping it would export a passed
   attendee as "Not passed". The answered-email set uses the same
-  HAS_SURVEY_RESPONSES filter as the response counts, and every survey-only
-  row counts as answered there too, so the download has exactly as many rows
+  HAS_SURVEY_RESPONSES filter as the response counts, and survey-only rows are
+  deduped per email in both places, so the download has exactly as many rows
   as the count shows. Each source is capped at SURVEY_EXPORT_CAP rows.
-  Emails are stored lowercased (lib/attend/event-actions.ts,
-  event-survey-actions.ts); the attempts query still matches
-  case-insensitively, like the attempts lookup there.
+  Both writers store attendee_email lowercased (submitEventAttendance in
+  lib/attend/event-actions.ts, which issues through event-issue.ts, and
+  submitEventSurveyOnly in event-survey-actions.ts), so the attempts query
+  matches the stored values with a plain IN.
 */
 export async function surveyExportResponse(event: {
   id: string;
@@ -47,16 +50,15 @@ export async function surveyExportResponse(event: {
     }),
   ]);
 
-  const emails = [
-    ...new Set([...answered, ...surveyOnly].map((r) => r.attendeeEmail.toLowerCase())),
-  ];
+  // distinct: ["attendeeEmail"] already dedupes; the values are stored lowercased.
+  const emails = answered.map((r) => r.attendeeEmail);
   const rows =
     emails.length === 0
       ? []
       : await prisma.issuedCertificate.findMany({
           where: {
             eventId: event.id,
-            attendeeEmail: { in: emails, mode: "insensitive" },
+            attendeeEmail: { in: emails },
           },
           orderBy: { issuedAt: "desc" },
           take: SURVEY_EXPORT_CAP,

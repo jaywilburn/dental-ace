@@ -22,6 +22,7 @@ import {
 import type { SurveySaveAction, SurveySaveState } from "@/lib/events/survey-save-state";
 import {
   appendCopiedQuestions,
+  effectiveCopySource,
   type CopiedSurveyQuestion,
   type SurveyCopySource,
 } from "@/lib/events/survey-copy";
@@ -147,6 +148,10 @@ export function SurveyEditor({
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
   const [focusRequest, setFocusRequest] = useState<{ id: string; fallback?: string } | null>(null);
   const [copyFrom, setCopyFrom] = useState(copySources[0]?.eventId ?? "");
+  // Derived at render (and read by the handler): a refreshed copySources list
+  // can drop the remembered id, so the select and the button fall back to the
+  // first source together.
+  const copySource = effectiveCopySource(copySources, copyFrom);
   const [copyNotice, setCopyNotice] = useState<{ ok: boolean; text: string } | null>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
 
@@ -214,7 +219,7 @@ export function SurveyEditor({
   }
 
   function copyQuestions() {
-    const source = copySources.find((s) => s.eventId === copyFrom);
+    const source = effectiveCopySource(copySources, copyFrom);
     if (!source) return;
     const result = appendCopiedQuestions(drafts, source.questions, SURVEY_MAX_QUESTIONS, fromCopy);
     if (!result.ok) {
@@ -328,7 +333,7 @@ export function SurveyEditor({
               {/* No name: the choice is client state, never posted with the survey. */}
               <select
                 id="survey-copy-source"
-                value={copyFrom}
+                value={copySource?.eventId ?? ""}
                 onChange={(e) => {
                   setCopyFrom(e.target.value);
                   setCopyNotice(null);

@@ -62,7 +62,7 @@ import { randomUUID } from "node:crypto";
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { PrismaPg } from "@prisma/adapter-pg";
-import { PrismaClient, type Prisma } from "@prisma/client";
+import { PrismaClient, Prisma } from "@prisma/client";
 import { z } from "zod";
 import {
   codeQuestionSchema,
@@ -359,11 +359,27 @@ async function main() {
       // A survey edit is not scored and holds no lock in the app either (the
       // provider and admin editors write it the same way). Scoped to the
       // still-APPROVED event so a status change since the checks writes nothing.
+      // Without --force-survey it is also scoped to "still has no survey" (the
+      // same test as hasStoredSurvey: SQL/JSON null or an empty array), so a
+      // survey the provider saved after the checks above is never overwritten.
       const { count } = await prisma.event.updateMany({
-        where: { id: EVENT_ID, companyId: COMPANY_ID, status: "APPROVED", eventType: "SELECTIVE_INLINE" },
+        where: {
+          id: EVENT_ID,
+          companyId: COMPANY_ID,
+          status: "APPROVED",
+          eventType: "SELECTIVE_INLINE",
+          ...(args.forceSurvey
+            ? {}
+            : { OR: [{ survey: { equals: Prisma.AnyNull } }, { survey: { equals: [] } }] }),
+        },
         data: { survey: survey as unknown as Prisma.InputJsonValue },
       });
-      if (count !== 1) throw new Error(`Event ${EVENT_ID} changed since the checks; nothing written`);
+      if (count === 0) {
+        throw new Error(
+          `Event ${EVENT_ID} changed since the checks (status, type or a survey saved meanwhile); nothing written. ` +
+            "Re-run the dry run, or pass --force-survey to replace a saved survey.",
+        );
+      }
       console.log(`\nApplied the starter survey (${survey.length} questions). Session questions untouched.`);
       return;
     }

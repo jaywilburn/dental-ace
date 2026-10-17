@@ -13,6 +13,13 @@ import { SURVEY_FORM_KEY } from "@/lib/events/survey-schemas";
   Until the attendee answers needsCe the flow stops there. The survey and
   needsCe stay at indices 0 and 1 whatever the answer, so switching Yes/No
   never moves the attendee or drops their survey answers.
+
+  When certificates cannot be claimed right now (the host is out of cert
+  credits, or the event has no certificate form) but a survey is active, the
+  CE question is skipped and every attendee takes the No-CE path:
+    survey -> contact
+  Without a survey the page blocks instead (app/attend/event/[token]/page.tsx),
+  so ceAvailable only matters together with hasSurvey.
 */
 
 export type AttendStage =
@@ -29,11 +36,14 @@ export function deriveStages({
   selective,
   hasSurvey,
   needsCe,
+  ceAvailable = true,
 }: {
   selective: boolean;
   hasSurvey: boolean;
   /** The attendee's CE answer; null until answered. Ignored without a survey. */
   needsCe: boolean | null;
+  /** False when no certificate can be claimed now; with a survey, skips to contact. */
+  ceAvailable?: boolean;
 }): AttendStage[] {
   const certificate: AttendStage[] = [
     "identity",
@@ -43,6 +53,7 @@ export function deriveStages({
     "review",
   ];
   if (!hasSurvey) return certificate;
+  if (!ceAvailable) return ["survey", "contact"];
   const head: AttendStage[] = ["survey", "needsCe"];
   if (needsCe === null) return head;
   return needsCe ? [...head, ...certificate] : [...head, "contact"];

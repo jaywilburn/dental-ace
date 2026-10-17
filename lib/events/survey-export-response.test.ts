@@ -57,7 +57,7 @@ describe("surveyExportResponse", () => {
     expect(answeredQuery.where).toEqual({ eventId: EVENT.id, surveyResponses: HAS_SURVEY_RESPONSES });
     expect(rowsQuery.where).toEqual({
       eventId: EVENT.id,
-      attendeeEmail: { in: ["jane@example.com"], mode: "insensitive" },
+      attendeeEmail: { in: ["jane@example.com"] },
     });
     expect(rowsQuery.where).not.toHaveProperty("surveyResponses");
 
@@ -71,7 +71,7 @@ describe("surveyExportResponse", () => {
     expect(lines[1]).toContain('"Great"');
   });
 
-  it("merges No-CE survey-only submissions, loading attempts for their emails too", async () => {
+  it("reports No-CE survey-only submissions as separate rows, loading attempts only for answered attempts", async () => {
     prismaMock.issuedCertificate.findMany
       .mockResolvedValueOnce([{ attendeeEmail: "jane@example.com" }])
       .mockResolvedValueOnce([
@@ -106,13 +106,14 @@ describe("surveyExportResponse", () => {
     expect(surveyOnlyQuery.where).toEqual({ eventId: EVENT.id });
     expect(surveyOnlyQuery.take).toBe(10_000);
     const rowsQuery = prismaMock.issuedCertificate.findMany.mock.calls[1][0];
-    expect(rowsQuery.where.attendeeEmail.in).toEqual(["jane@example.com", "sam@example.com"]);
+    expect(rowsQuery.where.attendeeEmail).toEqual({ in: ["jane@example.com"] });
 
     const lines = (await res.text()).split("\r\n");
-    expect(lines).toHaveLength(4);
+    expect(lines).toHaveLength(5);
     expect(lines[1]).toContain('"sam@example.com","","No CE requested","","Useful"');
-    // Jane's attempt is newer than her survey-only row, so its answers stand.
     expect(lines[2]).toContain('"Passed","2","Great"');
+    // Jane's survey-only row is its own row, never merged into her attempt.
+    expect(lines[3]).toContain('"jane@example.com","","No CE requested","",""');
   });
 
   it("skips the attempts query when nobody answered", async () => {
@@ -120,5 +121,22 @@ describe("surveyExportResponse", () => {
     const res = await surveyExportResponse(EVENT);
     expect(prismaMock.issuedCertificate.findMany).toHaveBeenCalledTimes(1);
     expect((await res.text()).split("\r\n")).toHaveLength(2);
+  });
+
+  it("never loads attempts for survey-only emails (a No-CE row cannot pull in a certificate)", async () => {
+    prismaMock.issuedCertificate.findMany.mockResolvedValueOnce([]);
+    prismaMock.eventSurveyResponse.findMany.mockResolvedValueOnce([
+      {
+        attendeeName: "Not Jane",
+        attendeeEmail: "jane@example.com",
+        createdAt: new Date("2026-10-02T09:00:00Z"),
+        responses: [{ questionId: Q1, type: "SHORT_TEXT", prompt: "Thoughts?", value: "Spoof" }],
+      },
+    ]);
+    const res = await surveyExportResponse(EVENT);
+    expect(prismaMock.issuedCertificate.findMany).toHaveBeenCalledTimes(1);
+    const lines = (await res.text()).split("\r\n");
+    expect(lines).toHaveLength(3);
+    expect(lines[1]).toContain('"No CE requested"');
   });
 });

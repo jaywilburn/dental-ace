@@ -26,6 +26,7 @@ vi.mock("next/headers", () => ({
 }));
 
 import { submitEventSurveyOnly } from "@/lib/attend/event-survey-actions";
+import { eventAttendRateLimit } from "@/lib/attend/event-rate-limit";
 import { SURVEY_STALE_MESSAGE, parseStoredSurvey, surveyVersion } from "@/lib/events/survey-schemas";
 
 const Q_SINGLE = "d1d1d1d1-0000-4000-8000-000000000001";
@@ -90,12 +91,12 @@ describe("submitEventSurveyOnly", () => {
     expect(prismaMock.$transaction).not.toHaveBeenCalled();
   });
 
-  it("records an all-optional survey left blank as an empty answer list", async () => {
+  it("reports an all-optional survey left blank as recorded but stores no row", async () => {
     mockEvent({ survey: [SURVEY[1]] });
     const version = surveyVersion(parseStoredSurvey([SURVEY[1]]));
     const result = await submitEventSurveyOnly(input({ survey: {}, surveyVersion: version }));
     expect(result).toEqual({ status: "recorded" });
-    expect(prismaMock.eventSurveyResponse.create.mock.calls[0][0].data.responses).toEqual([]);
+    expect(prismaMock.eventSurveyResponse.create).not.toHaveBeenCalled();
   });
 
   it("asks for a reload when the survey changed after the page loaded", async () => {
@@ -133,6 +134,14 @@ describe("submitEventSurveyOnly", () => {
     const result = await submitEventSurveyOnly(input({ token }));
     expect(result.status).toBe("rate_limited");
     expect(prismaMock.eventSurveyResponse.create).toHaveBeenCalledTimes(5);
+  });
+
+  it("uses its own bucket, so No-CE traffic never spends the certificate budget", async () => {
+    const token = nextToken();
+    for (let i = 0; i < 5; i++) await submitEventSurveyOnly(input({ token }));
+    expect((await submitEventSurveyOnly(input({ token }))).status).toBe("rate_limited");
+    // Same IP + link, certificate bucket: still the full budget.
+    for (let i = 0; i < 5; i++) expect((await eventAttendRateLimit(token)).ok).toBe(true);
   });
 
   it.each([
