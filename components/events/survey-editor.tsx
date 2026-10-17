@@ -20,6 +20,12 @@ import {
   type SurveyQuestionType,
 } from "@/lib/events/survey-schemas";
 import type { SurveySaveAction, SurveySaveState } from "@/lib/events/survey-save-state";
+import {
+  appendCopiedQuestions,
+  effectiveCopySource,
+  type CopiedSurveyQuestion,
+  type SurveyCopySource,
+} from "@/lib/events/survey-copy";
 import { cn } from "@/lib/utils";
 
 /*
@@ -39,6 +45,10 @@ import { cn } from "@/lib/utils";
 
   No drag and drop and no animation: Move up / Move down buttons are keyboard
   and screen-reader friendly by default.
+
+  "Copy questions from another event" (copySources, same company only, loaded
+  by the page) appends that event's questions as new unsaved drafts. It is all
+  or nothing against SURVEY_MAX_QUESTIONS, and nothing persists until Save.
 */
 
 type Draft = {
@@ -74,6 +84,19 @@ function fromQuestion(q: SurveyQuestion): Draft {
   };
 }
 
+/** A copied question becomes a brand-new draft: fresh key, no id. */
+function fromCopy(q: CopiedSurveyQuestion): Draft {
+  return {
+    key: tempKey(),
+    type: q.type,
+    prompt: q.prompt,
+    required: q.required,
+    options: "options" in q ? [...q.options] : [],
+  };
+}
+
+const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+
 function toPayload(d: Draft) {
   const base = { id: d.id, type: d.type, prompt: d.prompt, required: d.required };
   return isChoiceType(d.type) ? { ...base, options: d.options } : base;
@@ -108,10 +131,13 @@ export function SurveyEditor({
   eventId,
   initial,
   action,
+  copySources = [],
 }: {
   eventId: string;
   initial: SurveyQuestion[];
   action: SurveySaveAction;
+  /** Other events of the same company with at least one survey question. */
+  copySources?: SurveyCopySource[];
 }) {
   const [state, formAction, pending] = useActionState<SurveySaveState, FormData>(action, null);
   const [drafts, setDrafts] = useState<Draft[]>(() => initial.map(fromQuestion));
@@ -121,6 +147,12 @@ export function SurveyEditor({
   const [seenState, setSeenState] = useState<SurveySaveState>(state);
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
   const [focusRequest, setFocusRequest] = useState<{ id: string; fallback?: string } | null>(null);
+  const [copyFrom, setCopyFrom] = useState(copySources[0]?.eventId ?? "");
+  // Derived at render (and read by the handler): a refreshed copySources list
+  // can drop the remembered id, so the select and the button fall back to the
+  // first source together.
+  const copySource = effectiveCopySource(copySources, copyFrom);
+  const [copyNotice, setCopyNotice] = useState<{ ok: boolean; text: string } | null>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
 
   // Adopt each new action result once (adjusting state during render rather
@@ -131,6 +163,8 @@ export function SurveyEditor({
       setDrafts(state.questions.map(fromQuestion));
       setErrors(NO_ERRORS);
       setDirty(false);
+      // "Save to keep them" is no longer true once they are saved.
+      setCopyNotice(null);
     } else if (state) {
       setErrors(mapErrors(state.errors, submittedKeys));
     }
@@ -182,6 +216,28 @@ export function SurveyEditor({
     ]);
     setDirty(true);
     setFocusRequest({ id: `${key}-prompt` });
+  }
+
+  function copyQuestions() {
+    const source = effectiveCopySource(copySources, copyFrom);
+    if (!source) return;
+    const result = appendCopiedQuestions(drafts, source.questions, SURVEY_MAX_QUESTIONS, fromCopy);
+    if (!result.ok) {
+      setCopyNotice({
+        ok: false,
+        text:
+          result.room === 0
+            ? `The survey already has ${SURVEY_MAX_QUESTIONS} questions, the limit. Delete some before copying.`
+            : `${source.label} has ${plural(result.needed, "question", "questions")}, but only ${result.room} more ${result.room === 1 ? "fits" : "fit"} (limit ${SURVEY_MAX_QUESTIONS}). Nothing was added.`,
+      });
+      return;
+    }
+    setDrafts(result.list);
+    setDirty(true);
+    setCopyNotice({
+      ok: true,
+      text: `Added ${plural(result.added, "question", "questions")} from ${source.label}. Save to keep them.`,
+    });
   }
 
   function move(key: string, dir: -1 | 1) {
@@ -267,7 +323,59 @@ export function SurveyEditor({
       {/* Locked while a save is in flight: the save adopts the server's list
           when it returns, so anything typed meanwhile would be discarded. The
           posted JSON is captured at submit, before this disables. */}
-      <fieldset disabled={pending} aria-busy={pending} className="min-w-0 disabled:opacity-60">
+      <fieldset disabled={pending} aria-busy={pending} className="min-w-0 space-y-3 disabled:opacity-60">
+        {copySources.length > 0 ? (
+          <div className="rounded-lg border border-border bg-surface p-3">
+            <FormLabel htmlFor="survey-copy-source">
+              Copy questions from another event
+            </FormLabel>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              {/* No name: the choice is client state, never posted with the survey. */}
+              <select
+                id="survey-copy-source"
+                value={copySource?.eventId ?? ""}
+                onChange={(e) => {
+                  setCopyFrom(e.target.value);
+                  setCopyNotice(null);
+                }}
+                aria-invalid={copyNotice && !copyNotice.ok ? true : undefined}
+                aria-describedby={copyNotice ? "survey-copy-notice" : undefined}
+                className={cn(
+                  inputBase,
+                  "min-w-0 bg-white sm:flex-1",
+                  copyNotice && !copyNotice.ok && inputInvalid,
+                )}
+              >
+                {copySources.map((s) => (
+                  <option key={s.eventId} value={s.eventId}>
+                    {s.label} ({plural(s.questions.length, "question", "questions")})
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={copyQuestions}
+                aria-describedby={copyNotice ? "survey-copy-notice" : undefined}
+                className="inline-flex min-h-9 shrink-0 items-center justify-center rounded-md border border-border bg-white px-4 text-[12px] font-semibold text-navy hover:bg-surface"
+              >
+                Add questions
+              </button>
+            </div>
+            {/* Always mounted so screen readers announce the result. */}
+            <p
+              id="survey-copy-notice"
+              role="status"
+              aria-live="polite"
+              className={cn(
+                "text-pretty text-[11px] tabular-nums empty:hidden",
+                copyNotice?.ok ? "mt-1.5 text-text-mid" : "mt-1 text-red-600",
+              )}
+            >
+              {copyNotice?.text}
+            </p>
+          </div>
+        ) : null}
+
         {drafts.length === 0 ? (
           <div className="rounded-lg border border-dashed border-border bg-surface px-4 py-8 text-center">
             <p className="text-pretty text-[12px] text-text-muted">

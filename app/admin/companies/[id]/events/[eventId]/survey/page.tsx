@@ -8,6 +8,7 @@ import { prisma } from "@/lib/prisma";
 import { saveAdminEventSurvey } from "@/lib/events/survey-actions";
 import { parseStoredSurvey } from "@/lib/events/survey-schemas";
 import { surveyResponseCounts } from "@/lib/events/survey-response-counts";
+import { surveyCopySources } from "@/lib/events/survey-copy-sources";
 
 /*
   ADMIN editor for an event's attendee survey, reached from the Event surveys
@@ -43,7 +44,11 @@ export default async function AdminEventSurveyPage({
   });
   if (!event || event.status === "DRAFT" || !event.company.surveyEnabled) notFound();
 
-  const responses = (await surveyResponseCounts([event.id])).get(event.id) ?? 0;
+  const [counts, copySources] = await Promise.all([
+    surveyResponseCounts([event.id]),
+    surveyCopySources(event.company.id, event.id),
+  ]);
+  const responses = counts.get(event.id) ?? 0;
   const title = event.name || event.eventIdNumber || "Untitled event";
 
   return (
@@ -103,6 +108,7 @@ export default async function AdminEventSurveyPage({
             eventId={event.id}
             initial={parseStoredSurvey(event.survey)}
             action={saveAdminEventSurvey}
+            copySources={copySources}
           />
         </div>
       </div>

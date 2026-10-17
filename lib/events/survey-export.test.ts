@@ -1,12 +1,14 @@
 import { describe, it, expect } from "vitest";
 import {
   hasSurveyResponses,
-  pickExportedAttendees,
+  mergeExportedAttendees,
+  normalizeEmailKey,
   pickReportedRows,
   surveyExportCsv,
   surveyExportFilename,
   surveyExportRows,
   type SurveyExportCertRow,
+  type SurveyExportSurveyOnlyRow,
 } from "@/lib/events/survey-export";
 import type { SurveyQuestion } from "@/lib/events/survey-schemas";
 
@@ -34,6 +36,22 @@ function row(overrides: Partial<SurveyExportCertRow>): SurveyExportCertRow {
   };
 }
 
+function surveyOnly(overrides: Partial<SurveyExportSurveyOnlyRow>): SurveyExportSurveyOnlyRow {
+  return {
+    attendeeName: "Sam Lee",
+    attendeeEmail: "sam@example.com",
+    createdAt: new Date("2026-10-01T16:00:00Z"),
+    responses: [{ questionId: Q1, type: "SINGLE_CHOICE", prompt: "Satisfied?", value: "No" }],
+    ...overrides,
+  };
+}
+
+describe("normalizeEmailKey", () => {
+  it("trims and lowercases", () => {
+    expect(normalizeEmailKey("  Jane@Example.COM ")).toBe("jane@example.com");
+  });
+});
+
 describe("pickReportedRows", () => {
   it("keeps the passed attempt over a later failed one (email case-insensitive)", () => {
     const pass = row({ issuedAt: new Date("2026-10-01T10:00:00Z") });
@@ -53,7 +71,7 @@ describe("pickReportedRows", () => {
   });
 });
 
-describe("pickExportedAttendees", () => {
+describe("mergeExportedAttendees", () => {
   it("pairs the reported attempt with the latest answered attempt (email case-insensitive)", () => {
     const pass = row({ issuedAt: new Date("2026-10-01T12:00:00Z"), surveyResponses: null });
     const older = row({ passed: false, issuedAt: new Date("2026-10-01T08:00:00Z") });
@@ -62,13 +80,91 @@ describe("pickExportedAttendees", () => {
       passed: false,
       issuedAt: new Date("2026-10-01T10:00:00Z"),
     });
-    expect(pickExportedAttendees([older, pass, newer])).toEqual([{ reported: pass, answered: newer }]);
+    const [only, ...rest] = mergeExportedAttendees([older, pass, newer]);
+    expect(rest).toEqual([]);
+    expect(only).toMatchObject({ submittedAt: pass.issuedAt, result: "Passed", responses: newer.surveyResponses });
   });
   it("treats SQL NULL, JSON null and undefined as no answers", () => {
     expect(hasSurveyResponses({ surveyResponses: null })).toBe(false);
     expect(hasSurveyResponses({ surveyResponses: undefined })).toBe(false);
     expect(hasSurveyResponses({ surveyResponses: [] })).toBe(true);
-    expect(pickExportedAttendees([row({ surveyResponses: null })])).toEqual([]);
+    expect(mergeExportedAttendees([row({ surveyResponses: null })])).toEqual([]);
+  });
+  it("never lets a newer survey-only row replace a certificate attendee's answers (spoofing)", () => {
+    // Anyone can submit the public No-CE form with a certificate attendee's
+    // email. It must show as its own row, never as that attendee's answers.
+    const pass = row({ issuedAt: new Date("2026-10-01T12:00:00Z") });
+    const spoof = surveyOnly({
+      attendeeName: "Not Jane",
+      attendeeEmail: "JANE@example.com",
+      createdAt: new Date("2026-10-02T09:00:00Z"),
+      responses: [{ questionId: Q1, type: "SINGLE_CHOICE", prompt: "Satisfied?", value: "No" }],
+    });
+    expect(mergeExportedAttendees([pass], [spoof])).toEqual([
+      {
+        submittedAt: spoof.createdAt,
+        attendeeName: "Not Jane",
+        attendeeEmail: "JANE@example.com",
+        licenseStates: "",
+        result: "No CE requested",
+        hours: "",
+        responses: spoof.responses,
+      },
+      {
+        submittedAt: pass.issuedAt,
+        attendeeName: "Jane Doe",
+        attendeeEmail: "jane@example.com",
+        licenseStates: "TX",
+        result: "Passed",
+        hours: "2.5",
+        responses: pass.surveyResponses,
+      },
+    ]);
+  });
+  it("never fills an unanswered certificate attendee from a survey-only row", () => {
+    const pass = row({ surveyResponses: null });
+    const answered = surveyOnly({ attendeeEmail: "jane@example.com" });
+    const out = mergeExportedAttendees([pass], [answered]);
+    expect(out).toHaveLength(1);
+    expect(out[0]).toMatchObject({ result: "No CE requested", responses: answered.responses });
+  });
+  it("reports survey-only attendees as No CE requested from their latest submission", () => {
+    const first = surveyOnly({ createdAt: new Date("2026-10-01T09:00:00Z"), attendeeName: "Sam" });
+    const second = surveyOnly({
+      attendeeEmail: "SAM@example.com",
+      createdAt: new Date("2026-10-01T11:00:00Z"),
+      attendeeName: "Sam Lee",
+      responses: [],
+    });
+    expect(mergeExportedAttendees([], [second, first])).toEqual([
+      {
+        submittedAt: second.createdAt,
+        attendeeName: "Sam Lee",
+        attendeeEmail: "SAM@example.com",
+        licenseStates: "",
+        result: "No CE requested",
+        hours: "",
+        responses: [],
+      },
+    ]);
+  });
+  it("dedupes survey-only rows among themselves even when the email also has an attempt", () => {
+    const pass = row({});
+    const first = surveyOnly({ attendeeEmail: "jane@example.com", createdAt: new Date("2026-10-01T09:00:00Z") });
+    const latest = surveyOnly({ attendeeEmail: "Jane@Example.com", createdAt: new Date("2026-10-03T09:00:00Z") });
+    const out = mergeExportedAttendees([pass], [first, latest]);
+    expect(out.map((a) => a.result)).toEqual(["No CE requested", "Passed"]);
+    expect(out[0].submittedAt).toBe(latest.createdAt);
+  });
+  it("sorts both kinds of attendee newest first", () => {
+    const pass = row({ issuedAt: new Date("2026-10-01T12:00:00Z") });
+    const newer = surveyOnly({ createdAt: new Date("2026-10-01T13:00:00Z") });
+    const older = surveyOnly({ attendeeEmail: "old@example.com", createdAt: new Date("2026-09-01T13:00:00Z") });
+    expect(mergeExportedAttendees([pass], [older, newer]).map((a) => a.attendeeEmail)).toEqual([
+      "sam@example.com",
+      "jane@example.com",
+      "old@example.com",
+    ]);
   });
 });
 
@@ -182,6 +278,22 @@ describe("surveyExportRows", () => {
   it("tolerates malformed stored responses as no answers", () => {
     const [, data] = surveyExportRows(QUESTIONS, [row({ surveyResponses: { nope: true } })]);
     expect(data.slice(6)).toEqual(["", ""]);
+  });
+
+  it("writes a survey-only attendee as No CE requested with blank states and hours", () => {
+    const rows = surveyExportRows(QUESTIONS, [row({})], [surveyOnly({})]);
+    expect(rows).toHaveLength(3);
+    expect(rows[1]).toEqual([
+      "2026-10-01T16:00:00.000Z",
+      "Sam Lee",
+      "sam@example.com",
+      "",
+      "No CE requested",
+      "",
+      "No",
+      "",
+    ]);
+    expect(rows[2].slice(4, 6)).toEqual(["Passed", "2.5"]);
   });
 
   it("returns just the header when there are no responses", () => {
