@@ -7,20 +7,47 @@ import { adjustAppCredits, adjustCertBalance } from "@/lib/admin/billing-overrid
 import { txnLabel } from "@/lib/billing/transaction-labels";
 import { renameCompany } from "@/lib/admin/company-rename";
 import { renameCourse } from "@/lib/admin/course-rename";
+import { setCompanyFeature } from "@/lib/admin/company-features";
+import {
+  COMPANY_FEATURES,
+  COMPANY_FEATURE_LABEL,
+  type CompanyFeature,
+} from "@/lib/admin/company-feature-rules";
 import { memberDisplayName, pointOfContactId } from "@/lib/admin/company-members";
 import { hasCertificateQuiz, quizEditorPath } from "@/lib/admin/course-quiz-status";
+import { parseStoredSurvey } from "@/lib/events/survey-schemas";
+import { surveyResponseCounts } from "@/lib/events/survey-response-counts";
 import { cn } from "@/lib/utils";
+
+// Copy for the Features card. Labels come from company-feature-rules so the
+// buttons, the success message and the audit summary all name a feature alike.
+const FEATURE_COPY: Record<CompanyFeature, { title: string; description: string }> = {
+  surveyEnabled: {
+    title: "Event surveys",
+    description:
+      "Adds a custom, ungraded survey to this company's event attendee links. The company and admins can edit it.",
+  },
+  attendanceCodesEnabled: {
+    title: "Attendance codes",
+    description:
+      "Lets selective events ask attendees to type a code announced in each session instead of answering a multiple choice question.",
+  },
+};
+
+function isCompanyFeature(v: string | undefined): v is CompanyFeature {
+  return (COMPANY_FEATURES as readonly string[]).includes(v ?? "");
+}
 
 export default async function AdminCompanyDetailPage({
   params,
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ ok?: string; error?: string }>;
+  searchParams: Promise<{ ok?: string; error?: string; feature?: string }>;
 }) {
   await requireStaff("ADMIN");
   const { id } = await params;
-  const { ok, error } = await searchParams;
+  const { ok, error, feature } = await searchParams;
 
   const company = await prisma.company.findUnique({
     where: { id },
@@ -29,6 +56,7 @@ export default async function AdminCompanyDetailPage({
       certBalance: true, certAlertThreshold: true, totalCertsIssued: true,
       contactEmail: true, contactPhone: true, addressLine1: true,
       addressLine2: true, city: true, state: true, zip: true,
+      surveyEnabled: true, attendanceCodesEnabled: true,
       users: {
         orderBy: { createdAt: "asc" },
         select: { id: true, email: true, firstName: true, lastName: true, staffRole: true, createdAt: true },
@@ -57,12 +85,25 @@ export default async function AdminCompanyDetailPage({
   }));
   const needsQuiz = courses.filter((c) => !c.hasQuiz && !c.expired).length;
 
+  // Event surveys: only while the feature is on. Drafts are still in the
+  // wizard, so they have no survey to edit yet.
+  const surveyEvents = company.surveyEnabled
+    ? await prisma.event.findMany({
+        where: { companyId: company.id, status: { not: "DRAFT" } },
+        orderBy: { createdAt: "desc" },
+        select: { id: true, name: true, eventIdNumber: true, eventDate: true, status: true, survey: true },
+      })
+    : [];
+  const responseCounts = await surveyResponseCounts(surveyEvents.map((e) => e.id));
+
   return (
     <>
       <PageHeader title={company.name} subtitle="Company overrides (append-only)" />
       {ok ? (
         <div className="mb-4 rounded-md border border-emerald-400 bg-emerald-50 px-4 py-2.5 text-[13px] text-emerald-700">
-          {ok === "renamed"
+          {ok === "feature" && isCompanyFeature(feature)
+            ? `${FEATURE_COPY[feature].title} ${company[feature] ? "turned on" : "turned off"} for this company.`
+            : ok === "renamed"
             ? "Company name updated."
             : ok === "course-renamed"
               ? "Course title updated."
@@ -95,6 +136,111 @@ export default async function AdminCompanyDetailPage({
           <p className="font-serif text-2xl font-bold text-navy tabular-nums">{company.totalCertsIssued}</p>
         </div>
       </div>
+
+      <section id="features" aria-labelledby="features-heading" className="mt-5 overflow-hidden rounded-lg border border-border bg-white">
+        <div className="border-b border-border px-4 py-3">
+          <h2 id="features-heading" className="text-balance text-[12px] font-semibold text-navy">Features</h2>
+          <p className="text-pretty text-[11px] text-text-muted">
+            Optional features for this company. Turning one off hides it but keeps anything already set up.
+            Changes are recorded in the audit log.
+          </p>
+        </div>
+        <ul className="divide-y divide-border">
+          {COMPANY_FEATURES.map((f) => {
+            const on = company[f];
+            return (
+              <li key={f} className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
+                  <p className="flex flex-wrap items-center gap-2 text-[13px] font-medium text-navy">
+                    {FEATURE_COPY[f].title}
+                    <span
+                      className={cn(
+                        "inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold leading-none",
+                        on ? "bg-emerald-50 text-emerald-700" : "bg-surface text-text-mid",
+                      )}
+                    >
+                      {on ? "On" : "Off"}
+                    </span>
+                  </p>
+                  <p className="mt-0.5 text-pretty text-[11px] text-text-muted">{FEATURE_COPY[f].description}</p>
+                </div>
+                <form action={setCompanyFeature} className="shrink-0">
+                  <input type="hidden" name="companyId" value={company.id} />
+                  <input type="hidden" name="feature" value={f} />
+                  <input type="hidden" name="enabled" value={on ? "false" : "true"} />
+                  <button
+                    type="submit"
+                    className={cn(
+                      "inline-flex min-h-9 items-center rounded-md px-3 text-[12px] font-semibold sm:min-h-8",
+                      on
+                        ? "border border-border bg-white text-navy hover:bg-surface"
+                        : "bg-navy text-white hover:bg-navy/90",
+                    )}
+                  >
+                    {on ? "Turn off" : "Turn on"} {COMPANY_FEATURE_LABEL[f]}
+                  </button>
+                </form>
+              </li>
+            );
+          })}
+        </ul>
+      </section>
+
+      {company.surveyEnabled ? (
+        <section id="events" aria-labelledby="events-heading" className="mt-5 overflow-hidden rounded-lg border border-border bg-white">
+          <div className="border-b border-border px-4 py-3">
+            <h2 id="events-heading" className="text-balance text-[12px] font-semibold text-navy">Event surveys</h2>
+            <p className="text-pretty text-[11px] text-text-muted">
+              The optional survey attendees answer after the quiz on each event link. Admin edits are recorded in
+              the audit log.
+            </p>
+          </div>
+          {surveyEvents.length === 0 ? (
+            <p className="px-4 py-6 text-center text-[12px] text-text-muted">No submitted events yet.</p>
+          ) : (
+            <ul className="divide-y divide-border">
+              {surveyEvents.map((e) => {
+                const questions = parseStoredSurvey(e.survey).length;
+                const responses = responseCounts.get(e.id) ?? 0;
+                return (
+                  <li key={e.id} className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="min-w-0">
+                      <p className="text-pretty text-[13px] font-medium text-navy">{e.name || "Untitled event"}</p>
+                      <p className="mt-0.5 text-[11px] text-text-muted tabular-nums">
+                        {e.eventIdNumber ? <span className="font-mono">{e.eventIdNumber}</span> : e.status}
+                        {e.eventDate ? ` · ${e.eventDate}` : null}
+                        {" · "}
+                        {questions} question{questions === 1 ? "" : "s"}
+                        {" · "}
+                        {responses} response{responses === 1 ? "" : "s"}
+                      </p>
+                    </div>
+                    <div className="flex shrink-0 flex-wrap items-center gap-2">
+                      <Link
+                        href={`/admin/companies/${company.id}/events/${e.id}/survey`}
+                        className={cn(
+                          "inline-flex min-h-9 items-center rounded-md px-3 text-[12px] font-semibold sm:min-h-8",
+                          questions > 0
+                            ? "border border-border bg-white text-navy hover:bg-surface"
+                            : "bg-navy text-white hover:bg-navy/90",
+                        )}
+                      >
+                        {questions > 0 ? "Edit survey" : "Add survey"}
+                      </Link>
+                      <a
+                        href={`/api/admin/events/${e.id}/survey-export`}
+                        className="inline-flex min-h-9 items-center rounded-md border border-border bg-white px-3 text-[12px] font-semibold text-navy hover:bg-surface sm:min-h-8"
+                      >
+                        Download responses
+                      </a>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </section>
+      ) : null}
 
       <section id="courses" aria-labelledby="courses-heading" className="mt-5 overflow-hidden rounded-lg border border-border bg-white">
         <div className="border-b border-border px-4 py-3">

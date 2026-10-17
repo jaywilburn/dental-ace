@@ -2,6 +2,8 @@ import { describe, it, expect } from "vitest";
 import { passThreshold, scoreEventQuiz, creditSessions } from "@/lib/attend/event-scoring";
 import type { QuizQuestion } from "@/lib/forms/application/schemas";
 import type { AttendeeAnswer } from "@/lib/attend/scoring";
+import type { EventQuizQuestion } from "@/lib/forms/event/schemas";
+import type { EventAttendeeAnswer } from "@/lib/attend/event-schemas";
 
 const mc = (correctIndex: number): QuizQuestion => ({
   type: "MC",
@@ -91,5 +93,44 @@ describe("creditSessions (SELECTIVE_INLINE per-session credit)", () => {
   });
   it("throws on a length mismatch", () => {
     expect(() => creditSessions([true, false], [1])).toThrow();
+  });
+});
+
+describe("attendance codes (CODE)", () => {
+  const code = (c: string): EventQuizQuestion => ({ type: "CODE", question: "Code?", code: c });
+
+  it("matches a typed code regardless of case and spacing", () => {
+    const r = scoreEventQuiz([code("AbC12")], [{ type: "CODE", answer: " abc 12 " }], 0.7);
+    expect(r.correct).toEqual([true]);
+  });
+
+  it("rejects a wrong or blank code and a mismatched answer type", () => {
+    const r = scoreEventQuiz(
+      [code("ABCD"), code("ABCD"), code("ABCD"), mc(1)],
+      [
+        { type: "CODE", answer: "ABCE" },
+        { type: "CODE", answer: "" },
+        { type: "MC", answer: 0 },
+        { type: "CODE", answer: "1" },
+      ],
+      0.7,
+    );
+    expect(r.correct).toEqual([false, false, false, false]);
+  });
+
+  it("scores mixed MC + CODE sessions and credits only the matching ones", () => {
+    const questions = [mc(2), code("ROOM-A1"), code("ROOM-B2")];
+    const answers: EventAttendeeAnswer[] = [
+      { type: "MC", answer: 2 },
+      { type: "CODE", answer: "room-a1" },
+      { type: "CODE", answer: "ROOM-B3" },
+    ];
+    const scored = scoreEventQuiz(questions, answers, 0.7);
+    expect(scored.correct).toEqual([true, true, false]);
+    expect(creditSessions(scored.correct, [1, 1.5, 2])).toEqual({
+      creditedIndices: [0, 1],
+      creditedHours: 2.5,
+      passed: true,
+    });
   });
 });

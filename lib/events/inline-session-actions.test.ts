@@ -51,6 +51,7 @@ import {
   addInlineSession,
   saveInlineSessionCourse,
   saveInlineSessionCreator,
+  saveInlineSessionQuestion,
   removeInlineSession,
 } from "@/lib/events/inline-session-actions";
 
@@ -261,5 +262,102 @@ describe("removeInlineSession", () => {
     expect(txMock.event.update).toHaveBeenCalledWith(
       expect.objectContaining({ where: { id: "event-1" } }),
     );
+  });
+});
+
+describe("saveInlineSessionQuestion", () => {
+  const CODE_FIELDS = {
+    sessionId: "sess-1",
+    questionType: "CODE",
+    question: "Enter the attendance code announced during this session.",
+    code: "  ROOM-A1 ",
+  };
+
+  function owned(attendanceCodesEnabled: boolean) {
+    prismaMock.eventSession.findFirst.mockResolvedValue({
+      eventId: "event-1",
+      event: { company: { attendanceCodesEnabled } },
+    });
+    prismaMock.eventSession.updateMany.mockResolvedValue({ count: 1 });
+  }
+
+  it("saves a valid MC question and returns to the sessions list", async () => {
+    owned(false);
+    await expect(
+      saveInlineSessionQuestion(
+        form({
+          sessionId: "sess-1",
+          question: "What did the session cover?",
+          option_0: "A",
+          option_1: "B",
+          option_2: "C",
+          option_3: "D",
+          correctIndex: "2",
+        }),
+      ),
+    ).rejects.toThrow("NEXT_REDIRECT:/company/events/new/sessions?eventId=event-1");
+    const data = prismaMock.eventSession.updateMany.mock.calls[0][0].data;
+    expect(data.question).toMatchObject({ type: "MC", correctIndex: 2 });
+    // MC never reads the sibling sessions.
+    expect(prismaMock.eventSession.findMany).not.toHaveBeenCalled();
+  });
+
+  it("saves a trimmed attendance code when the company has codes on", async () => {
+    owned(true);
+    prismaMock.eventSession.findMany.mockResolvedValue([
+      { id: "sess-2", question: { type: "CODE", question: "Enter the code here.", code: "ROOM-B2" } },
+    ]);
+    await expect(saveInlineSessionQuestion(form(CODE_FIELDS))).rejects.toThrow(
+      "NEXT_REDIRECT:/company/events/new/sessions?eventId=event-1",
+    );
+    // Siblings are the same event's OTHER inline sessions.
+    expect(prismaMock.eventSession.findMany.mock.calls[0][0].where).toEqual({
+      eventId: "event-1",
+      courseId: null,
+      id: { not: "sess-1" },
+    });
+    const data = prismaMock.eventSession.updateMany.mock.calls[0][0].data;
+    expect(data.question).toEqual({
+      type: "CODE",
+      question: "Enter the attendance code announced during this session.",
+      code: "ROOM-A1",
+    });
+  });
+
+  it("refuses a code when the feature is off, echoing what was typed", async () => {
+    owned(false);
+    await expect(saveInlineSessionQuestion(form(CODE_FIELDS))).rejects.toThrow(
+      "NEXT_REDIRECT:/company/events/new/inline-sessions/sess-1/question?error=codes_disabled&type=CODE",
+    );
+    const data = prismaMock.eventSession.updateMany.mock.calls[0][0].data;
+    expect(data.question).toMatchObject({ type: "CODE", code: "ROOM-A1" });
+  });
+
+  it("rejects a code another session in the event already uses (after normalising)", async () => {
+    owned(true);
+    prismaMock.eventSession.findMany.mockResolvedValue([
+      { id: "sess-2", question: { type: "CODE", question: "Enter the code here.", code: " room-a1" } },
+    ]);
+    await expect(saveInlineSessionQuestion(form(CODE_FIELDS))).rejects.toThrow(
+      "NEXT_REDIRECT:/company/events/new/inline-sessions/sess-1/question?error=validation&type=CODE",
+    );
+    const data = prismaMock.eventSession.updateMany.mock.calls[0][0].data;
+    expect(data.question).toMatchObject({ type: "CODE", code: "ROOM-A1" });
+  });
+
+  it("echoes an invalid code back instead of blanking the form", async () => {
+    owned(true);
+    await expect(saveInlineSessionQuestion(form({ ...CODE_FIELDS, code: "a b" }))).rejects.toThrow(
+      "NEXT_REDIRECT:/company/events/new/inline-sessions/sess-1/question?error=validation&type=CODE",
+    );
+    const data = prismaMock.eventSession.updateMany.mock.calls[0][0].data;
+    expect(data.question).toMatchObject({ type: "CODE", code: "a b" });
+    expect(prismaMock.eventSession.findMany).not.toHaveBeenCalled();
+  });
+
+  it("throws when the session is not the caller's DRAFT inline session", async () => {
+    prismaMock.eventSession.findFirst.mockResolvedValue(null);
+    await expect(saveInlineSessionQuestion(form(CODE_FIELDS))).rejects.toThrow("Session not found");
+    expect(prismaMock.eventSession.updateMany).not.toHaveBeenCalled();
   });
 });

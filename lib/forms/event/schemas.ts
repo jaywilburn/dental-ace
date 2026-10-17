@@ -7,7 +7,13 @@ import {
   step3Schema,
   quizQuestionSchema,
   applicationDataReadSchema,
+  type QuizQuestion,
 } from "@/lib/forms/application/schemas";
+import {
+  ATTENDANCE_CODE_MAX,
+  ATTENDANCE_CODE_MIN,
+  normalizeAttendanceCode,
+} from "@/lib/attend/attendance-code";
 import type { OrganizationFields } from "@/lib/forms/application/detail-rows";
 
 /*
@@ -134,6 +140,59 @@ export const mcQuestionSchema = z.object({
   correctIndex: z.number().int().min(0).max(3),
 });
 
+/*
+  Attendance-code question (SELECTIVE_INLINE only, behind
+  companies.attendance_codes_enabled). The attendee types the code announced in
+  the session; a match (lib/attend/attendance-code.ts: NFKC, whitespace
+  stripped, case-insensitive) earns the session's hours exactly like a correct
+  MC answer. Uses the field name `question` so every renderer that prints the
+  prompt keeps working. Deliberately NOT part of the shared quizQuestionSchema:
+  the single-course /attend/[token] flow, AccreditedCourse.quizQuestions and the
+  FULL_EVENT_QUIZ session quiz keep rejecting it. Codes are unique within an
+  event (checked by saveInlineSessionQuestion, which can see the siblings).
+*/
+export const codeQuestionSchema = z.object({
+  type: z.literal("CODE"),
+  question: z
+    .string()
+    .min(5, "Write a prompt of at least 5 characters.")
+    .max(500, "Keep the prompt under 500 characters."),
+  code: z
+    .string()
+    .trim()
+    .max(ATTENDANCE_CODE_MAX, `Keep the code under ${ATTENDANCE_CODE_MAX} characters.`)
+    .refine((v) => normalizeAttendanceCode(v).length >= ATTENDANCE_CODE_MIN, {
+      message: `Use a code of at least ${ATTENDANCE_CODE_MIN} characters, not counting spaces.`,
+    }),
+});
+export type CodeQuestion = z.infer<typeof codeQuestionSchema>;
+
+/** A SELECTIVE_INLINE session's one question: multiple choice or attendance code. */
+export const inlineSessionQuestionSchema = z.discriminatedUnion("type", [
+  mcQuestionSchema,
+  codeQuestionSchema,
+]);
+export type InlineSessionQuestion = z.infer<typeof inlineSessionQuestionSchema>;
+
+/**
+ * Attendee-side READ of a stored inline session question. Accepts the shared
+ * TF/MC quiz shapes (what inline sessions have always been parsed with) plus
+ * CODE. Used only by the event attendee assembler (lib/attend/event-quiz.ts).
+ */
+export const inlineQuestionReadSchema = z.discriminatedUnion("type", [
+  ...quizQuestionSchema.options,
+  codeQuestionSchema,
+]);
+
+/** Any question an event attendee can be asked (scoring + assembly). */
+export type EventQuizQuestion = QuizQuestion | CodeQuestion;
+
+/** The code of a stored inline session question, or null if it is not a valid CODE question. */
+export function inlineSessionCode(question: unknown): string | null {
+  const parsed = codeQuestionSchema.safeParse(question);
+  return parsed.success ? parsed.data.code : null;
+}
+
 // True/False question (event-level quiz, Opt 1).
 export const tfQuestionSchema = z.object({
   type: z.literal("TF"),
@@ -162,9 +221,11 @@ export const eventQuizSchema = z.object({
 /*
   Opt 3 (SELECTIVE_INLINE): each inline session carries its own full Course
   Information section (the application step1 shape; July 2026 client request)
-  plus ONE multiple-choice question (mcQuestionSchema mirrors the standard MC
-  question shape in lib/forms/application/schemas.ts). A correct answer earns
-  that session's hours on the certificate; a wrong answer drops the session.
+  plus ONE question: multiple choice (mcQuestionSchema mirrors the standard MC
+  question shape in lib/forms/application/schemas.ts) or, when the company has
+  attendance codes on, a typed attendance code (codeQuestionSchema). A correct
+  answer earns that session's hours on the certificate; a wrong answer drops
+  the session.
   EventSession.name/durationHours are mirrored from courseTitle/ceCreditHours
   at save time so downstream consumers (quiz assembly, scoring, certificates,
   totalHours) keep reading them unchanged.
@@ -200,7 +261,7 @@ export type SessionApplicationData = z.infer<typeof sessionApplicationSchema>;
 
 export const inlineSessionSchema = z.object({
   courseInfo: sessionApplicationSchema,
-  question: mcQuestionSchema,
+  question: inlineSessionQuestionSchema,
 });
 
 // Tolerant READ of persisted courseInfo: a stored row must never become
@@ -227,9 +288,10 @@ export type SessionCourseInfoRead = z.infer<typeof sessionCourseInfoReadSchema>;
 /**
  * Submit-gate completeness for one stored inline session row. A complete
  * session carries the full front-half application (Course Info + Creator +
- * Presenters) plus its one MC question. Sessions saved before July 2026 hold
- * only the step1 course-info slice and correctly read incomplete until their
- * creator + presenters are added.
+ * Presenters) plus its one question (MC or attendance code; whether CODE is
+ * allowed for the company is checked separately by submitEvent). Sessions
+ * saved before July 2026 hold only the step1 course-info slice and correctly
+ * read incomplete until their creator + presenters are added.
  */
 export function isInlineSessionComplete(s: {
   courseInfo: unknown;
@@ -237,7 +299,7 @@ export function isInlineSessionComplete(s: {
 }): boolean {
   return (
     sessionApplicationSchema.safeParse(s.courseInfo).success &&
-    mcQuestionSchema.safeParse(s.question).success
+    inlineSessionQuestionSchema.safeParse(s.question).success
   );
 }
 

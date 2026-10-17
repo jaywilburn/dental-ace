@@ -16,6 +16,7 @@ export const ATTEND_FIELD_LABELS: Record<string, string> = {
   affirmed: "Attendance confirmation",
   answers: "Quiz answers",
   selectedSessionIds: "Sessions attended",
+  survey: "Survey",
 };
 
 /** Folds token/unknown-field errors (nothing the attendee can edit) into one
@@ -23,9 +24,20 @@ export const ATTEND_FIELD_LABELS: Record<string, string> = {
 export function toDisplayErrors(fieldErrors: Record<string, string[]>): Record<string, string[]> {
   const out: Record<string, string[]> = {};
   let hasUnknown = false;
+  // Per-question survey errors ("survey.<questionId>") fold into one "Survey"
+  // entry; the exact message shows next to each question.
+  let surveyQuestions = 0;
   for (const [key, msgs] of Object.entries(fieldErrors)) {
-    if (key in ATTEND_FIELD_LABELS) out[key] = msgs;
+    if (key.startsWith("survey.")) surveyQuestions += 1;
+    else if (key in ATTEND_FIELD_LABELS) out[key] = msgs;
     else hasUnknown = true;
+  }
+  if (surveyQuestions > 0 && !out.survey) {
+    out.survey = [
+      surveyQuestions === 1
+        ? "One question needs an answer or a fix."
+        : `${surveyQuestions} questions need an answer or a fix.`,
+    ];
   }
   if (hasUnknown && Object.keys(out).length === 0) {
     out.submission = ["Something went wrong with your submission link. Refresh this page and try again."];

@@ -78,6 +78,23 @@ describe("eventAttendeeSubmissionSchema", () => {
     expect(eventAttendeeSubmissionSchema.safeParse({ ...valid, answers: [] }).success).toBe(false);
   });
 
+  it("accepts an attendance-code answer and trims it", () => {
+    const parsed = eventAttendeeSubmissionSchema.parse({
+      ...valid,
+      answers: [{ type: "MC", answer: 0 }, { type: "CODE", answer: "  AbC 12 " }],
+    });
+    expect(parsed.answers[1]).toEqual({ type: "CODE", answer: "AbC 12" });
+  });
+
+  it("rejects an attendance-code answer over 100 characters", () => {
+    expect(
+      eventAttendeeSubmissionSchema.safeParse({
+        ...valid,
+        answers: [{ type: "CODE", answer: "x".repeat(101) }],
+      }).success,
+    ).toBe(false);
+  });
+
   it("rejects when attendance is not affirmed", () => {
     expect(eventAttendeeSubmissionSchema.safeParse({ ...valid, affirmed: false }).success).toBe(false);
   });

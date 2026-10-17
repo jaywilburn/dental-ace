@@ -3,6 +3,7 @@ import { z } from "zod";
 import { requireCertificateLogAccess } from "@/lib/company/credit-guards";
 import { prisma } from "@/lib/prisma";
 import { buildCertWhere } from "@/lib/certificates/query";
+import { csvField } from "@/lib/csv";
 
 export const runtime = "nodejs";
 
@@ -93,14 +94,4 @@ export async function GET(request: NextRequest) {
       "Cache-Control": "no-store",
     },
   });
-}
-
-/*
-  Quote + escape a CSV field. The leading apostrophe on =,+,-,@ neutralizes
-  spreadsheet formula injection — attendee names/emails are user-supplied.
-*/
-function csvField(value: string): string {
-  let v = value;
-  if (/^[=+\-@]/.test(v)) v = `'${v}`;
-  return `"${v.replace(/"/g, '""')}"`;
 }

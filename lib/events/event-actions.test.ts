@@ -317,6 +317,46 @@ describe("submitEvent — SELECTIVE_INLINE completeness gate", () => {
   });
 });
 
+describe("submitEvent — SELECTIVE_INLINE attendance codes", () => {
+  const code = (c: string) => ({
+    type: "CODE",
+    question: "Enter the attendance code announced during this session.",
+    code: c,
+  });
+  function withCodes(codes: [string, string], attendanceCodesEnabled: boolean) {
+    const base = draftEvent({ company: { name: "AADB", attendanceCodesEnabled } });
+    const sessions = (base.sessions as Array<Record<string, unknown>>).map((s, i) => ({
+      ...s,
+      question: code(codes[i]),
+    }));
+    return { ...base, sessions };
+  }
+
+  it("submits an event whose sessions ask for distinct codes when the feature is on", async () => {
+    prismaMock.event.findFirst.mockResolvedValue(withCodes(["ROOM-A1", "ROOM-B2"], true));
+    await expect(submitEvent(submitForm())).rejects.toThrow(
+      /NEXT_REDIRECT:\/company\/events\?just=submitted/,
+    );
+    expect(prismaMock.$transaction).toHaveBeenCalledTimes(1);
+  });
+
+  it("blocks submit when codes are present but the feature is off", async () => {
+    prismaMock.event.findFirst.mockResolvedValue(withCodes(["ROOM-A1", "ROOM-B2"], false));
+    await expect(submitEvent(submitForm())).rejects.toThrow(
+      /NEXT_REDIRECT:\/company\/events\/new\/sessions\?error=validation&detail=Attendance%20codes/,
+    );
+    expect(prismaMock.$transaction).not.toHaveBeenCalled();
+  });
+
+  it("blocks submit when two sessions share a code after normalising", async () => {
+    prismaMock.event.findFirst.mockResolvedValue(withCodes(["ROOM-A1", " room-a1 "], true));
+    await expect(submitEvent(submitForm())).rejects.toThrow(
+      /NEXT_REDIRECT:\/company\/events\/new\/sessions\?error=validation&detail=Two%20sessions/,
+    );
+    expect(prismaMock.$transaction).not.toHaveBeenCalled();
+  });
+});
+
 /*
   FULL_EVENT_QUIZ (Opt 1) shares the event-only billing rule: every session is a
   real CourseApplication row that flips DRAFT -> PENDING, but the EVENT is still

@@ -1,6 +1,7 @@
 import "server-only";
 import { Prisma } from "@prisma/client";
 import { CertBalanceExhaustedError } from "@/lib/attend/issue";
+import type { SurveyResponse } from "@/lib/events/survey-schemas";
 
 /*
   Issue ONE event certificate inside an open transaction that already holds a
@@ -25,6 +26,8 @@ export type IssueEventCertInput = {
   ceHours: number;
   attendedSessionIds: string[];
   completedAt: Date;
+  /** Validated survey answer snapshots; omitted when the event has no active survey. */
+  surveyResponses?: SurveyResponse[];
 };
 
 export async function issueEventCertificateTx(
@@ -65,6 +68,9 @@ export async function issueEventCertificateTx(
       ceHours: new Prisma.Decimal(input.ceHours),
       attendedSessionIds: input.attendedSessionIds as unknown as Prisma.InputJsonValue,
       completedAt: input.completedAt,
+      ...(input.surveyResponses
+        ? { surveyResponses: input.surveyResponses as Prisma.InputJsonValue }
+        : {}),
     },
     select: { id: true },
   });

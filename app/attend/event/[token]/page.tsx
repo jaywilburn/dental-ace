@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { loadEventPageByToken, buildPublicForm } from "@/lib/attend/event-quiz";
+import { loadEventPageByToken, buildPublicForm, activeSurvey } from "@/lib/attend/event-quiz";
 import { COURSE_FORMATS } from "@/lib/forms/application/schemas";
 import { EventAttendeeForm } from "@/components/attend/event-attendee-form";
 import { formatCeHours } from "@/lib/attend/format-ce-hours";
@@ -72,6 +72,9 @@ export default async function AttendEventPage({
         token={token}
         eventName={event.name}
         form={form}
+        // Ungraded host survey (null when the company has surveys off or the
+        // event has no questions); the submit action applies the same gate.
+        survey={activeSurvey(event)}
         // Events are delivered live; the attendee can still change this to the
         // format they actually attended in.
         courseFormatDefault={COURSE_FORMATS[0]}

@@ -4,9 +4,13 @@ import { headers } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { eventAttendeeSubmissionSchema } from "@/lib/attend/event-schemas";
 import { flattenFieldErrors } from "@/lib/attend/schemas";
-import { loadEventByToken, assembleForSubmit } from "@/lib/attend/event-quiz";
+import { loadEventByToken, assembleForSubmit, activeSurvey } from "@/lib/attend/event-quiz";
+import {
+  SURVEY_FORM_KEY,
+  validateSurveyResponses,
+  type SurveyResponse,
+} from "@/lib/events/survey-schemas";
 import { scoreEventQuiz, creditSessions } from "@/lib/attend/event-scoring";
-import type { AttendeeAnswer } from "@/lib/attend/scoring";
 import { decideAttempt } from "@/lib/attend/lockout";
 import { issueEventCertificateTx } from "@/lib/attend/event-issue";
 import { CertBalanceExhaustedError } from "@/lib/attend/issue";
@@ -33,7 +37,11 @@ class AlreadyCertifiedError extends Error {
 }
 
 export type EventAttendResult =
-  | { status: "passed"; certificateId: string }
+  // creditedSessionIds: the sessions on the certificate. On the per-session
+  // path (SELECTIVE_INLINE) this can be a subset of those attended, which the
+  // result screen lists so a mistyped attendance code is visible. Empty for
+  // full-attendance types.
+  | { status: "passed"; certificateId: string; creditedSessionIds: string[] }
   | { status: "failed"; correct: boolean[]; canRetake: boolean }
   | { status: "locked_out" }
   | { status: "already_certified" }
@@ -81,6 +89,28 @@ export async function submitEventAttendance(input: unknown): Promise<EventAttend
     };
   }
 
+  // Host survey: checked against the event's CURRENT definition BEFORE the
+  // attempts lookup, so a missing or bad survey answer returns "invalid" and
+  // never writes an attempt row (it cannot cost the attendee an attempt).
+  // Errors are keyed "survey.<questionId>" for the form's inline messages.
+  // With no active survey (feature off, or no questions) any posted answers
+  // are ignored and nothing is stored.
+  let surveyResponses: SurveyResponse[] | undefined;
+  const survey = activeSurvey(event);
+  if (survey) {
+    const checked = validateSurveyResponses(survey, sub.survey);
+    if (!checked.ok) {
+      const fieldErrors: Record<string, string[]> = {};
+      for (const [key, msgs] of Object.entries(checked.errors)) {
+        fieldErrors[key === SURVEY_FORM_KEY ? SURVEY_FORM_KEY : `survey.${key}`] = msgs;
+      }
+      return { status: "invalid", fieldErrors };
+    }
+    // All-optional and all skipped: store nothing, so response counts and the
+    // export only include attendees who actually answered.
+    if (checked.responses.length) surveyResponses = checked.responses;
+  }
+
   // Prior attempts for (event, email).
   const prior = await prisma.issuedCertificate.findMany({
     where: { eventId: event.id, attendeeEmail: { equals: email, mode: "insensitive" } },
@@ -93,7 +123,7 @@ export async function submitEventAttendance(input: unknown): Promise<EventAttend
   if (decision.kind === "already_certified") return { status: "already_certified" };
   if (decision.kind === "locked_out") return { status: "locked_out" };
 
-  const scored = scoreEventQuiz(assembled.questions, sub.answers as AttendeeAnswer[], assembled.passPct);
+  const scored = scoreEventQuiz(assembled.questions, sub.answers, assembled.passPct);
 
   // SELECTIVE_INLINE events credit each attended session individually: a
   // correct answer earns that session's hours, a wrong answer drops the session
@@ -134,6 +164,9 @@ export async function submitEventAttendance(input: unknown): Promise<EventAttend
         ceHours: assembled.hours,
         attendedSessionIds: assembled.attendedSessionIds,
         completedAt,
+        // Kept on the failed attempt too: the survey is ungraded, and the
+        // export reports the attendee's latest attempt when none passed.
+        ...(surveyResponses ? { surveyResponses } : {}),
       },
     });
     return { status: "failed", correct: scored.correct, canRetake: !decision.isFinalAttempt };
@@ -163,6 +196,7 @@ export async function submitEventAttendance(input: unknown): Promise<EventAttend
         ceHours: certHours,
         attendedSessionIds: certSessionIds,
         completedAt,
+        surveyResponses,
       });
       return cert.id;
     });
@@ -246,5 +280,5 @@ export async function submitEventAttendance(input: unknown): Promise<EventAttend
     console.error(`[submitEventAttendance] cert email send FAILED to ${sub.attendeeEmail}`, err);
   }
 
-  return { status: "passed", certificateId };
+  return { status: "passed", certificateId, creditedSessionIds: certSessionIds };
 }

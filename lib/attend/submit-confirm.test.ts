@@ -16,9 +16,24 @@ describe("submitConfirmCopy", () => {
     expect(submitConfirmCopy("full")).toBeNull();
   });
 
+  it("adds an attendance-code check line only when codes are present", () => {
+    expect(submitConfirmCopy("selective")!.body).toHaveLength(2);
+    expect(submitConfirmCopy("selective", { hasCodes: false })!.body).toHaveLength(2);
+    const withCodes = submitConfirmCopy("selective", { hasCodes: true })!;
+    expect(withCodes.body).toHaveLength(3);
+    expect(withCodes.body[2]).toMatch(/attendance codes/);
+    expect(withCodes.body[2]).toMatch(/not be able to correct it later/);
+  });
+
+  it("still needs no confirmation for full-attendance events with codes flagged", () => {
+    expect(submitConfirmCopy("full", { hasCodes: true })).toBeNull();
+  });
+
   it("follows the brand copy rules (no em dashes)", () => {
-    const copy = submitConfirmCopy("selective")!;
-    const all = [copy.title, ...copy.body, copy.confirmLabel, copy.cancelLabel].join(" ");
-    expect(all).not.toContain("—");
+    for (const hasCodes of [false, true]) {
+      const copy = submitConfirmCopy("selective", { hasCodes })!;
+      const all = [copy.title, ...copy.body, copy.confirmLabel, copy.cancelLabel].join(" ");
+      expect(all).not.toContain("—");
+    }
   });
 });

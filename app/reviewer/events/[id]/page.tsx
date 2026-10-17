@@ -36,7 +36,14 @@ const TYPE_LABEL: Record<EventType, string> = {
   SELECTIVE_PER_COURSE: "Selective attendance · courses reused",
 };
 
-type StoredQuestion = { question?: string; options?: string[]; correctIndex?: number };
+// Inline session question as stored: MC, or an attendance code (type "CODE").
+type StoredQuestion = {
+  type?: string;
+  question?: string;
+  options?: string[];
+  correctIndex?: number;
+  code?: string;
+};
 type QuizItem =
   | { type: "TF"; question: string; correctAnswer: "True" | "False" }
   | { type: "MC"; question: string; options: string[]; correctIndex: number };
@@ -135,7 +142,9 @@ export default async function ReviewEventPage({
       fullData,
       legacyRows,
       presenterCount: fullData?.presenters?.length ?? 0,
-      hasQuestion: Boolean(q.question && (q.options ?? []).length > 0),
+      hasQuestion: Boolean(
+        q.question && (q.type === "CODE" ? Boolean(q.code) : (q.options ?? []).length > 0),
+      ),
     };
   });
 
@@ -331,13 +340,20 @@ export default async function ReviewEventPage({
                     </p>
 
                     <p className="mt-2 text-text-mid">{s.q.question}</p>
-                    <ol className="mt-1 list-inside list-decimal text-text-muted">
-                      {(s.q.options ?? []).map((opt, i) => (
-                        <li key={i} className={i === s.q.correctIndex ? "font-semibold text-green-700" : ""}>
-                          {opt}{i === s.q.correctIndex ? " ✓" : ""}
-                        </li>
-                      ))}
-                    </ol>
+                    {s.q.type === "CODE" ? (
+                      <p className="mt-1 text-text-muted">
+                        Attendance code:{" "}
+                        <span className="break-all font-mono font-semibold text-green-700">{s.q.code}</span>
+                      </p>
+                    ) : (
+                      <ol className="mt-1 list-inside list-decimal text-text-muted">
+                        {(s.q.options ?? []).map((opt, i) => (
+                          <li key={i} className={i === s.q.correctIndex ? "font-semibold text-green-700" : ""}>
+                            {opt}{i === s.q.correctIndex ? " ✓" : ""}
+                          </li>
+                        ))}
+                      </ol>
+                    )}
 
                     {s.fullData ? (
                       <details open={expanded} className="mt-2 rounded-md border border-border">

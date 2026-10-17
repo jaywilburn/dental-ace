@@ -1,5 +1,7 @@
-import type { QuizQuestion } from "@/lib/forms/application/schemas";
-import type { AttendeeAnswer, QuizResult } from "@/lib/attend/scoring";
+import type { EventQuizQuestion } from "@/lib/forms/event/schemas";
+import type { EventAttendeeAnswer } from "@/lib/attend/event-schemas";
+import type { QuizResult } from "@/lib/attend/scoring";
+import { codesMatch } from "@/lib/attend/attendance-code";
 
 /*
   Variable-length quiz scorer for events. The single-course scorer
@@ -13,6 +15,10 @@ import type { AttendeeAnswer, QuizResult } from "@/lib/attend/scoring";
   a 2-question quiz needs 1/2, a 3-question quiz needs 2/3, a 5-question quiz
   needs 4/5 at 0.7). This is the "about 70%" reading the client chose; the
   threshold is a parameter so it can be tuned without touching callers.
+
+  CODE (SELECTIVE_INLINE attendance code) is correct when the typed code
+  matches the authored one under codesMatch. A mismatched answer type is
+  always wrong.
 */
 
 export function passThreshold(total: number, passPct: number): number {
@@ -20,8 +26,8 @@ export function passThreshold(total: number, passPct: number): number {
 }
 
 export function scoreEventQuiz(
-  questions: QuizQuestion[],
-  answers: AttendeeAnswer[],
+  questions: EventQuizQuestion[],
+  answers: EventAttendeeAnswer[],
   passPct = 0.7,
 ): QuizResult {
   if (questions.length !== answers.length) {
@@ -33,6 +39,7 @@ export function scoreEventQuiz(
     const a = answers[i];
     if (q.type === "TF" && a.type === "TF") return a.answer === q.correctAnswer;
     if (q.type === "MC" && a.type === "MC") return a.answer === q.correctIndex;
+    if (q.type === "CODE" && a.type === "CODE") return codesMatch(a.answer, q.code);
     return false;
   });
   const score = correct.filter(Boolean).length;

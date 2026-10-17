@@ -9,7 +9,10 @@
 
 export type PublicQuestion =
   | { type: "TF"; question: string }
-  | { type: "MC"; question: string; options: string[] };
+  | { type: "MC"; question: string; options: string[] }
+  // SELECTIVE_INLINE attendance code: the prompt only. The code itself never
+  // leaves the server (see strip() in lib/attend/event-quiz.ts).
+  | { type: "CODE"; question: string };
 
 export type EventFormItemDetails = {
   objectives?: string;

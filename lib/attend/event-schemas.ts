@@ -1,6 +1,8 @@
 import { z } from "zod";
 import { attendeeAnswerSchema, isRecentCompletionDate } from "@/lib/attend/schemas";
 import { COURSE_FORMATS } from "@/lib/forms/application/schemas";
+import { ATTENDANCE_CODE_MAX } from "@/lib/attend/attendance-code";
+import { surveyAnswerInputSchema } from "@/lib/events/survey-schemas";
 
 /*
   Event attendee submission boundary. Like attendeeSubmissionSchema but the quiz
@@ -8,6 +10,21 @@ import { COURSE_FORMATS } from "@/lib/forms/application/schemas";
   carry the chosen session ids. The server re-derives the questions from those
   ids and scores in order; the client never supplies questions.
 */
+
+/*
+  Event answers add the attendance code (SELECTIVE_INLINE CODE questions) to the
+  shared TF/MC answers. The single-course attendeeAnswerSchema stays TF/MC, so
+  /attend/[token] keeps rejecting a CODE answer. The typed code is kept as
+  entered (trimmed); matching normalises it (lib/attend/attendance-code.ts).
+*/
+export const eventAttendeeAnswerSchema = z.discriminatedUnion("type", [
+  ...attendeeAnswerSchema.options,
+  z.object({
+    type: z.literal("CODE"),
+    answer: z.string().trim().max(ATTENDANCE_CODE_MAX, "Attendance code is too long"),
+  }),
+]);
+export type EventAttendeeAnswer = z.infer<typeof eventAttendeeAnswerSchema>;
 export const eventAttendeeSubmissionSchema = z.object({
   token: z.guid(),
   attendeeName: z.string().trim().min(2, "Please enter your full name").max(200, "Name is too long"),
@@ -33,7 +50,11 @@ export const eventAttendeeSubmissionSchema = z.object({
   // attendance (the server uses every session/the event quiz).
   selectedSessionIds: z.array(z.string().uuid()).max(30),
   affirmed: z.literal(true, "Please confirm that you attended the event"),
-  answers: z.array(attendeeAnswerSchema).min(1, "Please answer the quiz questions").max(30, "Too many answers"),
+  answers: z.array(eventAttendeeAnswerSchema).min(1, "Please answer the quiz questions").max(30, "Too many answers"),
+  // Host survey answers (question id -> answer). Transport bounds only; the
+  // action checks them against the event's CURRENT survey (and ignores them
+  // when the event has no active survey).
+  survey: surveyAnswerInputSchema.optional(),
 });
 
 export type EventAttendeeSubmission = z.infer<typeof eventAttendeeSubmissionSchema>;

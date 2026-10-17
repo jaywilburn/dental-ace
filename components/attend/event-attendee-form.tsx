@@ -6,32 +6,65 @@ import { COURSE_FORMATS } from "@/lib/forms/application/schemas";
 import {
   activeQuizItems,
   selectedHoursTotal,
+  type ActiveQuizItem,
   type EventPublicForm,
 } from "@/lib/attend/event-form-items";
+import { ATTENDANCE_CODE_MAX } from "@/lib/attend/attendance-code";
 import { formatCeHours } from "@/lib/attend/format-ce-hours";
 import { JurisdictionOptions } from "@/components/jurisdiction-options";
 import { ErrorSummary, FieldError, toDisplayErrors } from "@/components/attend/form-errors";
 import { SubmitConfirmDialog } from "@/components/attend/submit-confirm-dialog";
 import { submitConfirmCopy } from "@/lib/attend/submit-confirm";
+import {
+  SURVEY_FORM_KEY,
+  validateSurveyResponses,
+  type SurveyQuestion,
+} from "@/lib/events/survey-schemas";
+import {
+  SurveyFields,
+  countSurveyAnswered,
+  surveyErrorKey,
+  type SurveyAnswers,
+} from "@/components/attend/survey-fields";
 
 type CourseFormat = (typeof COURSE_FORMATS)[number];
 
 export type { EventPublicForm };
 
 /*
-  Event attendee form. Full types (Opt 1/2) go identity -> affirm -> quiz; the
-  selective types (Opt 3/4) insert a session-selection step and only ask one
-  question per selected session, titled with the session it belongs to. Answers
+  Event attendee form. Stages are derived, never hard-coded:
+  identity -> affirm -> [select] -> quiz -> [survey] -> review. The selective
+  types (Opt 3/4) add the session-selection step and only ask one question per
+  selected session, titled with the session it belongs to. Companies with event
+  surveys switched on add the ungraded host survey after the quiz; its answers
+  survive a retake and never affect credit. Answers
   are stripped of correctness; scoring is server-side. selectedSessionIds +
   answers submit in item order so the server re-derives the same questions.
+
+  SELECTIVE_INLINE sessions may ask for an attendance code instead of an MC
+  answer (a typed text input). A passed submission cannot be retaken, so the
+  review step echoes every typed code, the confirm dialog asks the attendee to
+  check them, and the result lists which sessions were and were not credited.
 */
 
-type Answer = { type: "TF"; answer: "True" | "False" } | { type: "MC"; answer: number };
+type Answer =
+  | { type: "TF"; answer: "True" | "False" }
+  | { type: "MC"; answer: number }
+  | { type: "CODE"; answer: string };
+
+/** An answer the attendee has actually given (a blank code does not count). */
+function isAnswered(a: Answer | undefined): boolean {
+  if (!a) return false;
+  return a.type === "CODE" ? a.answer.trim().length > 0 : true;
+}
+
+type Stage = "identity" | "affirm" | "select" | "quiz" | "survey" | "review";
 
 // Which stage each server-validated field lives on, so an invalid submission
 // can jump back to the first stage the attendee needs to fix. Resolved against
-// the mode-dependent steps array at submit time.
-const FIELD_STAGE: Record<string, string> = {
+// the derived steps array at submit time. Survey errors are keyed
+// "survey.<questionId>" (or "survey" for an unreadable payload): see stageOf.
+const FIELD_STAGE: Record<string, Stage> = {
   attendeeName: "identity",
   attendeeEmail: "identity",
   completionDate: "identity",
@@ -44,14 +77,22 @@ const FIELD_STAGE: Record<string, string> = {
   answers: "quiz",
 };
 
+function stageOf(field: string): Stage | undefined {
+  if (field === SURVEY_FORM_KEY || field.startsWith(`${SURVEY_FORM_KEY}.`)) return "survey";
+  return FIELD_STAGE[field];
+}
+
 export function EventAttendeeForm({
   token,
   form,
+  survey,
   courseFormatDefault,
 }: {
   token: string;
   eventName: string;
   form: EventPublicForm;
+  /** The host's ungraded survey, or null when the event has none active. */
+  survey: SurveyQuestion[] | null;
   courseFormatDefault: CourseFormat;
 }) {
   const selective = form.mode === "selective";
@@ -73,11 +114,11 @@ export function EventAttendeeForm({
   const [affirmed, setAffirmed] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [answers, setAnswers] = useState<Record<string, Answer>>({});
+  // Survey answers, keyed by question id. Kept across a retake: the attendee
+  // only re-answers the quiz.
+  const [surveyAnswers, setSurveyAnswers] = useState<SurveyAnswers>({});
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<EventAttendResult | null>(null);
-  // Selective events confirm before the one-and-only submission (null = no
-  // confirmation step for this mode).
-  const confirmCopy = submitConfirmCopy(form.mode);
   const [confirmOpen, setConfirmOpen] = useState(false);
   // Server-side validation errors keyed by field. Non-empty only after an
   // "invalid" submit; the form stays mounted so the attendee can fix and retry.
@@ -99,14 +140,56 @@ export function EventAttendeeForm({
   // The questions to answer, with their answer-keys + session labels, in
   // submit order (pure helper; see lib/attend/event-form-items.ts).
   const active = activeQuizItems(form, selectedIds);
+  const hasCodes = active.some((a) => a.question.type === "CODE");
+  // Selective events confirm before the one-and-only submission (null = no
+  // confirmation step for this mode).
+  const confirmCopy = submitConfirmCopy(form.mode, { hasCodes });
 
-  // Step flow differs by mode.
-  const steps = selective
-    ? (["identity", "affirm", "select", "quiz", "review"] as const)
-    : (["identity", "affirm", "quiz", "review"] as const);
+  // Stage flow: optional stages appear only when this form has them.
+  const surveyQuestions = survey && survey.length > 0 ? survey : null;
+  const steps: Stage[] = [
+    "identity",
+    "affirm",
+    ...(selective ? (["select"] as const) : []),
+    "quiz",
+    ...(surveyQuestions ? (["survey"] as const) : []),
+    "review",
+  ];
   const stage = steps[step];
+  const goNext = () => setStep((s) => Math.min(s + 1, steps.length - 1));
+  const goBack = () => setStep((s) => Math.max(s - 1, 0));
 
-  const allAnswered = active.length > 0 && active.every((a) => answers[a.key]);
+  // Client-side copy of the server's survey check: errors show inline (and in
+  // the summary) and Next stays on this step until they are fixed.
+  function onSurveyNext() {
+    if (!surveyQuestions) return goNext();
+    const checked = validateSurveyResponses(surveyQuestions, surveyAnswers);
+    const errors: Record<string, string[]> = {};
+    if (!checked.ok) {
+      for (const [key, msgs] of Object.entries(checked.errors)) {
+        errors[key === SURVEY_FORM_KEY ? SURVEY_FORM_KEY : surveyErrorKey(key)] = msgs;
+      }
+    }
+    setFieldErrors((prev) => ({
+      ...Object.fromEntries(Object.entries(prev).filter(([k]) => stageOf(k) !== "survey")),
+      ...errors,
+    }));
+    if (checked.ok) {
+      goNext();
+      return;
+    }
+    // Move focus to the first question that needs attention.
+    const firstId = surveyQuestions.find((q) => errors[surveyErrorKey(q.id)])?.id;
+    if (firstId) {
+      document
+        .querySelector<HTMLElement>(
+          `[data-survey-q="${firstId}"] input, [data-survey-q="${firstId}"] textarea`,
+        )
+        ?.focus();
+    }
+  }
+
+  const allAnswered = active.length > 0 && active.every((a) => isAnswered(answers[a.key]));
 
   // Re-entrancy guard. The confirm dialog's button is not covered by the
   // Submit button's disabled state, so a double press would send two
@@ -132,16 +215,35 @@ export function EventAttendeeForm({
         selectedSessionIds: selective ? ordered.map((a) => a.key) : [],
         affirmed,
         answers: ordered.map((a) => answers[a.key]),
+        ...(surveyQuestions ? { survey: surveyAnswers } : {}),
       });
       if (res.status === "invalid") {
         // Keep the form mounted with everything the attendee entered and jump
         // to the first stage that has a failing field (token/unknown-only
         // errors stay on review; the summary shows a generic retry message).
-        setFieldErrors(res.fieldErrors);
+        // A survey error for a question this page never rendered means the host
+        // edited the survey after it loaded; only a reload can show it.
+        const known = new Set(surveyQuestions?.map((q) => surveyErrorKey(q.id)));
+        const staleSurvey = Object.keys(res.fieldErrors).some(
+          (k) => k.startsWith(`${SURVEY_FORM_KEY}.`) && !known.has(k),
+        );
+        setFieldErrors(
+          staleSurvey
+            ? {
+                ...res.fieldErrors,
+                [SURVEY_FORM_KEY]: [
+                  "The survey was updated after this page loaded. Please reload the page to see the current questions.",
+                ],
+              }
+            : res.fieldErrors,
+        );
         const failingSteps = Object.keys(res.fieldErrors)
           // indexOf is -1 for unknown fields and for stages the current mode
           // does not have (e.g. "select" in full mode); both filter out.
-          .map((k) => (steps as readonly string[]).indexOf(FIELD_STAGE[k] ?? ""))
+          .map((k) => {
+            const st = stageOf(k);
+            return st ? steps.indexOf(st) : -1;
+          })
           .filter((i) => i >= 0);
         if (failingSteps.length) setStep(Math.min(...failingSteps));
         return;
@@ -153,7 +255,15 @@ export function EventAttendeeForm({
     }
   }
 
-  if (result) return <ResultView result={result} onRetake={() => { setResult(null); setStep(steps.indexOf("quiz")); }} />;
+  if (result) {
+    return (
+      <ResultView
+        result={result}
+        items={perSessionCredit ? active : []}
+        onRetake={() => { setResult(null); setStep(steps.indexOf("quiz")); }}
+      />
+    );
+  }
 
   return (
     <div className="mt-6 space-y-4">
@@ -281,7 +391,7 @@ export function EventAttendeeForm({
               )}
             </div>
           )}
-          <NavButtons onNext={() => setStep(1)} nextDisabled={!name || !email || !completedOn || !cleanStates.length} />
+          <NavButtons onNext={goNext} nextDisabled={!name || !email || !completedOn || !cleanStates.length} />
         </section>
       )}
 
@@ -300,7 +410,7 @@ export function EventAttendeeForm({
             <span>I affirm that I attended and completed this event{selective ? "'s sessions I select below" : " in full"}.</span>
           </label>
           <FieldError messages={fieldErrors.affirmed} />
-          <NavButtons onBack={() => setStep(0)} onNext={() => setStep(2)} nextDisabled={!affirmed} />
+          <NavButtons onBack={goBack} onNext={goNext} nextDisabled={!affirmed} />
         </section>
       )}
 
@@ -361,7 +471,7 @@ export function EventAttendeeForm({
             </div>
           ))}
           <FieldError messages={fieldErrors.selectedSessionIds} />
-          <NavButtons onBack={() => setStep(1)} onNext={() => setStep(3)} nextDisabled={selectedIds.length === 0} />
+          <NavButtons onBack={goBack} onNext={goNext} nextDisabled={selectedIds.length === 0} />
         </section>
       )}
 
@@ -378,27 +488,75 @@ export function EventAttendeeForm({
                 <PresentedBy names={presenters} className="mb-1 block text-xs font-normal text-slate-600" />
                 {q.question}
               </legend>
-              {q.type === "TF"
-                ? (["True", "False"] as const).map((opt) => (
-                    <Option
-                      key={opt}
-                      label={opt}
-                      selected={answers[key]?.type === "TF" && answers[key]?.answer === opt}
-                      onSelect={() => setAnswers((p) => ({ ...p, [key]: { type: "TF", answer: opt } }))}
-                    />
-                  ))
-                : q.options.map((opt, j) => (
-                    <Option
-                      key={j}
-                      label={opt}
-                      selected={answers[key]?.type === "MC" && answers[key]?.answer === j}
-                      onSelect={() => setAnswers((p) => ({ ...p, [key]: { type: "MC", answer: j } }))}
-                    />
-                  ))}
+              {q.type === "TF" ? (
+                (["True", "False"] as const).map((opt) => (
+                  <Option
+                    key={opt}
+                    label={opt}
+                    selected={answers[key]?.type === "TF" && answers[key]?.answer === opt}
+                    onSelect={() => setAnswers((p) => ({ ...p, [key]: { type: "TF", answer: opt } }))}
+                  />
+                ))
+              ) : q.type === "CODE" ? (
+                <label className="block text-sm">
+                  <span className="text-slate-700">Attendance code</span>
+                  <input
+                    type="text"
+                    value={answers[key]?.type === "CODE" ? answers[key].answer : ""}
+                    onChange={(e) => {
+                      const answer = e.target.value;
+                      setAnswers((p) => ({ ...p, [key]: { type: "CODE", answer } }));
+                      clearFieldError("answers");
+                    }}
+                    maxLength={ATTENDANCE_CODE_MAX}
+                    autoComplete="off"
+                    autoCorrect="off"
+                    spellCheck={false}
+                    autoCapitalize="characters"
+                    className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 font-mono text-sm tracking-wide"
+                  />
+                  <span className="mt-1 block text-pretty text-xs text-slate-500">
+                    Enter the code announced during this session. Capital letters and spaces do not matter.
+                  </span>
+                </label>
+              ) : (
+                q.options.map((opt, j) => (
+                  <Option
+                    key={j}
+                    label={opt}
+                    selected={answers[key]?.type === "MC" && answers[key]?.answer === j}
+                    onSelect={() => setAnswers((p) => ({ ...p, [key]: { type: "MC", answer: j } }))}
+                  />
+                ))
+              )}
             </fieldset>
           ))}
           <FieldError messages={fieldErrors.answers} />
-          <NavButtons onBack={() => setStep(selective ? 2 : 1)} onNext={() => setStep(selective ? 4 : 3)} nextDisabled={!allAnswered} />
+          <NavButtons onBack={goBack} onNext={goNext} nextDisabled={!allAnswered} />
+        </section>
+      )}
+
+      {stage === "survey" && surveyQuestions && (
+        <section className="space-y-4">
+          <div className="space-y-1">
+            <h2 className="text-balance text-sm font-semibold text-slate-900">Event survey</h2>
+            <p className="text-pretty text-xs text-slate-600">
+              A few questions from the event host. Questions marked (optional) can be skipped.
+              Your answers do not affect your certificate or CE credit.
+            </p>
+          </div>
+          <SurveyFields
+            questions={surveyQuestions}
+            answers={surveyAnswers}
+            errors={fieldErrors}
+            onChange={(id, value) => {
+              setSurveyAnswers((p) => ({ ...p, [id]: value }));
+              clearFieldError(surveyErrorKey(id));
+              clearFieldError(SURVEY_FORM_KEY);
+            }}
+          />
+          <FieldError messages={fieldErrors.survey} />
+          <NavButtons onBack={goBack} onNext={onSurveyNext} />
         </section>
       )}
 
@@ -412,18 +570,36 @@ export function EventAttendeeForm({
             <div>{courseFormat}</div>
             <div>Completed {completedOn}</div>
             {selective ? <div>{active.length} session{active.length === 1 ? "" : "s"} attended</div> : null}
+            {surveyQuestions ? (
+              <div className="tabular-nums">
+                Survey: {countSurveyAnswered(surveyQuestions, surveyAnswers)} of {surveyQuestions.length} answered
+              </div>
+            ) : null}
             {selective && active.length > 0 ? (
               <>
                 <ul className="mt-2 space-y-1.5 border-t border-slate-200 pt-2">
-                  {active.map(({ key, label, presenters, hours }) => (
-                    <li key={key} className="flex items-start justify-between gap-3">
-                      <span className="min-w-0">
-                        <span className="font-medium text-slate-900">{label}</span>
-                        <PresentedBy names={presenters} className="block text-xs text-slate-600" />
-                      </span>
-                      <span className="shrink-0 text-xs text-slate-500">{formatCeHours(hours)}</span>
-                    </li>
-                  ))}
+                  {active.map(({ key, label, presenters, hours, question }) => {
+                    const a = answers[key];
+                    return (
+                      <li key={key} className="flex items-start justify-between gap-3">
+                        <span className="min-w-0">
+                          <span className="font-medium text-slate-900">{label}</span>
+                          <PresentedBy names={presenters} className="block text-xs text-slate-600" />
+                          {/* Echo the typed code: a passed submission cannot be
+                              retaken, so this is the last chance to catch a typo. */}
+                          {question.type === "CODE" ? (
+                            <span className="block text-xs text-slate-600">
+                              Attendance code:{" "}
+                              <span className="break-all font-mono font-medium text-slate-900">
+                                {a?.type === "CODE" ? a.answer.trim() : ""}
+                              </span>
+                            </span>
+                          ) : null}
+                        </span>
+                        <span className="shrink-0 text-xs text-slate-500 tabular-nums">{formatCeHours(hours)}</span>
+                      </li>
+                    );
+                  })}
                 </ul>
                 {/* Per-session credit: only correctly answered sessions are
                     credited, so the sum of the selected sessions is a ceiling,
@@ -446,7 +622,12 @@ export function EventAttendeeForm({
               </>
             ) : null}
           </div>
-          <NavButtons onBack={() => setStep(selective ? 3 : 2)} onNext={confirmCopy ? () => setConfirmOpen(true) : onSubmit} nextLabel={submitting ? "Submitting…" : "Submit"} nextDisabled={submitting} />
+          {hasCodes ? (
+            <p className="text-pretty text-xs text-slate-600">
+              Check each attendance code above. Use Back to fix one before you submit.
+            </p>
+          ) : null}
+          <NavButtons onBack={goBack} onNext={confirmCopy ? () => setConfirmOpen(true) : onSubmit} nextLabel={submitting ? "Submitting…" : "Submit"} nextDisabled={submitting} />
         </section>
       )}
       {confirmCopy ? (
@@ -464,10 +645,40 @@ export function EventAttendeeForm({
   );
 }
 
-function ResultView({ result, onRetake }: { result: EventAttendResult; onRetake: () => void }) {
+function ResultView({
+  result,
+  items,
+  onRetake,
+}: {
+  result: EventAttendResult;
+  /** The answered sessions, for the per-session credit breakdown (else []). */
+  items: ActiveQuizItem[];
+  onRetake: () => void;
+}) {
   switch (result.status) {
-    case "passed":
-      return <Banner tone="ok" title="You passed!" body="Your certificate is on its way by email." />;
+    case "passed": {
+      const credited = new Set(result.creditedSessionIds);
+      const missed = items.filter((it) => !credited.has(it.key));
+      if (items.length === 0) {
+        return <Banner tone="ok" title="You passed!" body="Your certificate is on its way by email." />;
+      }
+      return (
+        <div className="space-y-4">
+          <Banner tone="ok" title="You passed!" body="Your certificate is on its way by email." />
+          <SessionList
+            title="On your certificate"
+            items={items.filter((it) => credited.has(it.key))}
+          />
+          {missed.length > 0 ? (
+            <SessionList
+              title="Not credited"
+              note="The answer or attendance code you entered for these sessions did not match, so their hours are not on your certificate."
+              items={missed}
+            />
+          ) : null}
+        </div>
+      );
+    }
     case "failed":
       return (
         <div className="space-y-4">
@@ -490,6 +701,23 @@ function ResultView({ result, onRetake }: { result: EventAttendResult; onRetake:
     default:
       return <Banner tone="warn" title="Check your entries" body="Some details were missing or invalid." />;
   }
+}
+
+function SessionList({ title, note, items }: { title: string; note?: string; items: ActiveQuizItem[] }) {
+  return (
+    <section className="rounded-md bg-slate-50 p-3 text-sm text-slate-700">
+      <h3 className="text-balance font-semibold text-slate-900">{title}</h3>
+      {note ? <p className="mt-1 text-pretty text-xs text-slate-600">{note}</p> : null}
+      <ul className="mt-2 space-y-1.5">
+        {items.map((it) => (
+          <li key={it.key} className="flex items-start justify-between gap-3">
+            <span className="min-w-0 font-medium text-slate-900">{it.label}</span>
+            <span className="shrink-0 text-xs text-slate-500 tabular-nums">{formatCeHours(it.hours)}</span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
 }
 
 function todayISO(): string {
