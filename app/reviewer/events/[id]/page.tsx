@@ -29,6 +29,9 @@ import {
   QuizPreviewCard,
 } from "@/components/application-form/detail-section";
 import { SessionQuestion } from "@/components/events/session-question";
+import { SurveyPreview } from "@/components/events/survey-preview";
+import { parseStoredSurvey } from "@/lib/events/survey-schemas";
+import { surveyResponseCounts } from "@/lib/events/survey-response-counts";
 import type { EventType } from "@prisma/client";
 
 const TYPE_LABEL: Record<EventType, string> = {
@@ -57,6 +60,10 @@ type QuizItem =
   rendered at all. `?expand=collapsed` is the opt-out, not the default, and
   the collapse state is server-rendered (no client JS), mirroring the existing
   ?tab= pattern on the company event page.
+
+  The attendee survey (events.survey) is listed read-only whenever the company
+  has event surveys on or the event already stores questions, so staff can see
+  what the provider built. Admins also get the editor and CSV export links.
 */
 export default async function ReviewEventPage({
   params,
@@ -65,7 +72,7 @@ export default async function ReviewEventPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ error?: string; expand?: string; ok?: string }>;
 }) {
-  await requireStaff("REVIEWER");
+  const staff = await requireStaff("REVIEWER");
   const { id } = await params;
   const { error, expand, ok } = await searchParams;
   const expanded = expand !== "collapsed";
@@ -73,7 +80,7 @@ export default async function ReviewEventPage({
   const event = await prisma.event.findUnique({
     where: { id },
     include: {
-      company: { select: { name: true } },
+      company: { select: { id: true, name: true, surveyEnabled: true } },
       sessions: {
         orderBy: { position: "asc" },
         include: {
@@ -139,6 +146,15 @@ export default async function ReviewEventPage({
       hasQuestion: readInlineSessionQuestion(s.question) !== null,
     };
   });
+
+  const survey = parseStoredSurvey(event.survey);
+  const showSurvey = event.company.surveyEnabled || survey.length > 0;
+  // The admin editor and CSV export 404 while the feature is off; the editor
+  // also 404s for drafts.
+  const adminSurveyLinks = staff.staffRole === "ADMIN" && event.company.surveyEnabled;
+  const canEditSurvey = adminSurveyLinks && event.status !== "DRAFT";
+  const surveyResponses =
+    showSurvey ? ((await surveyResponseCounts([event.id])).get(event.id) ?? 0) : 0;
 
   return (
     <>
@@ -400,6 +416,48 @@ export default async function ReviewEventPage({
             </ol>
           </div>
         )}
+
+        {showSurvey ? (
+          <section
+            aria-labelledby="survey-heading"
+            className="rounded-lg border border-border bg-white p-5"
+          >
+            <div className="mb-1 flex flex-wrap items-baseline justify-between gap-2">
+              <h2 id="survey-heading" className="text-[13px] font-semibold text-navy">
+                Attendee survey ({survey.length}{" "}
+                {survey.length === 1 ? "question" : "questions"})
+              </h2>
+              {adminSurveyLinks ? (
+                <span className="flex flex-wrap gap-3 text-[11px] font-semibold">
+                  {canEditSurvey ? (
+                    <Link
+                      href={`/admin/companies/${event.company.id}/events/${event.id}/survey`}
+                      className="text-ace-dark underline"
+                    >
+                      Edit survey
+                    </Link>
+                  ) : null}
+                  <a
+                    href={`/api/admin/events/${event.id}/survey-export`}
+                    className="text-ace-dark underline"
+                  >
+                    Download responses (CSV)
+                  </a>
+                </span>
+              ) : null}
+            </div>
+            <p className="mb-3 text-pretty text-[11px] text-text-muted">
+              Optional and ungraded; attendees see it after the quiz and it never
+              affects credit.{" "}
+              <span className="tabular-nums">{surveyResponses}</span>{" "}
+              {surveyResponses === 1 ? "attendee has" : "attendees have"} responded.
+              {event.company.surveyEnabled
+                ? ""
+                : " Event surveys are turned off for this company, so attendees do not see it."}
+            </p>
+            <SurveyPreview questions={survey} />
+          </section>
+        ) : null}
 
         {pending ? (
           <div className="grid gap-4 md:grid-cols-2">
