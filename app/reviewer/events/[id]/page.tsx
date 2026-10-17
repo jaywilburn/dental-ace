@@ -149,10 +149,16 @@ export default async function ReviewEventPage({
 
   const survey = parseStoredSurvey(event.survey);
   const showSurvey = event.company.surveyEnabled || survey.length > 0;
-  // The admin editor and CSV export 404 while the feature is off; the editor
-  // also 404s for drafts.
-  const adminSurveyLinks = staff.staffRole === "ADMIN" && event.company.surveyEnabled;
-  const canEditSurvey = adminSurveyLinks && event.status !== "DRAFT";
+  // The admin survey page 404s for drafts and is read-only while the feature
+  // is off; the CSV export 404s while the feature is off.
+  const isAdmin = staff.staffRole === "ADMIN";
+  const surveyPageLabel = !event.company.surveyEnabled
+    ? "View survey"
+    : event.status === "APPROVED" && survey.length > 0
+      ? "Edit live survey"
+      : "Edit survey";
+  const showSurveyPageLink = isAdmin && event.status !== "DRAFT";
+  const showSurveyExport = isAdmin && event.company.surveyEnabled;
   const surveyResponses =
     showSurvey ? ((await surveyResponseCounts([event.id])).get(event.id) ?? 0) : 0;
 
@@ -427,22 +433,24 @@ export default async function ReviewEventPage({
                 Attendee survey ({survey.length}{" "}
                 {survey.length === 1 ? "question" : "questions"})
               </h2>
-              {adminSurveyLinks ? (
+              {isAdmin ? (
                 <span className="flex flex-wrap gap-3 text-[11px] font-semibold">
-                  {canEditSurvey ? (
+                  {showSurveyPageLink ? (
                     <Link
                       href={`/admin/companies/${event.company.id}/events/${event.id}/survey`}
                       className="text-ace-dark underline"
                     >
-                      Edit survey
+                      {surveyPageLabel}
                     </Link>
                   ) : null}
-                  <a
-                    href={`/api/admin/events/${event.id}/survey-export`}
-                    className="text-ace-dark underline"
-                  >
-                    Download responses (CSV)
-                  </a>
+                  {showSurveyExport ? (
+                    <a
+                      href={`/api/admin/events/${event.id}/survey-export`}
+                      className="text-ace-dark underline"
+                    >
+                      Download responses (CSV)
+                    </a>
+                  ) : null}
                 </span>
               ) : null}
             </div>

@@ -16,6 +16,7 @@ import {
 import { memberDisplayName, pointOfContactId } from "@/lib/admin/company-members";
 import { hasCertificateQuiz, quizEditorPath } from "@/lib/admin/course-quiz-status";
 import { parseStoredSurvey } from "@/lib/events/survey-schemas";
+import { SurveyPreview } from "@/components/events/survey-preview";
 import { surveyResponseCounts } from "@/lib/events/survey-response-counts";
 import { cn } from "@/lib/utils";
 
@@ -85,15 +86,20 @@ export default async function AdminCompanyDetailPage({
   }));
   const needsQuiz = courses.filter((c) => !c.hasQuiz && !c.expired).length;
 
-  // Event surveys: only while the feature is on. Drafts are still in the
-  // wizard, so they have no survey to edit yet.
+  // Event surveys. Drafts are still in the wizard, so they have no survey to
+  // edit yet. While the feature is off, events that already store questions
+  // (e.g. written by a setup script) are still listed read-only, so an admin
+  // can always see what exists; otherwise the switch alone hid them.
+  const submittedEvents = (
+    await prisma.event.findMany({
+      where: { companyId: company.id, status: { not: "DRAFT" } },
+      orderBy: { createdAt: "desc" },
+      select: { id: true, name: true, eventIdNumber: true, eventDate: true, status: true, survey: true },
+    })
+  ).map((e) => ({ ...e, questions: parseStoredSurvey(e.survey) }));
   const surveyEvents = company.surveyEnabled
-    ? await prisma.event.findMany({
-        where: { companyId: company.id, status: { not: "DRAFT" } },
-        orderBy: { createdAt: "desc" },
-        select: { id: true, name: true, eventIdNumber: true, eventDate: true, status: true, survey: true },
-      })
-    : [];
+    ? submittedEvents
+    : submittedEvents.filter((e) => e.questions.length > 0);
   const responseCounts = await surveyResponseCounts(surveyEvents.map((e) => e.id));
 
   return (
@@ -186,7 +192,7 @@ export default async function AdminCompanyDetailPage({
         </ul>
       </section>
 
-      {company.surveyEnabled ? (
+      {company.surveyEnabled || surveyEvents.length > 0 ? (
         <section id="events" aria-labelledby="events-heading" className="mt-5 overflow-hidden rounded-lg border border-border bg-white">
           <div className="border-b border-border px-4 py-3">
             <h2 id="events-heading" className="text-balance text-[12px] font-semibold text-navy">Event surveys</h2>
@@ -194,46 +200,73 @@ export default async function AdminCompanyDetailPage({
               The optional survey attendees answer after the quiz on each event link. Admin edits are recorded in
               the audit log.
             </p>
+            {company.surveyEnabled ? null : (
+              <p className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-pretty text-[11px] text-amber-900">
+                Event surveys are turned off for this company, so attendees do not see these questions and they
+                cannot be edited. Turn on Event surveys under Features to edit them and download responses.
+              </p>
+            )}
           </div>
           {surveyEvents.length === 0 ? (
             <p className="px-4 py-6 text-center text-[12px] text-text-muted">No submitted events yet.</p>
           ) : (
             <ul className="divide-y divide-border">
               {surveyEvents.map((e) => {
-                const questions = parseStoredSurvey(e.survey).length;
+                const questions = e.questions.length;
                 const responses = responseCounts.get(e.id) ?? 0;
+                const live = e.status === "APPROVED" && questions > 0;
                 return (
-                  <li key={e.id} className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="min-w-0">
-                      <p className="text-pretty text-[13px] font-medium text-navy">{e.name || "Untitled event"}</p>
-                      <p className="mt-0.5 text-[11px] text-text-muted tabular-nums">
-                        {e.eventIdNumber ? <span className="font-mono">{e.eventIdNumber}</span> : e.status}
-                        {e.eventDate ? ` · ${e.eventDate}` : null}
-                        {" · "}
-                        {questions} question{questions === 1 ? "" : "s"}
-                        {" · "}
-                        {responses} response{responses === 1 ? "" : "s"}
-                      </p>
+                  <li key={e.id} className="px-4 py-3">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="min-w-0">
+                        <p className="text-pretty text-[13px] font-medium text-navy">{e.name || "Untitled event"}</p>
+                        <p className="mt-0.5 text-[11px] text-text-muted tabular-nums">
+                          {e.eventIdNumber ? <span className="font-mono">{e.eventIdNumber}</span> : e.status}
+                          {e.eventDate ? ` · ${e.eventDate}` : null}
+                          {" · "}
+                          {questions} question{questions === 1 ? "" : "s"}
+                          {" · "}
+                          {responses} response{responses === 1 ? "" : "s"}
+                        </p>
+                      </div>
+                      <div className="flex shrink-0 flex-wrap items-center gap-2">
+                        <Link
+                          href={`/admin/companies/${company.id}/events/${e.id}/survey`}
+                          className={cn(
+                            "inline-flex min-h-9 items-center rounded-md px-3 text-[12px] font-semibold sm:min-h-8",
+                            questions > 0 || !company.surveyEnabled
+                              ? "border border-border bg-white text-navy hover:bg-surface"
+                              : "bg-navy text-white hover:bg-navy/90",
+                          )}
+                        >
+                          {!company.surveyEnabled
+                            ? "View survey"
+                            : live
+                              ? "Edit live survey"
+                              : questions > 0
+                                ? "Edit survey"
+                                : "Add survey"}
+                        </Link>
+                        {company.surveyEnabled ? (
+                          <a
+                            href={`/api/admin/events/${e.id}/survey-export`}
+                            className="inline-flex min-h-9 items-center rounded-md border border-border bg-white px-3 text-[12px] font-semibold text-navy hover:bg-surface sm:min-h-8"
+                          >
+                            Download responses
+                          </a>
+                        ) : null}
+                      </div>
                     </div>
-                    <div className="flex shrink-0 flex-wrap items-center gap-2">
-                      <Link
-                        href={`/admin/companies/${company.id}/events/${e.id}/survey`}
-                        className={cn(
-                          "inline-flex min-h-9 items-center rounded-md px-3 text-[12px] font-semibold sm:min-h-8",
-                          questions > 0
-                            ? "border border-border bg-white text-navy hover:bg-surface"
-                            : "bg-navy text-white hover:bg-navy/90",
-                        )}
-                      >
-                        {questions > 0 ? "Edit survey" : "Add survey"}
-                      </Link>
-                      <a
-                        href={`/api/admin/events/${e.id}/survey-export`}
-                        className="inline-flex min-h-9 items-center rounded-md border border-border bg-white px-3 text-[12px] font-semibold text-navy hover:bg-surface sm:min-h-8"
-                      >
-                        Download responses
-                      </a>
-                    </div>
+                    {questions > 0 ? (
+                      <details className="mt-2 rounded-md border border-border">
+                        <summary className="cursor-pointer px-3 py-2 text-[12px] font-semibold text-navy">
+                          View the {questions} survey question{questions === 1 ? "" : "s"}
+                        </summary>
+                        <div className="border-t border-border p-3">
+                          <SurveyPreview questions={e.questions} />
+                        </div>
+                      </details>
+                    ) : null}
                   </li>
                 );
               })}

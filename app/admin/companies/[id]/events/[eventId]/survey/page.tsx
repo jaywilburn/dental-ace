@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { z } from "zod";
 import { PageHeader } from "@/components/portal-shell";
 import { SurveyEditor } from "@/components/events/survey-editor";
+import { SurveyPreview } from "@/components/events/survey-preview";
 import { requireStaff } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { saveAdminEventSurvey } from "@/lib/events/survey-actions";
@@ -13,8 +14,10 @@ import { surveyResponseCounts } from "@/lib/events/survey-response-counts";
   ADMIN editor for an event's attendee survey, reached from the Event surveys
   section on /admin/companies/[id]. Same editor the provider sees on its
   event's Survey tab; saves here go through saveAdminEventSurvey, which writes
-  an EVENT_SURVEY_UPDATED audit row. 404 when the event is not this company's,
-  is still a draft, or the company has event surveys turned off.
+  an EVENT_SURVEY_UPDATED audit row. 404 when the event is not this company's
+  or is still a draft. While the company has event surveys turned off, the
+  stored questions are shown read-only (the save action and CSV export refuse
+  then), so turning the switch off never hides what the provider built.
 */
 
 export default async function AdminEventSurveyPage({
@@ -41,8 +44,11 @@ export default async function AdminEventSurveyPage({
       company: { select: { id: true, name: true, surveyEnabled: true } },
     },
   });
-  if (!event || event.status === "DRAFT" || !event.company.surveyEnabled) notFound();
+  if (!event || event.status === "DRAFT") notFound();
 
+  const enabled = event.company.surveyEnabled;
+  const questions = parseStoredSurvey(event.survey);
+  if (!enabled && questions.length === 0) notFound();
   const responses = (await surveyResponseCounts([event.id])).get(event.id) ?? 0;
   const title = event.name || event.eventIdNumber || "Untitled event";
 
@@ -85,25 +91,37 @@ export default async function AdminEventSurveyPage({
             never affect their score or credit hours. The provider can edit the same survey from its event
             page. Your saves are recorded in the audit log.
           </p>
+          {enabled ? null : (
+            <p className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-pretty text-amber-900">
+              Event surveys are turned off for this company, so attendees do not see this survey and it is
+              read-only here. Turn on Event surveys under{" "}
+              <Link href={`/admin/companies/${event.company.id}#features`} className="font-semibold underline">
+                Features
+              </Link>{" "}
+              to edit it and download responses.
+            </p>
+          )}
           <div className="mt-4 flex flex-col gap-3 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-text-mid">
               <span className="font-semibold text-navy tabular-nums">{responses}</span>{" "}
               {responses === 1 ? "attendee has" : "attendees have"} responded
             </p>
-            <a
-              href={`/api/admin/events/${event.id}/survey-export`}
-              className="inline-flex min-h-9 items-center justify-center rounded-md border border-border bg-white px-3 text-[12px] font-semibold text-navy hover:bg-surface"
-            >
-              Download responses (CSV)
-            </a>
+            {enabled ? (
+              <a
+                href={`/api/admin/events/${event.id}/survey-export`}
+                className="inline-flex min-h-9 items-center justify-center rounded-md border border-border bg-white px-3 text-[12px] font-semibold text-navy hover:bg-surface"
+              >
+                Download responses (CSV)
+              </a>
+            ) : null}
           </div>
         </div>
         <div className="rounded-lg border border-border bg-white p-5">
-          <SurveyEditor
-            eventId={event.id}
-            initial={parseStoredSurvey(event.survey)}
-            action={saveAdminEventSurvey}
-          />
+          {enabled ? (
+            <SurveyEditor eventId={event.id} initial={questions} action={saveAdminEventSurvey} />
+          ) : (
+            <SurveyPreview questions={questions} />
+          )}
         </div>
       </div>
     </>
