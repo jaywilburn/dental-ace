@@ -32,6 +32,7 @@ import { SurveyEditor } from "@/components/events/survey-editor";
 import { saveCompanyEventSurvey } from "@/lib/events/survey-actions";
 import { parseStoredSurvey } from "@/lib/events/survey-schemas";
 import { surveyResponseCounts } from "@/lib/events/survey-response-counts";
+import { surveyCopySources } from "@/lib/events/survey-copy-sources";
 import type { ApplicationStatus, EventType } from "@prisma/client";
 
 /*
@@ -124,8 +125,14 @@ export default async function CompanyEventDetailPage({
   const tabs = TABS.filter((t) => t !== "survey" || event.company.surveyEnabled);
   const tab: Tab = tabs.includes(requestedTab) ? requestedTab : "details";
   const survey = tab === "survey" ? parseStoredSurvey(event.survey) : [];
-  const surveyResponses =
-    tab === "survey" ? ((await surveyResponseCounts([event.id])).get(event.id) ?? 0) : 0;
+  const [surveyCounts, surveySources] =
+    tab === "survey"
+      ? await Promise.all([
+          surveyResponseCounts([event.id]),
+          surveyCopySources(event.companyId, event.id),
+        ])
+      : [null, []];
+  const surveyResponses = surveyCounts?.get(event.id) ?? 0;
 
   const data = (event.eventData as Record<string, unknown>) ?? {};
   const orgRows = organizationRows(eventOrgFields(event.eventData));
@@ -507,7 +514,12 @@ export default async function CompanyEventDetailPage({
             </div>
           </div>
           <div className="rounded-lg border border-border bg-white p-5">
-            <SurveyEditor eventId={event.id} initial={survey} action={saveCompanyEventSurvey} />
+            <SurveyEditor
+              eventId={event.id}
+              initial={survey}
+              action={saveCompanyEventSurvey}
+              copySources={surveySources}
+            />
           </div>
         </div>
       ) : null}

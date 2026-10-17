@@ -28,15 +28,34 @@
   live on the attendee link as soon as this applies (attendanceCodesEnabled
   gates authoring and submitEvent, not the attendee path).
 
+  SURVEY-ONLY MODE (--survey-only). AADB decided (October 2026) to KEEP their
+  multiple-choice session questions, whose correct answers act as their codes.
+  This mode writes the starter survey and nothing else: no --codes file, no
+  session checks, no session writes. It still verifies the company and that
+  the event is AADB's one APPROVED SELECTIVE_INLINE event, keeps an existing
+  survey unless --force-survey, writes the backup, and is a dry run unless
+  --apply. The zero-submissions guard is skipped on purpose: the survey is
+  not scored and is editable at any time after approval (the same edit the
+  provider or an admin can make in the UI), answers are snapshotted per
+  attempt with their prompts, and an attendee holding a form rendered from
+  the old survey gets a reload prompt (surveyVersion mismatch) rather than a
+  mis-scored or mis-stored answer. Prefer --force-survey only before anyone
+  has answered; replacing gives every question a new id, so earlier answers
+  appear in the CSV under the old questions.
+
   Usage:
     pnpm exec tsx scripts/setup-aadb-event-survey-codes.ts --codes <file.json>            dry run
     pnpm exec tsx scripts/setup-aadb-event-survey-codes.ts --codes <file.json> --apply    write
+    pnpm exec tsx scripts/setup-aadb-event-survey-codes.ts --survey-only                  dry run, survey only
+    pnpm exec tsx scripts/setup-aadb-event-survey-codes.ts --survey-only --apply          write survey only
     --force-survey   replace an existing survey (default: keep it and skip)
+    --survey-only    starter survey only; session questions untouched (no --codes)
     BACKUP_DIR=<dir> overrides where the pre-write JSON backup lands
     (default: logic/, gitignored; the backup holds the old MC answers).
 
   The codes file maps each session id to its code (AADB supplies the codes):
     { "<sessionId>": "CODE1", ... }   exactly the event's 5 sessions
+  Without --survey-only the CODE behaviour above is unchanged.
 */
 import { config } from "dotenv";
 import { randomUUID } from "node:crypto";
@@ -64,16 +83,21 @@ const CODE_PROMPT = "Enter the attendance code announced during this session.";
 
 // --- Args (strict: anything unrecognised is an error) ---
 
-type Args = { apply: boolean; forceSurvey: boolean; codesPath: string };
+type Args = { apply: boolean; forceSurvey: boolean } & (
+  | { surveyOnly: false; codesPath: string }
+  | { surveyOnly: true; codesPath: null }
+);
 
 function parseArgs(argv: string[]): Args {
   let apply = false;
   let forceSurvey = false;
+  let surveyOnly = false;
   let codesPath: string | null = null;
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     if (arg === "--apply") apply = true;
     else if (arg === "--force-survey") forceSurvey = true;
+    else if (arg === "--survey-only") surveyOnly = true;
     else if (arg === "--codes") {
       codesPath = argv[++i] ?? null;
       if (!codesPath || codesPath.startsWith("--")) throw new Error("--codes needs a path: --codes <file.json>");
@@ -82,8 +106,13 @@ function parseArgs(argv: string[]): Args {
       if (!codesPath) throw new Error("--codes needs a path: --codes=<file.json>");
     } else throw new Error(`Unrecognised argument "${arg}".`);
   }
-  if (!codesPath) throw new Error("Missing --codes <file.json> (a {sessionId: code} map from AADB).");
-  return { apply, forceSurvey, codesPath };
+  if (surveyOnly) {
+    // Refuse the mix rather than silently ignoring the codes file.
+    if (codesPath) throw new Error("--survey-only leaves session questions alone; drop --codes.");
+    return { apply, forceSurvey, surveyOnly: true, codesPath: null };
+  }
+  if (!codesPath) throw new Error("Missing --codes <file.json> (a {sessionId: code} map from AADB), or pass --survey-only.");
+  return { apply, forceSurvey, surveyOnly: false, codesPath };
 }
 
 const codesFileSchema = z.record(z.guid(), z.string());
@@ -169,11 +198,16 @@ async function main() {
   const dbUrl = process.env.DATABASE_URL;
   if (!dbUrl) throw new Error("DATABASE_URL is not set (populate .env.local first)");
 
-  const codesParsed = codesFileSchema.safeParse(JSON.parse(readFileSync(args.codesPath, "utf8")));
-  if (!codesParsed.success) {
-    throw new Error(`Codes file must be a {sessionId: code} object:\n${JSON.stringify(codesParsed.error.issues, null, 2)}`);
+  // Read the codes file before connecting so a bad file fails fast.
+  let codes: Record<string, string> = {};
+  if (!args.surveyOnly) {
+    const codesParsed = codesFileSchema.safeParse(JSON.parse(readFileSync(args.codesPath, "utf8")));
+    if (!codesParsed.success) {
+      throw new Error(`Codes file must be a {sessionId: code} object:\n${JSON.stringify(codesParsed.error.issues, null, 2)}`);
+    }
+    codes = codesParsed.data;
   }
-  const codes = codesParsed.data;
+  if (args.surveyOnly) console.log("Mode: --survey-only (session questions are not read or changed).");
 
   const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: dbUrl }) });
   try {
@@ -215,47 +249,51 @@ async function main() {
     }
     console.log(`Event: ${event.name} (${event.eventIdNumber ?? "no Event ID"})`);
 
-    // 2. Five lightweight inline sessions, no session CourseApplication rows.
-    if (event.sessions.length !== SESSION_COUNT) {
-      throw new Error(`Expected ${SESSION_COUNT} sessions, found ${event.sessions.length}`);
-    }
-    const courseBacked = event.sessions.filter((s) => s.courseId !== null);
-    if (courseBacked.length > 0) {
-      throw new Error(`Sessions are course-backed (course_id set): ${courseBacked.map((s) => s.id).join(", ")}`);
-    }
-    const sessionApps = await prisma.courseApplication.count({ where: { eventId: EVENT_ID } });
-    if (sessionApps !== 0) {
-      throw new Error(`Event has ${sessionApps} session CourseApplication rows; refusing (SELECTIVE_INLINE must have none)`);
-    }
-
-    // 3. Nobody has submitted: no attempt was scored against the old questions.
-    const certs = await prisma.issuedCertificate.count({ where: { eventId: EVENT_ID } });
-    if (certs !== 0) throw new Error(`Event already has ${certs} issued_certificates rows; refusing`);
-
-    // 4. Codes: one per session, valid, unique after normalising.
-    const sessionIds = new Set(event.sessions.map((s) => s.id));
-    const codeIds = Object.keys(codes);
-    const unknown = codeIds.filter((id) => !sessionIds.has(id));
-    const missing = [...sessionIds].filter((id) => !(id in codes));
-    if (unknown.length || missing.length) {
-      throw new Error(
-        `Codes file must cover exactly the event's sessions.\n  unknown: ${unknown.join(", ") || "none"}\n  missing: ${missing.join(", ") || "none"}`,
-      );
-    }
-    const dupes = duplicateCodeIds(codeIds.map((id) => ({ id, code: codes[id] })));
-    if (dupes.size > 0) {
-      throw new Error(`Codes must be unique (case and spaces ignored). Duplicates on sessions: ${[...dupes].join(", ")}`);
-    }
+    // Steps 2-4 guard the session-question rewrite only; --survey-only skips
+    // them (see the header for why the zero-submissions guard is not needed).
     const newQuestions = new Map<string, CodeQuestion>();
-    for (const s of event.sessions) {
-      const parsed = codeQuestionSchema.safeParse({ type: "CODE", question: CODE_PROMPT, code: codes[s.id] });
-      if (!parsed.success) {
-        throw new Error(`Session ${s.id} code is invalid:\n${JSON.stringify(parsed.error.issues, null, 2)}`);
+    if (!args.surveyOnly) {
+      // 2. Five lightweight inline sessions, no session CourseApplication rows.
+      if (event.sessions.length !== SESSION_COUNT) {
+        throw new Error(`Expected ${SESSION_COUNT} sessions, found ${event.sessions.length}`);
       }
-      if (!isInlineSessionComplete({ courseInfo: s.courseInfo, question: parsed.data })) {
-        throw new Error(`Session ${s.id} would not be complete with the new question (check its course info)`);
+      const courseBacked = event.sessions.filter((s) => s.courseId !== null);
+      if (courseBacked.length > 0) {
+        throw new Error(`Sessions are course-backed (course_id set): ${courseBacked.map((s) => s.id).join(", ")}`);
       }
-      newQuestions.set(s.id, parsed.data);
+      const sessionApps = await prisma.courseApplication.count({ where: { eventId: EVENT_ID } });
+      if (sessionApps !== 0) {
+        throw new Error(`Event has ${sessionApps} session CourseApplication rows; refusing (SELECTIVE_INLINE must have none)`);
+      }
+
+      // 3. Nobody has submitted: no attempt was scored against the old questions.
+      const certs = await prisma.issuedCertificate.count({ where: { eventId: EVENT_ID } });
+      if (certs !== 0) throw new Error(`Event already has ${certs} issued_certificates rows; refusing`);
+
+      // 4. Codes: one per session, valid, unique after normalising.
+      const sessionIds = new Set(event.sessions.map((s) => s.id));
+      const codeIds = Object.keys(codes);
+      const unknown = codeIds.filter((id) => !sessionIds.has(id));
+      const missing = [...sessionIds].filter((id) => !(id in codes));
+      if (unknown.length || missing.length) {
+        throw new Error(
+          `Codes file must cover exactly the event's sessions.\n  unknown: ${unknown.join(", ") || "none"}\n  missing: ${missing.join(", ") || "none"}`,
+        );
+      }
+      const dupes = duplicateCodeIds(codeIds.map((id) => ({ id, code: codes[id] })));
+      if (dupes.size > 0) {
+        throw new Error(`Codes must be unique (case and spaces ignored). Duplicates on sessions: ${[...dupes].join(", ")}`);
+      }
+      for (const s of event.sessions) {
+        const parsed = codeQuestionSchema.safeParse({ type: "CODE", question: CODE_PROMPT, code: codes[s.id] });
+        if (!parsed.success) {
+          throw new Error(`Session ${s.id} code is invalid:\n${JSON.stringify(parsed.error.issues, null, 2)}`);
+        }
+        if (!isInlineSessionComplete({ courseInfo: s.courseInfo, question: parsed.data })) {
+          throw new Error(`Session ${s.id} would not be complete with the new question (check its course info)`);
+        }
+        newQuestions.set(s.id, parsed.data);
+      }
     }
 
     // 5. Survey: keep an existing one unless --force-survey.
@@ -265,7 +303,7 @@ async function main() {
 
     // 6. Flags are flipped in the admin UI (audited); warn only.
     if (!company.surveyEnabled) console.warn("WARN: AADB has event surveys OFF. Turn them on at /admin/companies/[id].");
-    if (!company.attendanceCodesEnabled) {
+    if (!args.surveyOnly && !company.attendanceCodesEnabled) {
       console.warn("WARN: AADB has attendance codes OFF. Turn them on at /admin/companies/[id].");
     }
 
@@ -276,7 +314,12 @@ async function main() {
     writeFileSync(
       backupPath,
       JSON.stringify(
-        { eventId: event.id, survey: event.survey, sessions: event.sessions.map(({ id, name, question }) => ({ id, name, question })) },
+        {
+          eventId: event.id,
+          mode: args.surveyOnly ? "survey-only" : "codes",
+          survey: event.survey,
+          sessions: event.sessions.map(({ id, name, question }) => ({ id, name, question })),
+        },
         null,
         2,
       ),
@@ -284,7 +327,10 @@ async function main() {
     console.log(`Backup written: ${backupPath}`);
 
     console.log("\n=== Session questions ===");
-    for (const s of event.sessions) {
+    if (args.surveyOnly) {
+      console.log(`Unchanged (--survey-only): ${event.sessions.length} sessions keep their current questions.`);
+    }
+    for (const s of args.surveyOnly ? [] : event.sessions) {
       console.log(`- [${s.position}] ${s.name ?? "Session"} (${s.id})`);
       console.log(`    before: ${JSON.stringify(s.question)?.slice(0, 160)}`);
       console.log(`    after:  ${JSON.stringify(newQuestions.get(s.id))}`);
@@ -302,6 +348,23 @@ async function main() {
 
     if (!args.apply) {
       console.log("\nDry run only. Re-run with --apply to write.");
+      return;
+    }
+
+    if (args.surveyOnly) {
+      if (!writeSurvey) {
+        console.log("\nNothing to write.");
+        return;
+      }
+      // A survey edit is not scored and holds no lock in the app either (the
+      // provider and admin editors write it the same way). Scoped to the
+      // still-APPROVED event so a status change since the checks writes nothing.
+      const { count } = await prisma.event.updateMany({
+        where: { id: EVENT_ID, companyId: COMPANY_ID, status: "APPROVED", eventType: "SELECTIVE_INLINE" },
+        data: { survey: survey as unknown as Prisma.InputJsonValue },
+      });
+      if (count !== 1) throw new Error(`Event ${EVENT_ID} changed since the checks; nothing written`);
+      console.log(`\nApplied the starter survey (${survey.length} questions). Session questions untouched.`);
       return;
     }
 

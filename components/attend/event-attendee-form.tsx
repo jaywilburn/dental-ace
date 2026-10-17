@@ -2,6 +2,8 @@
 
 import { useRef, useState } from "react";
 import { submitEventAttendance, type EventAttendResult } from "@/lib/attend/event-actions";
+import { submitEventSurveyOnly, type EventSurveyOnlyResult } from "@/lib/attend/event-survey-actions";
+import { deriveStages, firstFailingStep, stageOfField } from "@/lib/attend/event-stages";
 import { COURSE_FORMATS } from "@/lib/forms/application/schemas";
 import {
   activeQuizItems,
@@ -33,14 +35,20 @@ type CourseFormat = (typeof COURSE_FORMATS)[number];
 export type { EventPublicForm };
 
 /*
-  Event attendee form. Stages are derived, never hard-coded:
-  identity -> affirm -> [select] -> quiz -> [survey] -> review. The selective
-  types (Opt 3/4) add the session-selection step and only ask one question per
-  selected session, titled with the session it belongs to. Companies with event
-  surveys switched on add the ungraded host survey after the quiz; its answers
-  survive a retake and never affect credit. Answers
-  are stripped of correctness; scoring is server-side. selectedSessionIds +
-  answers submit in item order so the server re-derives the same questions.
+  Event attendee form. Stages are derived, never hard-coded (deriveStages in
+  lib/attend/event-stages.ts): identity -> affirm -> [select] -> quiz ->
+  review. The selective types (Opt 3/4) add the session-selection step and
+  only ask one question per selected session, titled with the session it
+  belongs to. Answers are stripped of correctness; scoring is server-side.
+  selectedSessionIds + answers submit in item order so the server re-derives
+  the same questions.
+
+  When the event has an active host survey, the ungraded survey comes FIRST,
+  then "Do you need CE credit for this event?". Yes continues to the
+  certificate flow above and submits the survey answers with it; No asks for
+  name + email only and submits the survey alone (submitEventSurveyOnly): no
+  certificate, no cert credit, no attempt. Survey answers survive switching
+  Yes/No and a quiz retake, and never affect credit.
 
   SELECTIVE_INLINE sessions may ask for an attendance code instead of an MC
   answer (a typed text input). A passed submission cannot be retaken, so the
@@ -57,30 +65,6 @@ type Answer =
 function isAnswered(a: Answer | undefined): boolean {
   if (!a) return false;
   return a.type === "CODE" ? a.answer.trim().length > 0 : true;
-}
-
-type Stage = "identity" | "affirm" | "select" | "quiz" | "survey" | "review";
-
-// Which stage each server-validated field lives on, so an invalid submission
-// can jump back to the first stage the attendee needs to fix. Resolved against
-// the derived steps array at submit time. Survey errors are keyed
-// "survey.<questionId>" (or "survey" for an unreadable payload): see stageOf.
-const FIELD_STAGE: Record<string, Stage> = {
-  attendeeName: "identity",
-  attendeeEmail: "identity",
-  completionDate: "identity",
-  courseFormat: "identity",
-  licenseNumber: "identity",
-  licenseType: "identity",
-  licenseStates: "identity",
-  affirmed: "affirm",
-  selectedSessionIds: "select",
-  answers: "quiz",
-};
-
-function stageOf(field: string): Stage | undefined {
-  if (field === SURVEY_FORM_KEY || field.startsWith(`${SURVEY_FORM_KEY}.`)) return "survey";
-  return FIELD_STAGE[field];
 }
 
 export function EventAttendeeForm({
@@ -120,6 +104,10 @@ export function EventAttendeeForm({
   const [surveyAnswers, setSurveyAnswers] = useState<SurveyAnswers>({});
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<EventAttendResult | null>(null);
+  // Survey-first events only: the attendee's answer to "Do you need CE
+  // credit?" (null until answered), and the No-CE submit's outcome.
+  const [needsCe, setNeedsCe] = useState<boolean | null>(null);
+  const [surveyOnlyResult, setSurveyOnlyResult] = useState<EventSurveyOnlyResult | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   // Server-side validation errors keyed by field. Non-empty only after an
   // "invalid" submit; the form stays mounted so the attendee can fix and retry.
@@ -148,14 +136,7 @@ export function EventAttendeeForm({
 
   // Stage flow: optional stages appear only when this form has them.
   const surveyQuestions = survey && survey.length > 0 ? survey : null;
-  const steps: Stage[] = [
-    "identity",
-    "affirm",
-    ...(selective ? (["select"] as const) : []),
-    "quiz",
-    ...(surveyQuestions ? (["survey"] as const) : []),
-    "review",
-  ];
+  const steps = deriveStages({ selective, hasSurvey: surveyQuestions !== null, needsCe });
   const stage = steps[step];
   const goNext = () => setStep((s) => Math.min(s + 1, steps.length - 1));
   const goBack = () => setStep((s) => Math.max(s - 1, 0));
@@ -172,7 +153,7 @@ export function EventAttendeeForm({
       }
     }
     setFieldErrors((prev) => ({
-      ...Object.fromEntries(Object.entries(prev).filter(([k]) => stageOf(k) !== "survey")),
+      ...Object.fromEntries(Object.entries(prev).filter(([k]) => stageOfField(k, needsCe) !== "survey")),
       ...errors,
     }));
     if (checked.ok) {
@@ -229,15 +210,8 @@ export function EventAttendeeForm({
         // A survey edited after this page loaded comes back as a form-level
         // "survey" error asking for a reload (a version check on the server).
         setFieldErrors(res.fieldErrors);
-        const failingSteps = Object.keys(res.fieldErrors)
-          // indexOf is -1 for unknown fields and for stages the current mode
-          // does not have (e.g. "select" in full mode); both filter out.
-          .map((k) => {
-            const st = stageOf(k);
-            return st ? steps.indexOf(st) : -1;
-          })
-          .filter((i) => i >= 0);
-        if (failingSteps.length) setStep(Math.min(...failingSteps));
+        const failing = firstFailingStep(steps, res.fieldErrors, needsCe);
+        if (failing !== null) setStep(failing);
         return;
       }
       setResult(res);
@@ -245,6 +219,47 @@ export function EventAttendeeForm({
       submitInFlight.current = false;
       setSubmitting(false);
     }
+  }
+
+  // The No-CE path: name, email and the survey answers only.
+  async function onSurveyOnlySubmit() {
+    if (submitInFlight.current || !surveyQuestions) return;
+    submitInFlight.current = true;
+    setSubmitting(true);
+    setFieldErrors({});
+    try {
+      const res = await submitEventSurveyOnly({
+        token,
+        attendeeName: name,
+        attendeeEmail: email,
+        survey: surveyAnswers,
+        surveyVersion: surveyVersion(surveyQuestions),
+      });
+      if (res.status === "invalid") {
+        // Survey errors go back to the survey (step 0); name/email stay here.
+        setFieldErrors(res.fieldErrors);
+        const failing = firstFailingStep(steps, res.fieldErrors, needsCe);
+        if (failing !== null) setStep(failing);
+        return;
+      }
+      setSurveyOnlyResult(res);
+    } finally {
+      submitInFlight.current = false;
+      setSubmitting(false);
+    }
+  }
+
+  // Switching Yes/No keeps the survey answers (and name/email); errors from
+  // the other path's steps no longer apply.
+  function chooseNeedsCe(value: boolean) {
+    setNeedsCe(value);
+    setFieldErrors((prev) =>
+      Object.fromEntries(Object.entries(prev).filter(([k]) => stageOfField(k, value) === "survey")),
+    );
+  }
+
+  if (surveyOnlyResult) {
+    return <SurveyOnlyResultView result={surveyOnlyResult} />;
   }
 
   if (result) {
@@ -260,6 +275,88 @@ export function EventAttendeeForm({
   return (
     <div className="mt-6 space-y-4">
       <ErrorSummary fieldErrors={toDisplayErrors(fieldErrors)} />
+      {stage === "survey" && surveyQuestions && (
+        <section className="space-y-4">
+          <div className="space-y-1">
+            <h2 className="text-balance text-sm font-semibold text-slate-900">Event survey</h2>
+            <p className="text-pretty text-xs text-slate-600">
+              A few questions from the event host. Questions marked (optional) can be skipped.
+              Your answers do not affect CE credit.
+            </p>
+          </div>
+          <SurveyFields
+            questions={surveyQuestions}
+            answers={surveyAnswers}
+            errors={fieldErrors}
+            onChange={(id, value) => {
+              setSurveyAnswers((p) => ({ ...p, [id]: value }));
+              clearFieldError(surveyErrorKey(id));
+              clearFieldError(SURVEY_FORM_KEY);
+            }}
+          />
+          <FieldError messages={fieldErrors.survey} />
+          <NavButtons onNext={onSurveyNext} />
+        </section>
+      )}
+
+      {stage === "needsCe" && (
+        <section className="space-y-3">
+          <fieldset className="space-y-2">
+            <legend className="text-sm font-medium text-slate-900">Do you need CE credit for this event?</legend>
+            <p className="text-pretty text-xs text-slate-600">
+              Choose Yes to claim your certificate. Choose No to submit your survey answers only.
+            </p>
+            <div className="flex gap-2">
+              {([["Yes", true], ["No", false]] as const).map(([label, val]) => (
+                <button
+                  key={label}
+                  type="button"
+                  aria-pressed={needsCe === val}
+                  onClick={() => chooseNeedsCe(val)}
+                  className={`flex-1 rounded-md border px-3 py-2 text-sm ${needsCe === val ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 text-slate-700"}`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </fieldset>
+          <NavButtons onBack={goBack} onNext={goNext} nextDisabled={needsCe === null} />
+        </section>
+      )}
+
+      {stage === "contact" && (
+        <section className="space-y-3">
+          <p className="text-pretty text-sm text-slate-700">
+            Enter your name and email so the event host knows who responded.
+          </p>
+          <Field
+            label="Full name"
+            value={name}
+            onChange={(v) => {
+              setName(v);
+              clearFieldError("attendeeName");
+            }}
+            error={fieldErrors.attendeeName}
+          />
+          <Field
+            label="Email"
+            value={email}
+            onChange={(v) => {
+              setEmail(v);
+              clearFieldError("attendeeEmail");
+            }}
+            type="email"
+            error={fieldErrors.attendeeEmail}
+          />
+          <NavButtons
+            onBack={goBack}
+            onNext={onSurveyOnlySubmit}
+            nextLabel={submitting ? "Submitting…" : "Submit"}
+            nextDisabled={submitting || !name || !email}
+          />
+        </section>
+      )}
+
       {stage === "identity" && (
         <section className="space-y-3">
           <Field
@@ -383,7 +480,12 @@ export function EventAttendeeForm({
               )}
             </div>
           )}
-          <NavButtons onNext={goNext} nextDisabled={!name || !email || !completedOn || !cleanStates.length} />
+          <NavButtons
+            // First stage without a survey; after the CE question with one.
+            onBack={step > 0 ? goBack : undefined}
+            onNext={goNext}
+            nextDisabled={!name || !email || !completedOn || !cleanStates.length}
+          />
         </section>
       )}
 
@@ -528,30 +630,6 @@ export function EventAttendeeForm({
         </section>
       )}
 
-      {stage === "survey" && surveyQuestions && (
-        <section className="space-y-4">
-          <div className="space-y-1">
-            <h2 className="text-balance text-sm font-semibold text-slate-900">Event survey</h2>
-            <p className="text-pretty text-xs text-slate-600">
-              A few questions from the event host. Questions marked (optional) can be skipped.
-              Your answers do not affect your certificate or CE credit.
-            </p>
-          </div>
-          <SurveyFields
-            questions={surveyQuestions}
-            answers={surveyAnswers}
-            errors={fieldErrors}
-            onChange={(id, value) => {
-              setSurveyAnswers((p) => ({ ...p, [id]: value }));
-              clearFieldError(surveyErrorKey(id));
-              clearFieldError(SURVEY_FORM_KEY);
-            }}
-          />
-          <FieldError messages={fieldErrors.survey} />
-          <NavButtons onBack={goBack} onNext={onSurveyNext} />
-        </section>
-      )}
-
       {stage === "review" && (
         <section className="space-y-4">
           <p className="text-sm text-slate-700">Review and submit to claim your certificate.</p>
@@ -690,6 +768,19 @@ function ResultView({
       return <Banner tone="warn" title="Event unavailable" body="This event is no longer accepting certificate claims." />;
     case "rate_limited":
       return <Banner tone="warn" title="Too many attempts" body="Please wait a few minutes and try again." />;
+    default:
+      return <Banner tone="warn" title="Check your entries" body="Some details were missing or invalid." />;
+  }
+}
+
+function SurveyOnlyResultView({ result }: { result: EventSurveyOnlyResult }) {
+  switch (result.status) {
+    case "recorded":
+      return <Banner tone="ok" title="Thanks, your responses were recorded." body="You can close this page." />;
+    case "rate_limited":
+      return <Banner tone="warn" title="Too many attempts" body="Please wait a few minutes and try again." />;
+    case "event_inactive":
+      return <Banner tone="warn" title="Event unavailable" body="This event is no longer accepting responses." />;
     default:
       return <Banner tone="warn" title="Check your entries" body="Some details were missing or invalid." />;
   }

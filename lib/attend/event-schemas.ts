@@ -61,3 +61,19 @@ export const eventAttendeeSubmissionSchema = z.object({
 });
 
 export type EventAttendeeSubmission = z.infer<typeof eventAttendeeSubmissionSchema>;
+
+/*
+  The No-CE path of a survey-first event link: an attendee who does not need
+  CE credit identifies themselves and submits the survey only (no license, no
+  quiz, no certificate). Name and email follow the certificate submission's
+  rules exactly; the survey fields are the same transport bounds, checked
+  against the event's CURRENT survey by submitEventSurveyOnly.
+*/
+export const eventSurveyOnlySubmissionSchema = eventAttendeeSubmissionSchema
+  .pick({ token: true, attendeeName: true, attendeeEmail: true })
+  .extend({
+    survey: surveyAnswerInputSchema.optional(),
+    surveyVersion: z.string().max(SURVEY_VERSION_MAX).optional(),
+  });
+
+export type EventSurveyOnlySubmission = z.infer<typeof eventSurveyOnlySubmissionSchema>;

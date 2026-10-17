@@ -1,6 +1,5 @@
 "use server";
 
-import { headers } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { eventAttendeeSubmissionSchema } from "@/lib/attend/event-schemas";
 import { flattenFieldErrors } from "@/lib/attend/schemas";
@@ -17,7 +16,7 @@ import { scoreEventQuiz, creditSessions } from "@/lib/attend/event-scoring";
 import { decideAttempt } from "@/lib/attend/lockout";
 import { issueEventCertificateTx } from "@/lib/attend/event-issue";
 import { CertBalanceExhaustedError } from "@/lib/attend/issue";
-import { rateLimit } from "@/lib/rate-limit";
+import { eventAttendRateLimit } from "@/lib/attend/event-rate-limit";
 import { appBaseUrl } from "@/lib/app-url";
 import { renderEventCertificatePdf } from "@/lib/pdf/event-certificate";
 import { uploadToStorage } from "@/lib/storage";
@@ -71,9 +70,7 @@ export async function submitEventAttendance(input: unknown): Promise<EventAttend
   // the event's live format.
   const certFormat = sub.courseFormat ?? "LIVE In Person";
 
-  const h = await headers();
-  const ip = (h.get("x-forwarded-for") ?? "unknown").split(",")[0].trim();
-  const limit = rateLimit(`attend-event:${ip}:${sub.token}`, { limit: 5, windowMs: 10 * 60 * 1000 });
+  const limit = await eventAttendRateLimit(sub.token);
   if (!limit.ok) return { status: "rate_limited", retryAfterMs: limit.retryAfterMs };
 
   const event = await loadEventByToken(sub.token);
