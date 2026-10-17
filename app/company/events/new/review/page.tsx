@@ -56,7 +56,7 @@ export default async function EventReviewPage({
   const sessionCount = lightweightInline ? inlineSessions.length : sessionApps.length;
   // Each session's full application + question must pass the strict schemas
   // here (mirrors the submitEvent gate); draft.sessions[].complete already
-  // runs isInlineSessionComplete.
+  // runs isInlineSessionComplete plus the event-level attendance code checks.
   const allComplete = lightweightInline
     ? inlineSessions.length > 0 && inlineSessions.every((s) => s.complete)
     : sessionApps.length > 0 && sessionApps.every((s) => s.complete);
@@ -134,6 +134,7 @@ export default async function EventReviewPage({
                     {!s.complete ? (
                       <span className="ml-2 font-semibold text-orange-600">⚠ incomplete</span>
                     ) : null}
+                    {s.issue ? <span className="ml-2 text-orange-600">{s.issue}</span> : null}
                   </span>
                   <span className="tabular-nums text-text-muted">
                     {s.durationHours != null ? `${s.durationHours.toFixed(1)} hrs` : "—"}

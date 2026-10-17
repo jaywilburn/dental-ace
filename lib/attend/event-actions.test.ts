@@ -47,6 +47,7 @@ vi.mock("next/headers", () => ({
 }));
 
 import { submitEventAttendance } from "@/lib/attend/event-actions";
+import { SURVEY_STALE_MESSAGE, parseStoredSurvey, surveyVersion } from "@/lib/events/survey-schemas";
 
 // One MC question; the passing answer selects the correct index (0.7 * 1 -> 1/1).
 const ASSEMBLED = {
@@ -451,6 +452,10 @@ describe("submitEventAttendance — host survey", () => {
   let tokenSeq = 0;
   // A fresh token per call: the in-memory rate limiter allows 5 per token.
   const nextToken = () => `eeeeeeee-eeee-4eee-8eee-${String(++tokenSeq).padStart(12, "0")}`;
+  // The version the attendee form posts for the survey it rendered.
+  const VERSION = surveyVersion(parseStoredSurvey(SURVEY));
+  const surveyInput = (survey: Record<string, unknown>, overrides: Record<string, unknown> = {}) =>
+    buildInput({ token: nextToken(), survey, surveyVersion: VERSION, ...overrides });
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -466,24 +471,56 @@ describe("submitEventAttendance — host survey", () => {
     mockSurveyEvent(true);
     prismaMock.$transaction.mockResolvedValue("cert-evt-123");
 
-    const result = await submitEventAttendance(
-      buildInput({ token: nextToken(), survey: { [Q_LONG]: "Great event" } }),
-    );
+    const result = await submitEventAttendance(surveyInput({ [Q_LONG]: "Great event" }));
 
     expect(result.status).toBe("invalid");
     if (result.status !== "invalid") return;
     expect(Object.keys(result.fieldErrors)).toEqual([`survey.${Q_SINGLE}`]);
-    // Validated before the attempts lookup: no attempt read, no row, no cert.
-    expect(prismaMock.issuedCertificate.findMany).not.toHaveBeenCalled();
+    // Validated after the attempt decision but before any write: no row, no cert.
+    expect(prismaMock.issuedCertificate.findMany).toHaveBeenCalledTimes(1);
     expect(prismaMock.issuedCertificate.create).not.toHaveBeenCalled();
     expect(prismaMock.$transaction).not.toHaveBeenCalled();
   });
 
-  it("an option not in the survey is rejected without an attempt", async () => {
+  it("an already certified attendee gets their status, not a survey error", async () => {
+    mockSurveyEvent(true);
+    prismaMock.issuedCertificate.findMany.mockResolvedValue([{ passed: true }]);
+    const result = await submitEventAttendance(surveyInput({ [Q_SINGLE]: "Maybe" }));
+    expect(result).toEqual({ status: "already_certified" });
+    expect(prismaMock.issuedCertificate.create).not.toHaveBeenCalled();
+  });
+
+  it("a locked out attendee gets their status, not a stale survey error", async () => {
+    mockSurveyEvent(true);
+    prismaMock.issuedCertificate.findMany.mockResolvedValue([{ passed: false }, { passed: false }]);
+    const result = await submitEventAttendance(surveyInput({}, { surveyVersion: "stale" }));
+    expect(result).toEqual({ status: "locked_out" });
+    expect(prismaMock.issuedCertificate.create).not.toHaveBeenCalled();
+  });
+
+  it("a survey edited after the page loaded asks for a reload before checking answers", async () => {
+    mockSurveyEvent(true);
+    // An option the attendee could not fix: removed from the current survey.
+    const result = await submitEventAttendance(
+      surveyInput({ [Q_SINGLE]: "Maybe" }, { surveyVersion: "0badc0de" }),
+    );
+    expect(result).toEqual({ status: "invalid", fieldErrors: { survey: [SURVEY_STALE_MESSAGE] } });
+    expect(prismaMock.issuedCertificate.create).not.toHaveBeenCalled();
+    expect(prismaMock.$transaction).not.toHaveBeenCalled();
+  });
+
+  it("answers posted without a version (an older page) also ask for a reload", async () => {
     mockSurveyEvent(true);
     const result = await submitEventAttendance(
-      buildInput({ token: nextToken(), survey: { [Q_SINGLE]: "Maybe" } }),
+      buildInput({ token: nextToken(), survey: { [Q_SINGLE]: "Yes" } }),
     );
+    expect(result).toEqual({ status: "invalid", fieldErrors: { survey: [SURVEY_STALE_MESSAGE] } });
+    expect(prismaMock.issuedCertificate.create).not.toHaveBeenCalled();
+  });
+
+  it("an option not in the survey is rejected without an attempt", async () => {
+    mockSurveyEvent(true);
+    const result = await submitEventAttendance(surveyInput({ [Q_SINGLE]: "Maybe" }));
     expect(result.status).toBe("invalid");
     if (result.status !== "invalid") return;
     expect(result.fieldErrors[`survey.${Q_SINGLE}`]?.length).toBeGreaterThan(0);
@@ -493,11 +530,10 @@ describe("submitEventAttendance — host survey", () => {
   it("saves the answer snapshots on a failed attempt", async () => {
     mockSurveyEvent(true);
     const result = await submitEventAttendance(
-      buildInput({
-        token: nextToken(),
-        answers: [{ type: "MC", answer: 1 }],
-        survey: { [Q_SINGLE]: "No", [Q_MULTI]: ["Speaker", "Attendee"], [Q_LONG]: "  " },
-      }),
+      surveyInput(
+        { [Q_SINGLE]: "No", [Q_MULTI]: ["Speaker", "Attendee"], [Q_LONG]: "  " },
+        { answers: [{ type: "MC", answer: 1 }] },
+      ),
     );
 
     expect(result.status).toBe("failed");
@@ -530,7 +566,7 @@ describe("submitEventAttendance — host survey", () => {
     prismaMock.$transaction.mockImplementation(async (fn: (t: typeof tx) => unknown) => fn(tx));
 
     const result = await submitEventAttendance(
-      buildInput({ token: nextToken(), survey: { [Q_SINGLE]: "Yes", [Q_LONG]: " Loved it " } }),
+      surveyInput({ [Q_SINGLE]: "Yes", [Q_LONG]: " Loved it " }),
     );
 
     expect(result).toEqual({ status: "passed", certificateId: "cert-evt-123", creditedSessionIds: [] });

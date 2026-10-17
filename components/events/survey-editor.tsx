@@ -264,42 +264,47 @@ export function SurveyEditor({
         </div>
       ) : null}
 
-      {drafts.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-border bg-surface px-4 py-8 text-center">
-          <p className="text-pretty text-[12px] text-text-muted">
-            This event has no survey yet, so attendees go straight from the quiz to their certificate.
-          </p>
-          <button
-            type="button"
-            onClick={addQuestion}
-            className="mt-3 inline-flex min-h-9 items-center rounded-md bg-navy px-4 text-[12px] font-semibold text-white hover:bg-navy/90"
-          >
-            Add first question
-          </button>
-        </div>
-      ) : (
-        <ol className="space-y-3">
-          {drafts.map((d, i) => (
-            <QuestionCard
-              key={d.key}
-              draft={d}
-              index={i}
-              total={drafts.length}
-              errors={errors.byKey[d.key] ?? {}}
-              onEdit={(field, change) => edit(d.key, field, change)}
-              onMove={(dir) => move(d.key, dir)}
-              onDelete={() => setPendingDelete(d.key)}
-            />
-          ))}
-        </ol>
-      )}
+      {/* Locked while a save is in flight: the save adopts the server's list
+          when it returns, so anything typed meanwhile would be discarded. The
+          posted JSON is captured at submit, before this disables. */}
+      <fieldset disabled={pending} aria-busy={pending} className="min-w-0 disabled:opacity-60">
+        {drafts.length === 0 ? (
+          <div className="rounded-lg border border-dashed border-border bg-surface px-4 py-8 text-center">
+            <p className="text-pretty text-[12px] text-text-muted">
+              This event has no survey yet, so attendees go straight from the quiz to their certificate.
+            </p>
+            <button
+              type="button"
+              onClick={addQuestion}
+              className="mt-3 inline-flex min-h-9 items-center rounded-md bg-navy px-4 text-[12px] font-semibold text-white hover:bg-navy/90"
+            >
+              Add first question
+            </button>
+          </div>
+        ) : (
+          <ol className="space-y-3">
+            {drafts.map((d, i) => (
+              <QuestionCard
+                key={d.key}
+                draft={d}
+                index={i}
+                total={drafts.length}
+                errors={errors.byKey[d.key] ?? {}}
+                onEdit={(field, change) => edit(d.key, field, change)}
+                onMove={(dir) => move(d.key, dir)}
+                onDelete={() => setPendingDelete(d.key)}
+              />
+            ))}
+          </ol>
+        )}
+      </fieldset>
 
       <div className="flex flex-col gap-3 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-between">
         {drafts.length > 0 ? (
           <button
             type="button"
             onClick={addQuestion}
-            disabled={atMax}
+            disabled={atMax || pending}
             className="inline-flex min-h-9 items-center justify-center rounded-md border border-border bg-white px-4 text-[12px] font-semibold text-navy hover:bg-surface disabled:cursor-not-allowed disabled:opacity-50"
           >
             {atMax ? `Limit of ${SURVEY_MAX_QUESTIONS} questions reached` : "+ Add question"}

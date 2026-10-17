@@ -7,6 +7,9 @@ import { flattenFieldErrors } from "@/lib/attend/schemas";
 import { loadEventByToken, assembleForSubmit, activeSurvey } from "@/lib/attend/event-quiz";
 import {
   SURVEY_FORM_KEY,
+  SURVEY_STALE_MESSAGE,
+  surveyErrorKey,
+  surveyVersion,
   validateSurveyResponses,
   type SurveyResponse,
 } from "@/lib/events/survey-schemas";
@@ -89,28 +92,6 @@ export async function submitEventAttendance(input: unknown): Promise<EventAttend
     };
   }
 
-  // Host survey: checked against the event's CURRENT definition BEFORE the
-  // attempts lookup, so a missing or bad survey answer returns "invalid" and
-  // never writes an attempt row (it cannot cost the attendee an attempt).
-  // Errors are keyed "survey.<questionId>" for the form's inline messages.
-  // With no active survey (feature off, or no questions) any posted answers
-  // are ignored and nothing is stored.
-  let surveyResponses: SurveyResponse[] | undefined;
-  const survey = activeSurvey(event);
-  if (survey) {
-    const checked = validateSurveyResponses(survey, sub.survey);
-    if (!checked.ok) {
-      const fieldErrors: Record<string, string[]> = {};
-      for (const [key, msgs] of Object.entries(checked.errors)) {
-        fieldErrors[key === SURVEY_FORM_KEY ? SURVEY_FORM_KEY : `survey.${key}`] = msgs;
-      }
-      return { status: "invalid", fieldErrors };
-    }
-    // All-optional and all skipped: store nothing, so response counts and the
-    // export only include attendees who actually answered.
-    if (checked.responses.length) surveyResponses = checked.responses;
-  }
-
   // Prior attempts for (event, email).
   const prior = await prisma.issuedCertificate.findMany({
     where: { eventId: event.id, attendeeEmail: { equals: email, mode: "insensitive" } },
@@ -122,6 +103,35 @@ export async function submitEventAttendance(input: unknown): Promise<EventAttend
   });
   if (decision.kind === "already_certified") return { status: "already_certified" };
   if (decision.kind === "locked_out") return { status: "locked_out" };
+
+  // Host survey: checked against the event's CURRENT definition AFTER the
+  // attempt decision (a certified or locked-out attendee gets their real
+  // status, not a survey error) but BEFORE scoring and any row write, so a
+  // missing or bad survey answer returns "invalid" and never costs an attempt.
+  // A posted version that does not match the current survey (edited while the
+  // page was open, or a pre-version bundle) asks for a reload before the
+  // answers are checked, since the attendee cannot fix a question they were
+  // never shown. Errors are keyed surveyErrorKey(questionId) for the form's
+  // inline messages. With no active survey (feature off, or no questions) any
+  // posted answers are ignored and nothing is stored.
+  let surveyResponses: SurveyResponse[] | undefined;
+  const survey = activeSurvey(event);
+  if (survey) {
+    if (sub.surveyVersion !== surveyVersion(survey)) {
+      return { status: "invalid", fieldErrors: { [SURVEY_FORM_KEY]: [SURVEY_STALE_MESSAGE] } };
+    }
+    const checked = validateSurveyResponses(survey, sub.survey);
+    if (!checked.ok) {
+      const fieldErrors: Record<string, string[]> = {};
+      for (const [key, msgs] of Object.entries(checked.errors)) {
+        fieldErrors[key === SURVEY_FORM_KEY ? SURVEY_FORM_KEY : surveyErrorKey(key)] = msgs;
+      }
+      return { status: "invalid", fieldErrors };
+    }
+    // All-optional and all skipped: store nothing, so response counts and the
+    // export only include attendees who actually answered.
+    if (checked.responses.length) surveyResponses = checked.responses;
+  }
 
   const scored = scoreEventQuiz(assembled.questions, sub.answers, assembled.passPct);
 

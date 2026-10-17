@@ -17,13 +17,14 @@ import { SubmitConfirmDialog } from "@/components/attend/submit-confirm-dialog";
 import { submitConfirmCopy } from "@/lib/attend/submit-confirm";
 import {
   SURVEY_FORM_KEY,
+  surveyErrorKey,
+  surveyVersion,
   validateSurveyResponses,
   type SurveyQuestion,
 } from "@/lib/events/survey-schemas";
 import {
   SurveyFields,
   countSurveyAnswered,
-  surveyErrorKey,
   type SurveyAnswers,
 } from "@/components/attend/survey-fields";
 
@@ -215,28 +216,19 @@ export function EventAttendeeForm({
         selectedSessionIds: selective ? ordered.map((a) => a.key) : [],
         affirmed,
         answers: ordered.map((a) => answers[a.key]),
-        ...(surveyQuestions ? { survey: surveyAnswers } : {}),
+        // The version lets the server spot a survey edited after this page
+        // loaded and ask for a reload (lib/attend/event-actions.ts).
+        ...(surveyQuestions
+          ? { survey: surveyAnswers, surveyVersion: surveyVersion(surveyQuestions) }
+          : {}),
       });
       if (res.status === "invalid") {
         // Keep the form mounted with everything the attendee entered and jump
         // to the first stage that has a failing field (token/unknown-only
         // errors stay on review; the summary shows a generic retry message).
-        // A survey error for a question this page never rendered means the host
-        // edited the survey after it loaded; only a reload can show it.
-        const known = new Set(surveyQuestions?.map((q) => surveyErrorKey(q.id)));
-        const staleSurvey = Object.keys(res.fieldErrors).some(
-          (k) => k.startsWith(`${SURVEY_FORM_KEY}.`) && !known.has(k),
-        );
-        setFieldErrors(
-          staleSurvey
-            ? {
-                ...res.fieldErrors,
-                [SURVEY_FORM_KEY]: [
-                  "The survey was updated after this page loaded. Please reload the page to see the current questions.",
-                ],
-              }
-            : res.fieldErrors,
-        );
+        // A survey edited after this page loaded comes back as a form-level
+        // "survey" error asking for a reload (a version check on the server).
+        setFieldErrors(res.fieldErrors);
         const failingSteps = Object.keys(res.fieldErrors)
           // indexOf is -1 for unknown fields and for stages the current mode
           // does not have (e.g. "select" in full mode); both filter out.

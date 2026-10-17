@@ -2,6 +2,7 @@
 
 import type { ChangeEvent } from "react";
 import {
+  surveyErrorKey,
   surveyTextMax,
   type SurveyQuestion,
 } from "@/lib/events/survey-schemas";
@@ -16,11 +17,6 @@ import {
 */
 
 export type SurveyAnswers = Record<string, string | string[]>;
-
-/** Field-error key for one survey question (matches the submit action). */
-export function surveyErrorKey(questionId: string): string {
-  return `survey.${questionId}`;
-}
 
 /** Questions the attendee has given a non-blank answer to. */
 export function countSurveyAnswered(

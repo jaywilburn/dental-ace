@@ -2,7 +2,7 @@ import { z } from "zod";
 import { attendeeAnswerSchema, isRecentCompletionDate } from "@/lib/attend/schemas";
 import { COURSE_FORMATS } from "@/lib/forms/application/schemas";
 import { ATTENDANCE_CODE_MAX } from "@/lib/attend/attendance-code";
-import { surveyAnswerInputSchema } from "@/lib/events/survey-schemas";
+import { SURVEY_VERSION_MAX, surveyAnswerInputSchema } from "@/lib/events/survey-schemas";
 
 /*
   Event attendee submission boundary. Like attendeeSubmissionSchema but the quiz
@@ -55,6 +55,9 @@ export const eventAttendeeSubmissionSchema = z.object({
   // action checks them against the event's CURRENT survey (and ignores them
   // when the event has no active survey).
   survey: surveyAnswerInputSchema.optional(),
+  // surveyVersion() of the survey the page rendered. The action asks for a
+  // reload when it differs from the current survey's version.
+  surveyVersion: z.string().max(SURVEY_VERSION_MAX).optional(),
 });
 
 export type EventAttendeeSubmission = z.infer<typeof eventAttendeeSubmissionSchema>;

@@ -10,7 +10,7 @@ import { step3Schema } from "@/lib/forms/application/schemas";
 import {
   sessionCourseInfoSchema,
   inlineSessionQuestionSchema,
-  inlineSessionCode,
+  codeEntries,
 } from "@/lib/forms/event/schemas";
 import { duplicateCodeIds } from "@/lib/attend/attendance-code";
 import {
@@ -334,11 +334,7 @@ export async function saveInlineSessionQuestion(formData: FormData) {
       where: { eventId: owned.eventId, courseId: null, id: { not: sessionId } },
       select: { id: true, question: true },
     });
-    const entries = siblings.flatMap((s) => {
-      const code = inlineSessionCode(s.question);
-      return code === null ? [] : [{ id: s.id, code }];
-    });
-    if (duplicateCodeIds([...entries, { id: sessionId, code: result.data.code }]).has(sessionId)) {
+    if (duplicateCodeIds([...codeEntries(siblings), { id: sessionId, code: result.data.code }]).has(sessionId)) {
       failure = "validation";
     }
   }

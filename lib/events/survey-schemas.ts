@@ -206,6 +206,40 @@ export function parseStoredSurvey(json: unknown): SurveyQuestion[] {
   return parsed.success ? parsed.data : [];
 }
 
+/** Max length of a posted survey version (transport bound; see surveyVersion). */
+export const SURVEY_VERSION_MAX = 16;
+
+/**
+ * A short fingerprint of the survey as the attendee sees it (id, type, prompt,
+ * required, options), e.g. "3f9a0c1d". The attendee form posts the version of
+ * the survey it rendered and the submit action compares it to the CURRENT
+ * survey, so an edit made while the page was open (a changed option, a new
+ * required question) asks for a reload instead of an error the attendee cannot
+ * fix. Deterministic and identical in the browser and on the server: 32-bit
+ * FNV-1a over a fixed-order JSON array. Not a security boundary; the answers
+ * are still validated against the current survey.
+ */
+export function surveyVersion(questions: readonly SurveyQuestion[]): string {
+  const text = JSON.stringify(
+    questions.map((q) => [q.id, q.type, q.prompt, q.required, "options" in q ? q.options : null]),
+  );
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) {
+    hash ^= text.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(16).padStart(8, "0");
+}
+
+/** The message for a submission made against an outdated survey. */
+export const SURVEY_STALE_MESSAGE =
+  "The survey was updated after this page loaded. Please reload the page to see the current questions.";
+
+/** Field-error key for one survey question: "survey.<questionId>" (server and form). */
+export function surveyErrorKey(questionId: string): string {
+  return `${SURVEY_FORM_KEY}.${questionId}`;
+}
+
 // --- Attendee answers ---
 
 /**

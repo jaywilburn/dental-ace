@@ -10,6 +10,7 @@ import {
   eventOrgFields,
   sessionCourseInfoReadSchema,
   eventSessionApplicationReadSchema,
+  readInlineSessionQuestion,
 } from "@/lib/forms/event/schemas";
 import {
   applicationDataReadSchema,
@@ -27,6 +28,7 @@ import {
   DetailSection,
   QuizPreviewCard,
 } from "@/components/application-form/detail-section";
+import { SessionQuestion } from "@/components/events/session-question";
 import type { EventType } from "@prisma/client";
 
 const TYPE_LABEL: Record<EventType, string> = {
@@ -36,14 +38,6 @@ const TYPE_LABEL: Record<EventType, string> = {
   SELECTIVE_PER_COURSE: "Selective attendance · courses reused",
 };
 
-// Inline session question as stored: MC, or an attendance code (type "CODE").
-type StoredQuestion = {
-  type?: string;
-  question?: string;
-  options?: string[];
-  correctIndex?: number;
-  code?: string;
-};
 type QuizItem =
   | { type: "TF"; question: string; correctAnswer: "True" | "False" }
   | { type: "MC"; question: string; options: string[]; correctIndex: number };
@@ -133,18 +127,16 @@ export default async function ReviewEventPage({
       : null;
     const legacy = fullData ? null : sessionCourseInfoReadSchema.safeParse(s.courseInfo ?? {});
     const legacyRows = legacy && legacy.success ? sessionCourseInfoRows(legacy.data) : [];
-    const q = (s.question as StoredQuestion | null) ?? {};
     return {
       row: s,
       index: i,
       anchor: `session-${i + 1}`,
-      q,
       fullData,
       legacyRows,
       presenterCount: fullData?.presenters?.length ?? 0,
-      hasQuestion: Boolean(
-        q.question && (q.type === "CODE" ? Boolean(q.code) : (q.options ?? []).length > 0),
-      ),
+      // Same parse SessionQuestion renders with, so the ribbon and the
+      // question below can never disagree.
+      hasQuestion: readInlineSessionQuestion(s.question) !== null,
     };
   });
 
@@ -339,21 +331,7 @@ export default async function ReviewEventPage({
                       )}
                     </p>
 
-                    <p className="mt-2 text-text-mid">{s.q.question}</p>
-                    {s.q.type === "CODE" ? (
-                      <p className="mt-1 text-text-muted">
-                        Attendance code:{" "}
-                        <span className="break-all font-mono font-semibold text-green-700">{s.q.code}</span>
-                      </p>
-                    ) : (
-                      <ol className="mt-1 list-inside list-decimal text-text-muted">
-                        {(s.q.options ?? []).map((opt, i) => (
-                          <li key={i} className={i === s.q.correctIndex ? "font-semibold text-green-700" : ""}>
-                            {opt}{i === s.q.correctIndex ? " ✓" : ""}
-                          </li>
-                        ))}
-                      </ol>
-                    )}
+                    <SessionQuestion question={s.row.question} />
 
                     {s.fullData ? (
                       <details open={expanded} className="mt-2 rounded-md border border-border">

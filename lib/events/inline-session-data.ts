@@ -7,7 +7,7 @@ import {
   step3Schema,
   type ApplicationData,
 } from "@/lib/forms/application/schemas";
-import { inlineSessionCode } from "@/lib/forms/event/schemas";
+import { codeEntries } from "@/lib/forms/event/schemas";
 
 /*
   Loader for one SELECTIVE_INLINE session's mini-wizard (Course Info -> Creator
@@ -78,10 +78,7 @@ export async function getInlineSession(
     };
   }
 
-  const siblingCodes = row.event.sessions.flatMap((s) => {
-    const code = inlineSessionCode(s.question);
-    return code === null ? [] : [{ id: s.id, code }];
-  });
+  const siblingCodes = codeEntries(row.event.sessions);
 
   return {
     id: row.id,

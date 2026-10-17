@@ -6,6 +6,8 @@ import {
   normalizeSurveyInput,
   parseStoredSurvey,
   parseStoredSurveyResponses,
+  surveyErrorKey,
+  surveyVersion,
   validateSurveyResponses,
   type SurveyQuestion,
 } from "@/lib/events/survey-schemas";
@@ -335,5 +337,34 @@ describe("validateSurveyResponses", () => {
       {},
     );
     expect(res.ok).toBe(false);
+  });
+});
+
+describe("surveyVersion", () => {
+  const text: SurveyQuestion = { id: ID3, type: "LONG_TEXT", prompt: "Comments", required: false };
+
+  it("is a stable 8-character hex fingerprint", () => {
+    const v = surveyVersion([single, multi, text]);
+    expect(v).toMatch(/^[0-9a-f]{8}$/);
+    expect(surveyVersion([single, multi, text])).toBe(v);
+    // Key order of the stored JSON does not matter, only the values.
+    const reordered = { options: single.options, required: true, prompt: single.prompt, type: single.type, id: ID1 } as SurveyQuestion;
+    expect(surveyVersion([reordered, multi, text])).toBe(v);
+  });
+
+  it("changes with anything the attendee sees", () => {
+    const base = surveyVersion([single, text]);
+    expect(surveyVersion([{ ...single, options: ["Great", "Fine"] }, text])).not.toBe(base);
+    expect(surveyVersion([{ ...single, prompt: "Satisfaction" }, text])).not.toBe(base);
+    expect(surveyVersion([{ ...single, required: false }, text])).not.toBe(base);
+    expect(surveyVersion([text, single])).not.toBe(base);
+    expect(surveyVersion([single])).not.toBe(base);
+    expect(surveyVersion([])).not.toBe(base);
+  });
+});
+
+describe("surveyErrorKey", () => {
+  it("keys a question error under the survey form key", () => {
+    expect(surveyErrorKey(ID1)).toBe(`${SURVEY_FORM_KEY}.${ID1}`);
   });
 });

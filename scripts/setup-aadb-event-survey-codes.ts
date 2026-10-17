@@ -10,7 +10,13 @@
   Edited in place so the event stays APPROVED: Event ID, attendee link, QR and
   approval letter are unchanged. It aborts unless the event is exactly the
   expected shape and NO attendee has submitted yet (zero issued_certificates),
-  so no existing attempt was scored against the old MC questions. Every new
+  so no existing attempt was scored against the old MC questions.
+
+  RUN IT BEFORE THE ATTENDEE LINK IS SHARED. The write holds the company row
+  lock, which serializes it against attendee passes only; failed-attempt
+  inserts are not serialized by this lock. The attempt count is re-checked
+  inside the transaction before and after the writes, which narrows but does
+  not close that window. Every new
   question is re-validated (codeQuestionSchema, unique after normalising,
   isInlineSessionComplete) and the survey against eventSurveySchema before any
   write, and the original rows are backed up as JSON.
@@ -302,10 +308,18 @@ async function main() {
     await prisma.$transaction(async (tx) => {
       // Re-check inside the transaction: an attendee could have submitted
       // between the dry-run checks above and this write. The company row lock
-      // is the one the attendee pass path takes, so no pass can land mid-write.
+      // is the one the attendee PASS path takes, so no pass can land while it
+      // is held. FAILED attempts are inserted without that lock, so they are
+      // not serialized by it: the count is taken again after the writes to
+      // catch one that committed meanwhile (READ COMMITTED sees it), but one
+      // committing after that last count can still slip through. That is why
+      // this must run before the attendee link is shared.
       await tx.$executeRaw`select id from public.companies where id = ${COMPANY_ID}::uuid for update`;
-      const lateCerts = await tx.issuedCertificate.count({ where: { eventId: EVENT_ID } });
-      if (lateCerts !== 0) throw new Error(`An attendee submitted meanwhile (${lateCerts} rows); aborting`);
+      const assertNoAttempts = async (when: string) => {
+        const late = await tx.issuedCertificate.count({ where: { eventId: EVENT_ID } });
+        if (late !== 0) throw new Error(`An attendee submitted ${when} (${late} rows); aborting`);
+      };
+      await assertNoAttempts("before the write");
       for (const [id, question] of newQuestions) {
         await tx.eventSession.update({ where: { id }, data: { question } });
       }
@@ -315,6 +329,7 @@ async function main() {
           data: { survey: survey as unknown as Prisma.InputJsonValue },
         });
       }
+      await assertNoAttempts("during the write");
     });
     console.log(`\nApplied ${newQuestions.size} attendance-code questions${writeSurvey ? " and the starter survey" : ""}.`);
   } finally {

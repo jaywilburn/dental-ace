@@ -12,6 +12,7 @@ import {
 import {
   ATTENDANCE_CODE_MAX,
   ATTENDANCE_CODE_MIN,
+  duplicateCodeIds,
   normalizeAttendanceCode,
 } from "@/lib/attend/attendance-code";
 import type { OrganizationFields } from "@/lib/forms/application/detail-rows";
@@ -187,10 +188,56 @@ export const inlineQuestionReadSchema = z.discriminatedUnion("type", [
 /** Any question an event attendee can be asked (scoring + assembly). */
 export type EventQuizQuestion = QuizQuestion | CodeQuestion;
 
+/**
+ * Display READ of a stored inline session question for the company and
+ * reviewer event pages (components/events/session-question.tsx): MC, CODE, or
+ * a legacy TF row, parsed with inlineQuestionReadSchema. Null when the row is
+ * missing or malformed, which the pages show as "Question missing or invalid".
+ */
+export function readInlineSessionQuestion(question: unknown): EventQuizQuestion | null {
+  const parsed = inlineQuestionReadSchema.safeParse(question);
+  return parsed.success ? parsed.data : null;
+}
+
 /** The code of a stored inline session question, or null if it is not a valid CODE question. */
 export function inlineSessionCode(question: unknown): string | null {
   const parsed = codeQuestionSchema.safeParse(question);
   return parsed.success ? parsed.data.code : null;
+}
+
+/** {id, code} for every session whose stored question is a valid CODE question. */
+export function codeEntries(
+  sessions: readonly { id: string; question: unknown }[],
+): Array<{ id: string; code: string }> {
+  return sessions.flatMap((s) => {
+    const code = inlineSessionCode(s.question);
+    return code === null ? [] : [{ id: s.id, code }];
+  });
+}
+
+export const CODES_DISABLED_REASON = "Attendance codes are not enabled";
+export const DUPLICATE_CODE_REASON = "Uses the same attendance code as another session";
+
+/**
+ * Event-level reasons an inline session's question cannot be submitted, by
+ * session id: a CODE question while the company has attendance codes off, or
+ * a code another session of the event also uses. Per-row completeness
+ * (isInlineSessionComplete) cannot see either, and the question step echoes
+ * such a question back schema-valid, so the sessions list and review gate
+ * check this too. submitEvent keeps its own checks with the same rules.
+ */
+export function inlineSessionCodeIssues(
+  sessions: readonly { id: string; question: unknown }[],
+  attendanceCodesEnabled: boolean,
+): Map<string, string> {
+  const entries = codeEntries(sessions);
+  const issues = new Map<string, string>();
+  if (!attendanceCodesEnabled) {
+    for (const e of entries) issues.set(e.id, CODES_DISABLED_REASON);
+    return issues;
+  }
+  for (const id of duplicateCodeIds(entries)) issues.set(id, DUPLICATE_CODE_REASON);
+  return issues;
 }
 
 // True/False question (event-level quiz, Opt 1).

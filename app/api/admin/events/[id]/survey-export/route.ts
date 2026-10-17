@@ -1,14 +1,8 @@
 import { NextResponse } from "next/server";
-import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { requireStaff } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
-import { parseStoredSurvey } from "@/lib/events/survey-schemas";
-import {
-  SURVEY_EXPORT_CAP,
-  surveyExportCsv,
-  surveyExportFilename,
-} from "@/lib/events/survey-export";
+import { surveyExportResponse } from "@/lib/events/survey-export-response";
 
 export const runtime = "nodejs";
 
@@ -39,26 +33,5 @@ export async function GET(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  const rows = await prisma.issuedCertificate.findMany({
-    where: { eventId: event.id, surveyResponses: { not: Prisma.DbNull } },
-    orderBy: { issuedAt: "desc" },
-    take: SURVEY_EXPORT_CAP,
-    select: {
-      attendeeName: true,
-      attendeeEmail: true,
-      licenseStates: true,
-      passed: true,
-      ceHours: true,
-      issuedAt: true,
-      surveyResponses: true,
-    },
-  });
-
-  return new NextResponse(surveyExportCsv(parseStoredSurvey(event.survey), rows), {
-    headers: {
-      "Content-Type": "text/csv; charset=utf-8",
-      "Content-Disposition": `attachment; filename="${surveyExportFilename(event.name)}"`,
-      "Cache-Control": "no-store",
-    },
-  });
+  return surveyExportResponse(event);
 }

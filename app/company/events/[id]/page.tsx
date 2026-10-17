@@ -27,6 +27,7 @@ import {
   DetailSection,
   QuizPreviewCard,
 } from "@/components/application-form/detail-section";
+import { SessionQuestion } from "@/components/events/session-question";
 import { SurveyEditor } from "@/components/events/survey-editor";
 import { saveCompanyEventSurvey } from "@/lib/events/survey-actions";
 import { parseStoredSurvey } from "@/lib/events/survey-schemas";
@@ -69,15 +70,6 @@ const STATUS_STYLE: Record<ApplicationStatus, string> = {
   PENDING: "bg-ace-bg text-ace-dark",
   APPROVED: "bg-green-100 text-green-700",
   REJECTED: "bg-red-100 text-red-700",
-};
-
-// Inline session question as stored: MC, or an attendance code (type "CODE").
-type StoredQuestion = {
-  type?: string;
-  question?: string;
-  options?: string[];
-  correctIndex?: number;
-  code?: string;
 };
 
 function fmtDate(d: Date | null): string | null {
@@ -358,7 +350,6 @@ export default async function CompanyEventDetailPage({
               </p>
               <ul className="space-y-3">
                 {inlineSessions.map((s) => {
-                  const q = (s.question as StoredQuestion | null) ?? {};
                   // New sessions carry the full front-half application; parse it
                   // as such, else fall back to the legacy step1-only slice.
                   const full = applicationDataReadSchema
@@ -395,32 +386,7 @@ export default async function CompanyEventDetailPage({
                           This session predates per-session course information.
                         </p>
                       )}
-                      {q.question ? (
-                        <div className="mt-2">
-                          <p className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">
-                            Question
-                          </p>
-                          <p className="mt-1 text-text-mid">{q.question}</p>
-                          {q.type === "CODE" ? (
-                            <p className="mt-1 text-text-muted">
-                              Attendance code:{" "}
-                              <span className="break-all font-mono font-semibold text-green-700">{q.code}</span>
-                            </p>
-                          ) : (
-                            <ol className="mt-1 list-inside list-decimal text-text-muted">
-                              {(q.options ?? []).map((opt, i) => (
-                                <li
-                                  key={i}
-                                  className={i === q.correctIndex ? "font-semibold text-green-700" : ""}
-                                >
-                                  {opt}
-                                  {i === q.correctIndex ? " ✓" : ""}
-                                </li>
-                              ))}
-                            </ol>
-                          )}
-                        </div>
-                      ) : null}
+                      <SessionQuestion question={s.question} label />
                     </li>
                   );
                 })}

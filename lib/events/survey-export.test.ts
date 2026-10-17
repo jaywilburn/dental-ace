@@ -1,5 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
+  hasSurveyResponses,
+  pickExportedAttendees,
   pickReportedRows,
   surveyExportCsv,
   surveyExportFilename,
@@ -48,6 +50,25 @@ describe("pickReportedRows", () => {
     const fail2 = row({ passed: false, issuedAt: new Date("2026-10-01T11:00:00Z") });
     const other = row({ attendeeEmail: "bob@example.com", issuedAt: new Date("2026-10-02T09:00:00Z") });
     expect(pickReportedRows([fail2, other, fail1])).toEqual([other, fail2]);
+  });
+});
+
+describe("pickExportedAttendees", () => {
+  it("pairs the reported attempt with the latest answered attempt (email case-insensitive)", () => {
+    const pass = row({ issuedAt: new Date("2026-10-01T12:00:00Z"), surveyResponses: null });
+    const older = row({ passed: false, issuedAt: new Date("2026-10-01T08:00:00Z") });
+    const newer = row({
+      attendeeEmail: "JANE@example.com",
+      passed: false,
+      issuedAt: new Date("2026-10-01T10:00:00Z"),
+    });
+    expect(pickExportedAttendees([older, pass, newer])).toEqual([{ reported: pass, answered: newer }]);
+  });
+  it("treats SQL NULL, JSON null and undefined as no answers", () => {
+    expect(hasSurveyResponses({ surveyResponses: null })).toBe(false);
+    expect(hasSurveyResponses({ surveyResponses: undefined })).toBe(false);
+    expect(hasSurveyResponses({ surveyResponses: [] })).toBe(true);
+    expect(pickExportedAttendees([row({ surveyResponses: null })])).toEqual([]);
   });
 });
 
@@ -104,17 +125,58 @@ describe("surveyExportRows", () => {
     expect(rows[2].slice(6)).toEqual(["Yes", "", ""]);
   });
 
-  it("only adds removed columns answered by the reported rows", () => {
+  it("only adds removed columns answered by the exported answers", () => {
     const rows = surveyExportRows(QUESTIONS, [
-      row({ issuedAt: new Date("2026-10-01T10:00:00Z") }),
+      row({ issuedAt: new Date("2026-10-01T12:00:00Z") }),
       row({
         passed: false,
-        issuedAt: new Date("2026-10-01T12:00:00Z"),
+        issuedAt: new Date("2026-10-01T10:00:00Z"),
         surveyResponses: [{ questionId: OLD, type: "SHORT_TEXT", prompt: "Gone?", value: "x" }],
       }),
     ]);
     expect(rows[0]).toHaveLength(8);
     expect(rows).toHaveLength(2);
+  });
+
+  it("reports a pass with no answers as Passed, with answers from the latest answered attempt", () => {
+    const rows = surveyExportRows(QUESTIONS, [
+      row({
+        passed: true,
+        ceHours: 2,
+        issuedAt: new Date("2026-10-01T12:00:00Z"),
+        surveyResponses: null,
+      }),
+      row({
+        passed: false,
+        issuedAt: new Date("2026-10-01T10:00:00Z"),
+        surveyResponses: [{ questionId: Q1, type: "SINGLE_CHOICE", prompt: "Satisfied?", value: "No" }],
+      }),
+      row({
+        passed: false,
+        issuedAt: new Date("2026-10-01T09:00:00Z"),
+        surveyResponses: [{ questionId: Q1, type: "SINGLE_CHOICE", prompt: "Satisfied?", value: "Yes" }],
+      }),
+    ]);
+    expect(rows).toHaveLength(2);
+    expect(rows[1]).toEqual([
+      "2026-10-01T12:00:00.000Z",
+      "Jane Doe",
+      "jane@example.com",
+      "TX",
+      "Passed",
+      "2",
+      "No",
+      "",
+    ]);
+  });
+
+  it("leaves out attendees with no answered attempt", () => {
+    const rows = surveyExportRows(QUESTIONS, [
+      row({ attendeeEmail: "bob@example.com", surveyResponses: null }),
+      row({}),
+    ]);
+    expect(rows).toHaveLength(2);
+    expect(rows[1][2]).toBe("jane@example.com");
   });
 
   it("tolerates malformed stored responses as no answers", () => {

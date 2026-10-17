@@ -10,8 +10,15 @@ import {
   export routes load the rows and the current survey, this shapes them, and
   lib/csv.ts quotes them. Unit-tested in survey-export.test.ts.
 
-  One row per attendee (email, case-insensitive): the passed attempt if there
-  is one, else the most recent attempt. Columns are the fixed attendee fields,
+  One row per attendee (email, case-insensitive) who answered the survey on
+  at least one attempt. Submitted at / Name / Result / Hours come from the
+  reported attempt (the passed one if there is one, else the most recent),
+  which may itself carry no answers: a retake after a survey edit, or a pass
+  that was never shown a survey, still reports as passed. The answers come
+  from that attendee's most recent attempt that HAS answers. Callers pass
+  every attempt for the event (lib/events/survey-export-response.ts), not just
+  the answered ones, or a pass without answers would read "Not passed".
+  Columns are the fixed attendee fields,
   then the CURRENT survey questions in order (header = prompt), then any
   question no longer in the survey that the reported rows answered, headed
   "<prompt as answered> (removed)". Answers are matched by question id, so a
@@ -49,6 +56,11 @@ function formatHours(row: SurveyExportCertRow): string {
   return String(Number(row.ceHours));
 }
 
+/** True when an attempt stored survey answers (SQL NULL and JSON null both read back as null). */
+export function hasSurveyResponses(row: { surveyResponses: unknown }): boolean {
+  return row.surveyResponses != null;
+}
+
 /** The reported attempt per attendee, newest first. */
 export function pickReportedRows<T extends SurveyExportCertRow>(rows: readonly T[]): T[] {
   const byEmail = new Map<string, T>();
@@ -66,19 +78,43 @@ export function pickReportedRows<T extends SurveyExportCertRow>(rows: readonly T
   return [...byEmail.values()].sort((a, b) => b.issuedAt.getTime() - a.issuedAt.getTime());
 }
 
+/**
+  The reported attempt per attendee plus the attempt their answers come from,
+  newest reported first. Attendees with no answered attempt are left out.
+*/
+export function pickExportedAttendees<T extends SurveyExportCertRow>(
+  rows: readonly T[],
+): { reported: T; answered: T }[] {
+  const answeredByEmail = new Map<string, T>();
+  for (const row of rows) {
+    if (!hasSurveyResponses(row)) continue;
+    const key = row.attendeeEmail.trim().toLowerCase();
+    const current = answeredByEmail.get(key);
+    if (!current || row.issuedAt.getTime() > current.issuedAt.getTime()) {
+      answeredByEmail.set(key, row);
+    }
+  }
+  const out: { reported: T; answered: T }[] = [];
+  for (const reported of pickReportedRows(rows)) {
+    const answered = answeredByEmail.get(reported.attendeeEmail.trim().toLowerCase());
+    if (answered) out.push({ reported, answered });
+  }
+  return out;
+}
+
 /** Header + one row per attendee, as raw (unquoted) cell values. */
 export function surveyExportRows(
   questions: readonly SurveyQuestion[],
   certRows: readonly SurveyExportCertRow[],
 ): string[][] {
-  const reported = pickReportedRows(certRows).map((row) => {
+  const reported = pickExportedAttendees(certRows).map(({ reported: row, answered }) => {
     const answers = new Map<string, SurveyResponse>();
-    for (const r of parseStoredSurveyResponses(row.surveyResponses)) answers.set(r.questionId, r);
+    for (const r of parseStoredSurveyResponses(answered.surveyResponses)) answers.set(r.questionId, r);
     return { row, answers };
   });
 
-  // Removed questions, in order of first appearance across the reported rows
-  // (newest first), labelled with the newest prompt that row answered.
+  // Removed questions, in order of first appearance across the exported
+  // answers (attendees newest first), labelled with the prompt as answered.
   const current = new Set(questions.map((q) => q.id));
   const removed = new Map<string, string>();
   for (const { answers } of reported) {

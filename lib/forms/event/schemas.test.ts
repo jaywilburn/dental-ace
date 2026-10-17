@@ -14,6 +14,11 @@ import {
   inlineSessionQuestionSchema,
   inlineQuestionReadSchema,
   inlineSessionCode,
+  codeEntries,
+  inlineSessionCodeIssues,
+  readInlineSessionQuestion,
+  CODES_DISABLED_REASON,
+  DUPLICATE_CODE_REASON,
   sessionCourseInfoSchema,
   sessionApplicationSchema,
   eventSessionApplicationSchema,
@@ -560,5 +565,66 @@ describe("eventOrgFields", () => {
       adminEmail: undefined,
       adminPhone: undefined,
     });
+  });
+});
+
+describe("codeEntries / inlineSessionCodeIssues", () => {
+  const code = (c: string) => ({ ...CODE_QUESTION, code: c });
+  const MC = {
+    type: "MC",
+    question: "Which option is correct?",
+    options: ["A", "B", "C", "D"],
+    correctIndex: 0,
+  };
+  const sessions = [
+    { id: "s1", question: code("AADB-2026") },
+    { id: "s2", question: MC },
+    { id: "s3", question: code(" aadb - 2026 ") },
+    { id: "s4", question: code("OTHER1") },
+    { id: "s5", question: { type: "CODE", question: "Too short", code: "x" } },
+  ];
+
+  it("lists only valid CODE questions", () => {
+    expect(codeEntries(sessions).map((e) => e.id)).toEqual(["s1", "s3", "s4"]);
+    expect(codeEntries(sessions)[0]).toEqual({ id: "s1", code: "AADB-2026" });
+  });
+
+  it("flags sessions sharing a code (after normalisation) when codes are on", () => {
+    expect(inlineSessionCodeIssues(sessions, true)).toEqual(
+      new Map([
+        ["s1", DUPLICATE_CODE_REASON],
+        ["s3", DUPLICATE_CODE_REASON],
+      ]),
+    );
+  });
+
+  it("flags every CODE session when attendance codes are off", () => {
+    expect(inlineSessionCodeIssues(sessions, false)).toEqual(
+      new Map([
+        ["s1", CODES_DISABLED_REASON],
+        ["s3", CODES_DISABLED_REASON],
+        ["s4", CODES_DISABLED_REASON],
+      ]),
+    );
+  });
+
+  it("has no issues for MC-only events", () => {
+    expect(inlineSessionCodeIssues([{ id: "s2", question: MC }], false).size).toBe(0);
+  });
+});
+
+describe("readInlineSessionQuestion", () => {
+  it("reads CODE, MC and legacy TF questions", () => {
+    expect(readInlineSessionQuestion(CODE_QUESTION)).toEqual(CODE_QUESTION);
+    const mc = { type: "MC", question: "Which option is correct?", options: ["A", "B", "C", "D"], correctIndex: 2 };
+    expect(readInlineSessionQuestion(mc)).toEqual(mc);
+    const tf = { type: "TF", question: "Fluoride strengthens enamel.", correctAnswer: "True" };
+    expect(readInlineSessionQuestion(tf)).toEqual(tf);
+  });
+  it("returns null for missing or malformed questions", () => {
+    expect(readInlineSessionQuestion(null)).toBeNull();
+    expect(readInlineSessionQuestion({})).toBeNull();
+    expect(readInlineSessionQuestion({ type: "CODE", question: "Enter the code here.", code: "" })).toBeNull();
+    expect(readInlineSessionQuestion({ type: "MC", question: "Which one?", options: [] })).toBeNull();
   });
 });

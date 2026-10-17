@@ -13,6 +13,10 @@ import { prisma } from "@/lib/prisma";
 
   AnyNull excludes both SQL NULL (no survey shown) and a JSON null.
 */
+
+/** "This attempt stored survey answers", shared with the CSV export (survey-export-response.ts). */
+export const HAS_SURVEY_RESPONSES = { not: Prisma.AnyNull };
+
 export async function surveyResponseCounts(
   eventIds: readonly string[],
 ): Promise<Map<string, number>> {
@@ -20,7 +24,7 @@ export async function surveyResponseCounts(
   if (eventIds.length === 0) return counts;
   const rows = await prisma.issuedCertificate.groupBy({
     by: ["eventId", "attendeeEmail"],
-    where: { eventId: { in: [...eventIds] }, surveyResponses: { not: Prisma.AnyNull } },
+    where: { eventId: { in: [...eventIds] }, surveyResponses: HAS_SURVEY_RESPONSES },
   });
   for (const r of rows) {
     if (r.eventId) counts.set(r.eventId, (counts.get(r.eventId) ?? 0) + 1);
