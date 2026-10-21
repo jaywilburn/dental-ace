@@ -66,16 +66,20 @@ export function FormSelect({
 
 export function FormCard({
   title,
+  action,
   children,
 }: {
   title: string;
+  /** Optional control on the right of the title row (e.g. a Remove button). */
+  action?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
     <div className="rounded-lg border border-border bg-white p-5">
-      <p className="mb-4 border-b border-border pb-3 text-[13px] font-semibold text-navy">
-        {title}
-      </p>
+      <div className="mb-4 flex items-center justify-between gap-3 border-b border-border pb-3">
+        <p className="text-[13px] font-semibold text-navy">{title}</p>
+        {action}
+      </div>
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">{children}</div>
     </div>
   );

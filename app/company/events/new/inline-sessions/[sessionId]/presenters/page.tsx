@@ -36,7 +36,7 @@ export default async function InlineSessionPresentersPage({
       <StepErrors error={error} errors={errors} />
       <form action={saveInlineSessionPresenters} className="space-y-5">
         <input type="hidden" name="sessionId" value={session.id} />
-        <PresentersFields draft={session.data} errors={errors} />
+        <PresentersFields presenters={session.data.presenters} errors={errors} />
         <FormNav
           back={{
             href: `/company/events/new/inline-sessions/${sessionId}/creator`,

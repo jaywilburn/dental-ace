@@ -1,4 +1,5 @@
 import { normalizeFormText } from "@/lib/forms/normalize";
+import { MAX_PRESENTERS, PRESENTER_ROLES } from "@/lib/forms/application/schemas";
 
 /*
   Pure FormData -> raw-slice mappers for the shared course-application step
@@ -76,21 +77,46 @@ export function creatorRawFromForm(formData: FormData, detailedBioHtml: string) 
   };
 }
 
-/** Presenters fields (step3Schema slice; Phase 1 ships one primary presenter). */
+const PRESENTER_FIELD = /^presenter_(\d+)_/;
+
+const [PRIMARY_ROLE, DEFAULT_ADDED_ROLE] = PRESENTER_ROLES;
+
+/**
+ * Presenters fields (step3Schema slice). Cards post `presenter_<i>_<field>`
+ * numbered by their current position, so a normal post is contiguous. Indices
+ * are still read from the posted keys and compacted in order, so a stale or
+ * hand-built post with a gap keeps every presenter rather than silently
+ * dropping the ones after it. Presenter 1 is always the Primary
+ * Presenter and no later presenter can claim that role (old drafts saved with
+ * a Co-Presenter first are corrected here on their next save). One index past
+ * the cap is kept so the schema's .max reports a tampered post instead of the
+ * extras vanishing silently.
+ */
 export function presentersRawFromForm(formData: FormData) {
+  const indices = new Set<number>([0]);
+  for (const key of formData.keys()) {
+    const m = PRESENTER_FIELD.exec(key);
+    if (m) indices.add(Number(m[1]));
+  }
+  const ordered = [...indices].sort((a, b) => a - b).slice(0, MAX_PRESENTERS + 1);
+
   return {
-    presenters: [
-      {
-        name: normalizeFormText(formData.get("presenter_0_name")),
+    presenters: ordered.map((idx, position) => {
+      const field = (name: string) => normalizeFormText(formData.get(`presenter_${idx}_${name}`));
+      const role = field("role");
+      return {
+        name: field("name"),
         role:
-          normalizeFormText(formData.get("presenter_0_role")) || "Primary Presenter",
-        commercialDisclosure: normalizeFormText(
-          formData.get("presenter_0_commercialDisclosure"),
-        ),
-        experience: normalizeFormText(formData.get("presenter_0_experience")),
-        training: normalizeFormText(formData.get("presenter_0_training")),
-        bio: normalizeFormText(formData.get("presenter_0_bio")),
-      },
-    ],
+          position === 0
+            ? PRIMARY_ROLE
+            : role && role !== PRIMARY_ROLE
+              ? role
+              : DEFAULT_ADDED_ROLE,
+        commercialDisclosure: field("commercialDisclosure"),
+        experience: field("experience"),
+        training: field("training"),
+        bio: field("bio"),
+      };
+    }),
   };
 }

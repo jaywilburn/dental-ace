@@ -164,7 +164,7 @@ export const WORKSHEET_SECTIONS: readonly WorksheetSection[] = [
   {
     title: "Presenter(s)",
     description:
-      "Provide details for each presenter. The online form ships with one primary presenter and supports up to eight.",
+      "Provide details for each presenter: the primary presenter first, then each co-presenter or moderator (up to eight in total).",
     fields: [
       { label: "Presenter Name" },
       { label: "Role", options: ["Primary Presenter", "Co-Presenter", "Moderator"] },

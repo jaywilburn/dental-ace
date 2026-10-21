@@ -1,4 +1,5 @@
 import { FORM_LEVEL_KEY, type FieldErrors } from "@/lib/forms/field-errors";
+import { MAX_PRESENTERS } from "@/lib/forms/application/schemas";
 
 /*
   Field-level error display for the course-application and event wizards.
@@ -58,14 +59,21 @@ export const APPLICATION_FIELD_LABELS: Record<string, string> = {
   educationPart4: "Education 4",
   creatorExperience: "Creator experience",
 
-  // Presenters (Phase 1 ships one primary presenter)
+  // Presenters (card 1 is the Primary Presenter, then Presenter 2..8)
   presenters: "Presenters",
-  presenter_0_name: "Presenter name",
-  presenter_0_role: "Presenter role",
-  presenter_0_commercialDisclosure: "Commercial disclosure",
-  presenter_0_experience: "Presenter experience",
-  presenter_0_training: "Presenter training",
-  presenter_0_bio: "Presenter bio",
+  ...Object.fromEntries(
+    Array.from({ length: MAX_PRESENTERS }, (_, i) => i).flatMap((i) => {
+      const who = i === 0 ? "Primary presenter" : `Presenter ${i + 1}`;
+      return [
+        [`presenter_${i}_name`, `${who} name`],
+        [`presenter_${i}_role`, `${who} role`],
+        [`presenter_${i}_commercialDisclosure`, `${who} commercial disclosure`],
+        [`presenter_${i}_experience`, `${who} experience`],
+        [`presenter_${i}_training`, `${who} training`],
+        [`presenter_${i}_bio`, `${who} bio`],
+      ];
+    }),
+  ),
 
   // Single MC question (per-session steps)
   question: "Question",

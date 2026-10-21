@@ -33,7 +33,7 @@ export default async function ApplicationStep3Page({
       <StepErrors error={error} errors={errors} />
       <form action={saveStep3} className="space-y-5">
         <input type="hidden" name="applicationId" value={applicationId} />
-        <PresentersFields draft={draft} errors={errors} />
+        <PresentersFields presenters={draft.presenters} errors={errors} />
         <FormNav
           back={{ href: "/company/applications/new/creator", label: "Back" }}
           nextLabel="Next: Quiz Builder"
