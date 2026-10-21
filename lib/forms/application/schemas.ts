@@ -203,9 +203,15 @@ export const step2Schema = z.object({
   // parseable so old records stay viewable.
 });
 
+/** Presenter 1 is always the Primary Presenter; added presenters pick one of
+ *  the other two (enforced by presentersRawFromForm, not this enum, so legacy
+ *  drafts with a non-primary first presenter still parse). */
+export const PRESENTER_ROLES = ["Primary Presenter", "Co-Presenter", "Moderator"] as const;
+export const MAX_PRESENTERS = 8;
+
 export const presenterSchema = z.object({
   name: z.string().min(2).max(200, "Keep the presenter name under 200 characters."),
-  role: z.enum(["Primary Presenter", "Co-Presenter", "Moderator"]),
+  role: z.enum(PRESENTER_ROLES),
   commercialDisclosure: z
     .string()
     .min(2)
@@ -228,7 +234,7 @@ export const step3Schema = z.object({
   presenters: z
     .array(presenterSchema)
     .min(1, "Add at least one presenter.")
-    .max(8, "You can list up to 8 presenters."),
+    .max(MAX_PRESENTERS, `You can list up to ${MAX_PRESENTERS} presenters.`),
   // Presenter headshot upload removed 2026-06 (client: no longer needed).
   // Legacy applications still carry a headshot fileRef; the read schema keeps
   // it parseable so old records stay viewable (shown via the Attachments card).

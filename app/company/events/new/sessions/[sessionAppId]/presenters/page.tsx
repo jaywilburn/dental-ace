@@ -35,7 +35,7 @@ export default async function SessionPresentersPage({
       <StepErrors error={error} errors={errors} />
       <form action={saveSessionPresenters} className="space-y-5">
         <input type="hidden" name="sessionAppId" value={app.id} />
-        <PresentersFields draft={app.data} errors={errors} />
+        <PresentersFields presenters={app.data.presenters} errors={errors} />
         <FormNav
           back={{ href: `/company/events/new/sessions/${sessionAppId}/creator`, label: "Back" }}
           nextLabel="Next: Question"

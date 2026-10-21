@@ -129,6 +129,93 @@ describe("presentersRawFromForm", () => {
     expect(raw.presenters[0].role).toBe("Primary Presenter");
     expect(step3Schema.safeParse(raw).success).toBe(true);
   });
+
+  /** PRESENTER_FIELDS re-keyed to card index `i` with an optional role. */
+  function presenterAt(i: number, role?: string, name = `Dr. Presenter ${i}`) {
+    return Object.fromEntries(
+      Object.entries({ ...PRESENTER_FIELDS, presenter_0_name: name })
+        .filter(([k]) => k !== "presenter_0_role" || role !== undefined)
+        .map(([k, v]) => [
+          k.replace("presenter_0_", `presenter_${i}_`),
+          k === "presenter_0_role" ? role! : v,
+        ]),
+    );
+  }
+
+  it("maps every presenter card, in card order", () => {
+    const raw = presentersRawFromForm(
+      formDataFrom({
+        ...presenterAt(0, "Primary Presenter"),
+        ...presenterAt(1, "Co-Presenter"),
+        ...presenterAt(2, "Moderator"),
+      }),
+    );
+    const parsed = step3Schema.safeParse(raw);
+    expect(parsed.success).toBe(true);
+    expect(raw.presenters.map((p) => [p.name, p.role])).toEqual([
+      ["Dr. Presenter 0", "Primary Presenter"],
+      ["Dr. Presenter 1", "Co-Presenter"],
+      ["Dr. Presenter 2", "Moderator"],
+    ]);
+  });
+
+  it("keeps every presenter from a post with a gap in its indices (stale or hand-built)", () => {
+    const raw = presentersRawFromForm(
+      formDataFrom({ ...presenterAt(0), ...presenterAt(3, "Moderator"), ...presenterAt(1, "Co-Presenter") }),
+    );
+    expect(raw.presenters.map((p) => p.name)).toEqual([
+      "Dr. Presenter 0",
+      "Dr. Presenter 1",
+      "Dr. Presenter 3",
+    ]);
+  });
+
+  it("forces presenter 1 to Primary and keeps later presenters off Primary", () => {
+    const raw = presentersRawFromForm(
+      formDataFrom({
+        ...presenterAt(0, "Co-Presenter"),
+        ...presenterAt(1, "Primary Presenter"),
+        ...presenterAt(2),
+      }),
+    );
+    expect(raw.presenters.map((p) => p.role)).toEqual([
+      "Primary Presenter",
+      "Co-Presenter",
+      "Co-Presenter",
+    ]);
+  });
+
+  it("requires every field on an added presenter, not just the primary", () => {
+    const raw = presentersRawFromForm(
+      formDataFrom({ ...presenterAt(0), presenter_1_name: "Dr. Half Filled" }),
+    );
+    const parsed = step3Schema.safeParse(raw);
+    expect(parsed.success).toBe(false);
+    if (!parsed.success) {
+      const paths = parsed.error.issues.map((i) => i.path.join("."));
+      expect(paths).toEqual(
+        expect.arrayContaining(["presenters.1.experience", "presenters.1.training", "presenters.1.bio"]),
+      );
+      expect(paths.some((p) => p.startsWith("presenters.0"))).toBe(false);
+    }
+  });
+
+  it("accepts 8 presenters and reports a 9th instead of dropping it", () => {
+    const eight = Object.assign({}, ...Array.from({ length: 8 }, (_, i) => presenterAt(i, "Co-Presenter")));
+    expect(step3Schema.safeParse(presentersRawFromForm(formDataFrom(eight))).success).toBe(true);
+
+    const nine = { ...eight, ...presenterAt(8, "Co-Presenter") };
+    const tooMany = presentersRawFromForm(formDataFrom(nine));
+    expect(tooMany.presenters).toHaveLength(9);
+    expect(step3Schema.safeParse(tooMany).success).toBe(false);
+  });
+
+  it("ignores indices far past the cap", () => {
+    const raw = presentersRawFromForm(
+      formDataFrom(Object.assign({}, ...Array.from({ length: 40 }, (_, i) => presenterAt(i)))),
+    );
+    expect(raw.presenters).toHaveLength(9);
+  });
 });
 
 /*

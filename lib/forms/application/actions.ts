@@ -163,8 +163,7 @@ export async function saveStep3(formData: FormData) {
   const applicationId = String(formData.get("applicationId") ?? "");
   if (!applicationId) throw new Error("Missing applicationId");
 
-  // Fields are named presenter_<idx>_<field>. Phase 1 ships a single primary
-  // presenter; multi-presenter UI lands later.
+  // Fields are named presenter_<idx>_<field>, one group per presenter card.
   await mergeStep(
     applicationId,
     step3Schema,
