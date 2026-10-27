@@ -210,9 +210,13 @@ const others = (ids: string[], allowed: string | null) => ids.filter((id) => id 
 /** Every rule that must hold before (and again, under lock, during) the write. */
 export function preflightViolations(certs: CertSnapshot[], accounts: AccountSnapshot[]): string[] {
   const out: string[] = [];
+  // Sibling targets are not duplicates: Eileen's two legacy passes on one
+  // course both move to .com, so after --apply each sees the other there.
+  const targetIds = new Set(certs.map((c) => c.target.issuedCertificateId));
   for (const c of certs) {
     const t = c.target;
     const tag = `${t.label} cert ${t.issuedCertificateId}`;
+    const otherPassedIds = c.otherPassedIds.filter((id) => !targetIds.has(id));
     if (!c.row) {
       out.push(`${tag}: not found.`);
       continue;
@@ -224,8 +228,8 @@ export function preflightViolations(certs: CertSnapshot[], accounts: AccountSnap
     if (emailState(c.row.attendeeEmail, t.from, t.to) === "mismatch") {
       out.push(`${tag}: email is now ${c.row.attendeeEmail}, expected ${t.from}. Someone changed it; re-verify by hand.`);
     }
-    if (c.otherPassedIds.length > 0) {
-      out.push(`${tag}: ${t.to} already holds a PASSED certificate on ${t.courseIdNumber} (${c.otherPassedIds.join(", ")}).`);
+    if (otherPassedIds.length > 0) {
+      out.push(`${tag}: ${t.to} already holds a PASSED certificate on ${t.courseIdNumber} (${otherPassedIds.join(", ")}).`);
     }
     if (c.ceLinkedUserId !== null && c.ceLinkedUserId !== t.accountUserId) {
       out.push(`${tag}: its ProTrack copy belongs to user ${c.ceLinkedUserId}, not the expected account.`);
