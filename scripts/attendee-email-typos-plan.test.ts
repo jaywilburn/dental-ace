@@ -126,6 +126,22 @@ describe("preflightViolations", () => {
     expect(v.join()).toMatch(/already holds a PASSED certificate/);
   });
 
+  it("does not count a sibling target as a duplicate after --apply (Eileen's two legacy passes)", () => {
+    const [a, b] = CERT_TARGETS.filter((t) => t.label === "Eileen Nowak");
+    const done = (t: typeof a, other: typeof a) =>
+      certSnap(t, {
+        row: { attendeeEmail: t.to, passed: true, courseIdNumber: t.courseIdNumber },
+        otherPassedIds: [other.issuedCertificateId],
+        ceLinkedUserId: eileen.userId,
+        usersWithTo: [eileen.userId],
+        authWithTo: [eileen.userId],
+      });
+    expect(preflightViolations([done(a, b), done(b, a)], [])).toEqual([]);
+    // A non-target duplicate still aborts.
+    expect(preflightViolations([certSnap(a, { otherPassedIds: [b.issuedCertificateId, "stranger"] }), certSnap(b)], []).join())
+      .toMatch(/\(stranger\)/);
+  });
+
   it("aborts when the corrected email belongs to a different account or Auth user", () => {
     expect(preflightViolations([certSnap(stephen, { usersWithTo: ["someone"] })], []).join()).toMatch(/different account/);
     expect(preflightViolations([certSnap(stephen, { authWithTo: ["someone"] })], []).join()).toMatch(/different Auth user/);
