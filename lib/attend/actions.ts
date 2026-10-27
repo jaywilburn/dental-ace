@@ -4,11 +4,13 @@ import { headers } from "next/headers";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { attendeeSubmissionSchema, flattenFieldErrors } from "@/lib/attend/schemas";
+import { redactEmails } from "@/lib/attend/email-typo";
 import { courseFormatLabel } from "@/lib/pdf/course-format-label";
 import { COURSE_FORMATS } from "@/lib/forms/application/schemas";
 import { scoreQuiz, type AttendeeAnswer } from "@/lib/attend/scoring";
 import { decideAttempt } from "@/lib/attend/lockout";
-import { issueCertificateTx, CertBalanceExhaustedError } from "@/lib/attend/issue";
+import { isCourseClosed } from "@/lib/courses/course-open";
+import { issueCertificateTx, CertBalanceExhaustedError, CourseRetiredError } from "@/lib/attend/issue";
 import { rateLimit } from "@/lib/rate-limit";
 import { appBaseUrl } from "@/lib/app-url";
 import { renderCertificatePdf } from "@/lib/pdf/certificate";
@@ -37,6 +39,7 @@ class AlreadyCertifiedError extends Error {
   }
 }
 
+
 export type AttendResult =
   | { status: "passed"; certificateId: string }
   | { status: "failed"; correct: boolean[]; canRetake: boolean; correctAnswers?: CorrectAnswer[] }
@@ -63,8 +66,9 @@ export async function submitAttendance(input: unknown): Promise<AttendResult> {
   const parsed = attendeeSubmissionSchema.safeParse(input);
   if (!parsed.success) {
     const fieldErrors = flattenFieldErrors(parsed.error);
-    // Field names + static schema messages only, never submitted values.
-    console.error("[submitAttendance] invalid submission", JSON.stringify(fieldErrors));
+    // Field names + schema messages only, never submitted values (an email
+    // typo suggestion is the one message carrying an address, so redact).
+    console.error("[submitAttendance] invalid submission", redactEmails(JSON.stringify(fieldErrors)));
     return { status: "invalid", fieldErrors };
   }
   const sub = parsed.data;
@@ -87,13 +91,15 @@ export async function submitAttendance(input: unknown): Promise<AttendResult> {
       companyId: true,
       courseIdNumber: true,
       expiresAt: true,
+      retiredAt: true,
       quizQuestions: true,
       application: {
         select: { courseTitle: true, ceHours: true, courseType: true, deliveryMethod: true },
       },
     },
   });
-  if (!course || course.expiresAt < new Date()) return { status: "course_inactive" };
+  // A retired course closes exactly like an expired one (lib/courses/course-open.ts).
+  if (!course || isCourseClosed(course)) return { status: "course_inactive" };
 
   const quizParsed = quizArraySchema.safeParse(course.quizQuestions);
   if (!quizParsed.success) return { status: "course_inactive" };
@@ -166,6 +172,7 @@ export async function submitAttendance(input: unknown): Promise<AttendResult> {
         select: { id: true },
       });
       if (alreadyPassed) throw new AlreadyCertifiedError();
+      // issueCertificateTx re-checks retirement under this lock (CourseRetiredError).
       const cert = await issueCertificateTx(tx, {
         courseId: course.id,
         companyId: course.companyId,
@@ -184,6 +191,7 @@ export async function submitAttendance(input: unknown): Promise<AttendResult> {
     });
   } catch (err) {
     if (err instanceof AlreadyCertifiedError) return { status: "already_certified" };
+    if (err instanceof CourseRetiredError) return { status: "course_inactive" };
     if (err instanceof CertBalanceExhaustedError) return { status: "balance_exhausted" };
     throw err;
   }

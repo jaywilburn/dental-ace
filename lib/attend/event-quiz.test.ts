@@ -510,3 +510,45 @@ describe("activeSurvey", () => {
     ).toBeNull();
   });
 });
+
+describe("retired attached courses (lib/admin/course-retire.ts)", () => {
+  function retired<T extends ReturnType<typeof courseSession>>(s: T): T {
+    return { ...s, course: { ...s.course, retiredAt: new Date("2026-10-27T12:00:00Z") } };
+  }
+
+  it("a selective per-course event stops offering the retired course's session", () => {
+    const event = baseEvent({
+      eventType: EventType.SELECTIVE_PER_COURSE,
+      sessions: [courseSession("c1", "Course One", 1, 0), retired(courseSession("c2", "Course Two", 2, 1))],
+    });
+    const form = buildPublicForm(event as never);
+    expect(form?.mode).toBe("selective");
+    expect(form && form.mode === "selective" ? form.items.map((i) => i.id) : []).toEqual(["c1"]);
+  });
+
+  it("refuses a selective submit that selects the retired session, but not one without it", () => {
+    const event = baseEvent({
+      eventType: EventType.SELECTIVE_PER_COURSE,
+      sessions: [courseSession("c1", "Course One", 1, 0), retired(courseSession("c2", "Course Two", 2, 1))],
+    });
+    expect(assembleForSubmit(event, ["c1", "c2"])).toBeNull();
+    expect(assembleForSubmit(event, ["c1"])?.hours).toBe(1);
+  });
+
+  it("a selective event whose only course is retired has no form", () => {
+    const event = baseEvent({
+      eventType: EventType.SELECTIVE_PER_COURSE,
+      sessions: [retired(courseSession("c1", "Course One", 1, 0))],
+    });
+    expect(buildPublicForm(event as never)).toBeNull();
+  });
+
+  it("a full-attendance per-course event closes rather than certify a retired course", () => {
+    const event = baseEvent({
+      eventType: EventType.FULL_PER_COURSE,
+      sessions: [courseSession("c1", "Course One", 1, 0), retired(courseSession("c2", "Course Two", 2, 1))],
+    });
+    expect(buildPublicForm(event as never)).toBeNull();
+    expect(assembleForSubmit(event, [])).toBeNull();
+  });
+});

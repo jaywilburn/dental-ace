@@ -7,6 +7,8 @@ import { adjustAppCredits, adjustCertBalance } from "@/lib/admin/billing-overrid
 import { txnLabel } from "@/lib/billing/transaction-labels";
 import { renameCompany } from "@/lib/admin/company-rename";
 import { renameCourse } from "@/lib/admin/course-rename";
+import { retireCourse } from "@/lib/admin/course-retire";
+import { RETIRE_REASON_MAX } from "@/lib/admin/course-retire-rules";
 import { setCompanyFeature } from "@/lib/admin/company-features";
 import {
   COMPANY_FEATURES,
@@ -70,7 +72,7 @@ export default async function AdminCompanyDetailPage({
         orderBy: { approvedAt: "desc" },
         select: {
           id: true, courseIdNumber: true, expiresAt: true, certsIssuedCount: true,
-          quizQuestions: true, application: { select: { courseTitle: true } },
+          retiredAt: true, quizQuestions: true, application: { select: { courseTitle: true } },
         },
       },
     },
@@ -83,8 +85,11 @@ export default async function AdminCompanyDetailPage({
     ...c,
     hasQuiz: hasCertificateQuiz(c.quizQuestions),
     expired: c.expiresAt < now,
+    retired: c.retiredAt !== null,
   }));
-  const needsQuiz = courses.filter((c) => !c.hasQuiz && !c.expired).length;
+  // Retired courses are listed (an admin can always see what exists) but are
+  // not offerings, so they never count toward "needs a quiz".
+  const needsQuiz = courses.filter((c) => !c.hasQuiz && !c.expired && !c.retired).length;
 
   // Event surveys. Drafts are still in the wizard, so they have no survey to
   // edit yet. While the feature is off, events that already store questions
@@ -113,6 +118,8 @@ export default async function AdminCompanyDetailPage({
             ? "Company name updated."
             : ok === "course-renamed"
               ? "Course title updated."
+              : ok === "course-retired"
+              ? "Course retired. It no longer appears for this company; its certificates stay valid in ProTrack and Verify."
               : ok === "credits"
               ? "Application credits updated."
               : ok === "balance"
@@ -315,58 +322,111 @@ export default async function AdminCompanyDetailPage({
                     </p>
                   </div>
                   <div className="flex shrink-0 flex-wrap items-center gap-2">
-                    <span
-                      className={cn(
-                        "inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold leading-none",
-                        c.hasQuiz ? "bg-emerald-50 text-emerald-700" : "bg-amber-100 text-amber-800",
-                      )}
-                    >
-                      {c.hasQuiz ? "Quiz ready" : "No quiz"}
-                    </span>
-                    <Link
-                      href={quizEditorPath(c.id)}
-                      className={cn(
-                        "inline-flex min-h-9 items-center rounded-md px-3 text-[12px] font-semibold sm:min-h-8",
-                        c.hasQuiz
-                          ? "border border-border bg-white text-navy hover:bg-surface"
-                          : "bg-navy text-white hover:bg-navy/90",
-                      )}
-                    >
-                      {c.hasQuiz ? "Edit quiz" : "Add quiz"}
-                    </Link>
+                    {c.retiredAt ? (
+                      <span className="inline-flex items-center rounded-full bg-surface px-2 py-0.5 text-[10px] font-semibold leading-none text-text-mid tabular-nums">
+                        Retired{" "}
+                        {c.retiredAt.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                      </span>
+                    ) : (
+                      <>
+                        <span
+                          className={cn(
+                            "inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold leading-none",
+                            c.hasQuiz ? "bg-emerald-50 text-emerald-700" : "bg-amber-100 text-amber-800",
+                          )}
+                        >
+                          {c.hasQuiz ? "Quiz ready" : "No quiz"}
+                        </span>
+                        <Link
+                          href={quizEditorPath(c.id)}
+                          className={cn(
+                            "inline-flex min-h-9 items-center rounded-md px-3 text-[12px] font-semibold sm:min-h-8",
+                            c.hasQuiz
+                              ? "border border-border bg-white text-navy hover:bg-surface"
+                              : "bg-navy text-white hover:bg-navy/90",
+                          )}
+                        >
+                          {c.hasQuiz ? "Edit quiz" : "Add quiz"}
+                        </Link>
+                      </>
+                    )}
                   </div>
                 </div>
-                {/* No-JS disclosure: this page is a server component, so the rename
-                    form opens with a native <details> instead of client state. */}
-                <details className="group mt-2">
-                  <summary className="inline-flex min-h-9 cursor-pointer list-none items-center rounded-md border border-border bg-white px-3 text-[12px] font-semibold text-navy hover:bg-surface sm:min-h-8 [&::-webkit-details-marker]:hidden">
-                    <span className="group-open:hidden">Rename</span>
-                    <span className="hidden group-open:inline">Cancel rename</span>
-                  </summary>
-                  <form action={renameCourse} className="mt-3 space-y-3 rounded-md border border-border bg-surface p-3">
-                    <input type="hidden" name="courseId" value={c.id} />
-                    <label className="block text-[12px] font-semibold text-navy">
-                      New title
-                      <input
-                        type="text"
-                        name="title"
-                        defaultValue={c.application.courseTitle ?? ""}
-                        required
-                        minLength={3}
-                        maxLength={200}
-                        className="mt-1 w-full rounded-md border border-border bg-white px-3 py-2 text-[13px] font-normal"
-                      />
-                    </label>
-                    <p className="text-pretty text-[11px] text-text-muted">
-                      Updates the title everywhere it appears, including the approval letter and ProTrack
-                      records synced from this course. Certificates already downloaded are not reissued. The
-                      change is recorded in the audit log.
-                    </p>
-                    <button type="submit" className="rounded-md bg-navy px-3 py-1.5 text-[12px] font-semibold text-white">
-                      Save title
-                    </button>
-                  </form>
-                </details>
+                {/* Retired courses are read-only here: no rename, quiz or retire. */}
+                {c.retired ? null : (
+                  <div className="mt-2 flex flex-wrap items-start gap-2">
+                    {/* No-JS disclosures: this page is a server component, so the rename
+                        and retire forms open with a native <details> instead of client
+                        state. An open one takes the full row. */}
+                    <details className="group open:basis-full">
+                      <summary className="inline-flex min-h-9 cursor-pointer list-none items-center rounded-md border border-border bg-white px-3 text-[12px] font-semibold text-navy hover:bg-surface sm:min-h-8 [&::-webkit-details-marker]:hidden">
+                        <span className="group-open:hidden">Rename</span>
+                        <span className="hidden group-open:inline">Cancel rename</span>
+                      </summary>
+                      <form action={renameCourse} className="mt-3 space-y-3 rounded-md border border-border bg-surface p-3">
+                        <input type="hidden" name="courseId" value={c.id} />
+                        <label className="block text-[12px] font-semibold text-navy">
+                          New title
+                          <input
+                            type="text"
+                            name="title"
+                            defaultValue={c.application.courseTitle ?? ""}
+                            required
+                            minLength={3}
+                            maxLength={200}
+                            className="mt-1 w-full rounded-md border border-border bg-white px-3 py-2 text-[13px] font-normal"
+                          />
+                        </label>
+                        <p className="text-pretty text-[11px] text-text-muted">
+                          Updates the title everywhere it appears, including the approval letter and ProTrack
+                          records synced from this course. Certificates already downloaded are not reissued. The
+                          change is recorded in the audit log.
+                        </p>
+                        <button type="submit" className="rounded-md bg-navy px-3 py-1.5 text-[12px] font-semibold text-white">
+                          Save title
+                        </button>
+                      </form>
+                    </details>
+                    {/* Opening this is the confirm step; the typed reason is required
+                        and lands in the audit log. */}
+                    <details className="group open:basis-full">
+                      <summary className="inline-flex min-h-9 cursor-pointer list-none items-center rounded-md border border-red-300 bg-white px-3 text-[12px] font-semibold text-red-700 hover:bg-red-50 sm:min-h-8 [&::-webkit-details-marker]:hidden">
+                        <span className="group-open:hidden">Retire</span>
+                        <span className="hidden group-open:inline">Cancel retire</span>
+                      </summary>
+                      <form action={retireCourse} className="mt-3 space-y-3 rounded-md border border-red-200 bg-red-50 p-3">
+                        <input type="hidden" name="courseId" value={c.id} />
+                        <p className="text-pretty text-[12px] font-semibold text-red-800">
+                          Retire {c.courseIdNumber} from {company.name}?
+                        </p>
+                        <p className="text-pretty text-[11px] text-red-800">
+                          The course disappears from this company&apos;s course list, dashboard, event picker and
+                          Certificate Log, and its attendee link closes. Certificates already issued for it (
+                          <span className="tabular-nums">{c.certsIssuedCount}</span>) stay valid for attendees in
+                          ProTrack and Verify. Nothing is deleted and the certificate balance does not change. This
+                          cannot be undone from this page.
+                        </p>
+                        <label className="block text-[12px] font-semibold text-navy">
+                          Reason
+                          <textarea
+                            name="reason"
+                            required
+                            maxLength={RETIRE_REASON_MAX}
+                            rows={2}
+                            placeholder="e.g. The company confirmed this course is not theirs"
+                            className="mt-1 w-full rounded-md border border-border bg-white px-3 py-2 text-[13px] font-normal"
+                          />
+                        </label>
+                        <button
+                          type="submit"
+                          className="rounded-md bg-red-700 px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-red-800"
+                        >
+                          Retire course
+                        </button>
+                      </form>
+                    </details>
+                  </div>
+                )}
               </li>
             ))}
           </ul>

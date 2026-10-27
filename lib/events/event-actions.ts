@@ -439,9 +439,10 @@ export async function saveAttachedCourses(formData: FormData) {
       );
   }
 
-  // Ownership: every course must belong to the caller's company.
+  // Ownership: every course must belong to the caller's company and must not be
+  // retired (a retired course is not an offering; lib/admin/course-retire.ts).
   const owned = await prisma.accreditedCourse.findMany({
-    where: { id: { in: parsed.data.courseIds }, companyId },
+    where: { id: { in: parsed.data.courseIds }, companyId, retiredAt: null },
     select: { id: true, application: { select: { ceHours: true } } },
   });
   if (owned.length !== parsed.data.courseIds.length) {

@@ -54,7 +54,8 @@ export default async function CompanyDashboard({
   }
 
   const [activeCount, pendingCount, recentTxns] = await Promise.all([
-    prisma.accreditedCourse.count({ where: { companyId: user.companyId } }),
+    // Retired courses (lib/admin/course-retire.ts) are not this company's offerings.
+    prisma.accreditedCourse.count({ where: { companyId: user.companyId, retiredAt: null } }),
     prisma.courseApplication.count({
       where: { companyId: user.companyId, status: "PENDING" },
     }),

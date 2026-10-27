@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { COURSE_FORMATS } from "@/lib/forms/application/schemas";
+import { invalidTldMessage } from "@/lib/attend/email-typo";
 
 /*
   Attendee submission boundary. Validated server-side in submitAttendance.
@@ -45,8 +46,10 @@ export function isRecentCompletionDate(s: string): boolean {
 
 /** Zod v4 flatten, filtered to a plain Record (flattenError's fieldErrors is a
  *  partial record; strict TS will not assign it directly). Messages are static
- *  schema strings only, never the submitted values, so they are safe to return
- *  to the client and to log. */
+ *  schema strings, never the submitted values, with one exception: the
+ *  attendeeEmail invalid-TLD message carries the CORRECTED address ("Did you
+ *  mean jane@gmail.com?"). That is fine to return to the attendee who typed it,
+ *  but log through redactEmails (lib/attend/email-typo.ts). */
 export function flattenFieldErrors(error: z.ZodError): Record<string, string[]> {
   const flat = z.flattenError(error).fieldErrors as Record<string, string[] | undefined>;
   const out: Record<string, string[]> = {};
@@ -56,10 +59,24 @@ export function flattenFieldErrors(error: z.ZodError): Record<string, string[]> 
   return out;
 }
 
+/** Attendee email, shared by the course and event attendee schemas. Rejects a
+ *  non-existent TLD typo ("jane@gmail.con") with a "Did you mean" suggestion so
+ *  the certificate is not emailed into the void; provider misspellings
+ *  ("gmial.com") are only hinted on the client (see lib/attend/email-typo.ts). */
+export const attendeeEmailSchema = z
+  .string()
+  .trim()
+  .email("Enter a valid email address")
+  .max(200, "Email is too long")
+  .superRefine((email, ctx) => {
+    const message = invalidTldMessage(email);
+    if (message) ctx.addIssue({ code: "custom", message });
+  });
+
 export const attendeeSubmissionSchema = z.object({
   token: z.guid(),
   attendeeName: z.string().trim().min(2, "Please enter your full name").max(200, "Name is too long"),
-  attendeeEmail: z.string().trim().email("Enter a valid email address").max(200, "Email is too long"),
+  attendeeEmail: attendeeEmailSchema,
   licenseNumber: z.string().trim().max(100, "License number is too long").optional(),
   licenseType: z.string().trim().max(100, "License type is too long").optional(),
   licenseStates: z

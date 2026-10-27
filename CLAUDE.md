@@ -89,6 +89,7 @@ DentalACE One is **one platform**; features are gated by **per-user entitlements
 - **Money in cents** — integer columns, never floats.
 - **All credit/balance decrements** run inside a transaction with a row-level lock on the relevant `companies` row.
 - Phase 2/3 tables don't exist yet. Don't reference them in Phase 1 code. Don't create them ahead of schedule.
+- **Courses are retired, never deleted.** `accredited_courses.retired_at` (set only by the admin Retire control, `lib/admin/course-retire.ts`, audited as `COURSE_RETIRED`) hides a course from every company-facing list (My Courses, dashboard count, event attach picker, expiry reminders), from the Certificate Log and its CSV export (`buildCertWhere` keeps event certs via `OR [{courseId: null}, {course: {retiredAt: null}}]`), and closes the attendee link exactly like an expiry (`isCourseClosed`, re-checked under the company lock at issue). Its issued certificates stay valid: **never filter ProTrack (`ace-sync`) or public Verify (`lib/verify/lookup.ts`) by `retiredAt`.** Retiring takes the course's passed certs out of `total_certs_issued` but never touches `cert_balance`, `issued_certificates` or `ce_certificates`. Any new company-facing course query must add `retiredAt: null`. (First use 2026-10-27: ACE-LEG-00023 / legacy DA245, imported under Limitless on Demand, which said it is not theirs.)
 
 ### File storage
 - **Supabase Storage** with two private buckets: `certificates` and `uploads`.

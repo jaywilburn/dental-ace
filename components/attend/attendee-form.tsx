@@ -5,6 +5,7 @@ import { submitAttendance, type AttendResult } from "@/lib/attend/actions";
 import { COURSE_FORMATS } from "@/lib/forms/application/schemas";
 import { JurisdictionOptions } from "@/components/jurisdiction-options";
 import { ErrorSummary, FieldError, toDisplayErrors } from "@/components/attend/form-errors";
+import { EmailField } from "@/components/attend/email-field";
 
 type CourseFormat = (typeof COURSE_FORMATS)[number];
 
@@ -159,14 +160,12 @@ export function AttendeeForm({
             }}
             error={fieldErrors.attendeeName}
           />
-          <Field
-            label="Email"
+          <EmailField
             value={email}
             onChange={(v) => {
               setEmail(v);
               clearFieldError("attendeeEmail");
             }}
-            type="email"
             error={fieldErrors.attendeeEmail}
           />
           <label className="block text-sm">

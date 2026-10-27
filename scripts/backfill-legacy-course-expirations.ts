@@ -15,7 +15,9 @@
   approved_at becomes 2024-01-01 (noon UTC, the legacy-date convention).
 
   Targets are ABSOLUTE (approved_at + 3 years), so re-running after apply is a
-  no-op. Matching is on legacy_id, the stable provenance key — natively
+  no-op. Only approved_at/expires_at are written: a course an admin RETIRED
+  (retired_at, lib/admin/course-retire.ts) stays retired even if its expiry
+  moves, and its attendee link stays closed. Matching is on legacy_id, the stable provenance key — natively
   accredited courses (legacy_id null) are never touched.
 
   Usage:

@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { eventAttendeeSubmissionSchema } from "@/lib/attend/event-schemas";
+import { flattenFieldErrors } from "@/lib/attend/schemas";
 
 const DAY = 864e5;
 // yyyy-mm-dd for the UTC calendar date msFromNow from now.
@@ -97,5 +98,22 @@ describe("eventAttendeeSubmissionSchema", () => {
 
   it("rejects when attendance is not affirmed", () => {
     expect(eventAttendeeSubmissionSchema.safeParse({ ...valid, affirmed: false }).success).toBe(false);
+  });
+});
+
+describe("eventAttendeeSubmissionSchema email typo guard", () => {
+  it("rejects a non-existent TLD with a did-you-mean message on the email field", () => {
+    const parsed = eventAttendeeSubmissionSchema.safeParse({ ...valid, attendeeEmail: "jane@yahoo.con" });
+    expect(parsed.success).toBe(false);
+    if (parsed.success) return;
+    expect(flattenFieldErrors(parsed.error).attendeeEmail).toEqual([
+      "Check your email address. Did you mean jane@yahoo.com?",
+    ]);
+  });
+
+  it("accepts a provider misspelling and real .cm/.co TLDs", () => {
+    for (const attendeeEmail of ["jane@gmial.com", "jane@example.cm", "jane@example.co"]) {
+      expect(eventAttendeeSubmissionSchema.safeParse({ ...valid, attendeeEmail }).success).toBe(true);
+    }
   });
 });

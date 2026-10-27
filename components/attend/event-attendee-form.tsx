@@ -13,6 +13,7 @@ import { ATTENDANCE_CODE_MAX } from "@/lib/attend/attendance-code";
 import { formatCeHours } from "@/lib/attend/format-ce-hours";
 import { JurisdictionOptions } from "@/components/jurisdiction-options";
 import { ErrorSummary, FieldError, toDisplayErrors } from "@/components/attend/form-errors";
+import { EmailField } from "@/components/attend/email-field";
 import { SubmitConfirmDialog } from "@/components/attend/submit-confirm-dialog";
 import { submitConfirmCopy } from "@/lib/attend/submit-confirm";
 import {
@@ -271,14 +272,12 @@ export function EventAttendeeForm({
             }}
             error={fieldErrors.attendeeName}
           />
-          <Field
-            label="Email"
+          <EmailField
             value={email}
             onChange={(v) => {
               setEmail(v);
               clearFieldError("attendeeEmail");
             }}
-            type="email"
             error={fieldErrors.attendeeEmail}
           />
           <label className="block text-sm">

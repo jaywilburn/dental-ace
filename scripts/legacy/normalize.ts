@@ -26,6 +26,19 @@ export const LEGACY_APPROVED_AT_OVERRIDES: Record<number, string> = {
   78: "2024-01-01",
 };
 
+// Legacy courses an admin has RETIRED in the app (accredited_courses.retired_at,
+// lib/admin/course-retire.ts). A note, not a list the code reads:
+// the importer never writes retired_at, so a re-run cannot revive a retired
+// course, and runLoad (scripts/migrate-legacy.ts) reads retired courses from
+// the DB and keeps their certificates out of the refreshed
+// companies.total_certs_issued. Do not "fix" these by moving them to another
+// company here without the true owner confirmed.
+//
+//   23 (DA245, ACE-LEG-00023, "Jan. 30th, 2026 Arch Intelligence Course"):
+//      imported under company legacy_id 4 (Limitless on Demand), which said on
+//      2026-10-27 it is not their course. True owner unknown. Its 16 issued
+//      certificates stay valid for attendees in ProTrack and Verify.
+
 /**
  * Course validity window: approvedAt + 3 years, the same rule live approvals
  * use (lib/reviewer/actions.ts). ISO YYYY-MM-DD in and out; the noon-UTC

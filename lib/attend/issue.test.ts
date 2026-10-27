@@ -1,13 +1,13 @@
 import { describe, it, expect, vi } from "vitest";
-import { issueCertificateTx, CertBalanceExhaustedError } from "@/lib/attend/issue";
+import { issueCertificateTx, CertBalanceExhaustedError, CourseRetiredError } from "@/lib/attend/issue";
 
-function fakeTx(certBalance: number) {
+function fakeTx(certBalance: number, liveCourse = true) {
   return {
     company: {
       findUniqueOrThrow: vi.fn().mockResolvedValue({ certBalance }),
       update: vi.fn().mockResolvedValue({}),
     },
-    accreditedCourse: { update: vi.fn().mockResolvedValue({}) },
+    accreditedCourse: { updateMany: vi.fn().mockResolvedValue({ count: liveCourse ? 1 : 0 }) },
     issuedCertificate: {
       create: vi.fn().mockResolvedValue({ id: "cert-1" }),
     },
@@ -40,8 +40,8 @@ describe("issueCertificateTx", () => {
       where: { id: "company-1" },
       data: { certBalance: { decrement: 1 }, totalCertsIssued: { increment: 1 } },
     });
-    expect(tx.accreditedCourse.update).toHaveBeenCalledWith({
-      where: { id: "course-1" },
+    expect(tx.accreditedCourse.updateMany).toHaveBeenCalledWith({
+      where: { id: "course-1", retiredAt: null },
       data: { certsIssuedCount: { increment: 1 } },
     });
     expect(tx.issuedCertificate.create).toHaveBeenCalledOnce();
@@ -69,6 +69,13 @@ describe("issueCertificateTx", () => {
       issueCertificateTx(tx, baseInput),
     ).rejects.toBeInstanceOf(CertBalanceExhaustedError);
     expect(tx.company.update).not.toHaveBeenCalled();
+    expect(tx.issuedCertificate.create).not.toHaveBeenCalled();
+  });
+
+  it("throws CourseRetiredError and issues nothing when the course was retired", async () => {
+    const tx = fakeTx(5, false);
+    // @ts-expect-error fake tx shape
+    await expect(issueCertificateTx(tx, baseInput)).rejects.toBeInstanceOf(CourseRetiredError);
     expect(tx.issuedCertificate.create).not.toHaveBeenCalled();
   });
 });

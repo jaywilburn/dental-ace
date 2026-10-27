@@ -26,8 +26,9 @@ export default async function EventCoursesPage({
   if (isEventOnly(draft.eventType)) redirect("/company/events/new/sessions");
 
   const courses = await prisma.accreditedCourse.findMany({
-    // eventId:null keeps event-scoped session courses out of the attach picker.
-    where: { companyId: user.companyId!, supersededAt: null, eventId: null },
+    // eventId:null keeps event-scoped session courses out of the attach picker;
+    // retiredAt:null keeps admin-retired courses out (lib/admin/course-retire.ts).
+    where: { companyId: user.companyId!, supersededAt: null, eventId: null, retiredAt: null },
     orderBy: { approvedAt: "desc" },
     select: {
       id: true,
