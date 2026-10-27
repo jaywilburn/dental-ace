@@ -329,9 +329,32 @@ async function runLoad(prisma: PrismaClient, bundle: Bundle): Promise<void> {
   const companyId = new Map<number, string>();
   const courseId = new Map<number, string>();
 
+  // Courses an admin retired in the app (lib/admin/course-retire.ts). Their
+  // certificates are still loaded (they stay valid in ProTrack and Verify), but
+  // retiring took them out of companies.total_certs_issued, so the refreshed
+  // total below must leave them out too or a re-run would quietly add them
+  // back. retired_at itself is never written by this importer (see step 2).
+  const retiredLegacyCourseIds = new Set(
+    (
+      await prisma.accreditedCourse.findMany({
+        where: { legacyId: { not: null }, retiredAt: { not: null } },
+        select: { legacyId: true },
+      })
+    ).map((r) => r.legacyId!),
+  );
+  const retiredCertsByCompany = new Map<number, number>();
+  for (const ct of bundle.certificates) {
+    if (!retiredLegacyCourseIds.has(ct.courseLegacyId)) continue;
+    retiredCertsByCompany.set(ct.companyLegacyId, (retiredCertsByCompany.get(ct.companyLegacyId) ?? 0) + 1);
+  }
+  if (retiredLegacyCourseIds.size > 0) {
+    console.log(`Retired legacy courses kept retired: ${[...retiredLegacyCourseIds].sort((a, b) => a - b).join(", ")}`);
+  }
+
   // 1) Companies (upsert on legacyId). Only totalCertsIssued is refreshed on
   //    re-run; name/credits are left as-is so an in-app edit is never reverted.
   for (const c of bundle.companies) {
+    const totalCertsIssued = Math.max(0, c.totalCertsIssued - (retiredCertsByCompany.get(c.legacyId) ?? 0));
     const row = await prisma.company.upsert({
       where: { legacyId: c.legacyId },
       create: {
@@ -339,9 +362,9 @@ async function runLoad(prisma: PrismaClient, bundle: Bundle): Promise<void> {
         name: c.name,
         applicationCredits: 0,
         certBalance: 0,
-        totalCertsIssued: c.totalCertsIssued,
+        totalCertsIssued,
       },
-      update: { totalCertsIssued: c.totalCertsIssued },
+      update: { totalCertsIssued },
       select: { id: true },
     });
     companyId.set(c.legacyId, row.id);
@@ -378,6 +401,8 @@ async function runLoad(prisma: PrismaClient, bundle: Bundle): Promise<void> {
 
     const existing = existingByLegacy.get(co.legacyId);
     if (existing) {
+      // retiredAt is deliberately absent from this update: a course retired in
+      // the app (e.g. legacy 23, see the note in legacy/normalize.ts) stays retired.
       await prisma.courseApplication.update({ where: { id: existing.applicationId }, data: appFields });
       await prisma.accreditedCourse.update({
         where: { id: existing.id },

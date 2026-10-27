@@ -561,6 +561,7 @@ describe("submitEventAttendance — host survey", () => {
         findUniqueOrThrow: vi.fn(async () => ({ certBalance: 10 })),
         update: vi.fn(async () => ({})),
       },
+      eventSession: { count: vi.fn(async () => 0) },
       event: { update: vi.fn(async () => ({})) },
     };
     prismaMock.$transaction.mockImplementation(async (fn: (t: typeof tx) => unknown) => fn(tx));
@@ -574,6 +575,26 @@ describe("submitEventAttendance — host survey", () => {
       { questionId: Q_SINGLE, type: "SINGLE_CHOICE", prompt: "Satisfied?", value: "Yes" },
       { questionId: Q_LONG, type: "LONG_TEXT", prompt: "Comments?", value: "Loved it" },
     ]);
+  });
+
+  it("re-checks attached-course retirement under the company lock and issues nothing", async () => {
+    mockSurveyEvent(true);
+    const tx = {
+      $executeRaw: vi.fn(async () => 1),
+      issuedCertificate: { findFirst: vi.fn(async () => null), create: vi.fn() },
+      company: { findUniqueOrThrow: vi.fn(async () => ({ certBalance: 10 })), update: vi.fn() },
+      eventSession: { count: vi.fn(async () => 1) },
+      event: { update: vi.fn() },
+    };
+    prismaMock.$transaction.mockImplementation(async (fn: (t: typeof tx) => unknown) => fn(tx));
+
+    const result = await submitEventAttendance(
+      surveyInput({ [Q_SINGLE]: "Yes", [Q_LONG]: "Fine" }),
+    );
+
+    expect(result).toEqual({ status: "event_inactive" });
+    expect(tx.company.update).not.toHaveBeenCalled();
+    expect(tx.issuedCertificate.create).not.toHaveBeenCalled();
   });
 
   it("ignores posted answers when the company has surveys switched off", async () => {

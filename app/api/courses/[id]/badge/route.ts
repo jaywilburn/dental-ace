@@ -23,9 +23,12 @@ export async function GET(
       courseIdNumber: true,
       approvedAt: true,
       expiresAt: true,
+      retiredAt: true,
     },
   });
-  if (!course) {
+  // A retired course (lib/admin/course-retire.ts) is not this company's
+  // offering, so it has no marketing logo either.
+  if (!course || course.retiredAt) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
   if (course.companyId !== user.companyId) {

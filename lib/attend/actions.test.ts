@@ -190,6 +190,24 @@ describe("submitAttendance — certificate email recipient + hardening", () => {
     }
   });
 
+  it("rejects a .con email with a did-you-mean on the email field, redacted in the log", async () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const result = await submitAttendance(buildInput({ attendeeEmail: "typo.person@gmail.con" }));
+
+      expect(result.status).toBe("invalid");
+      if (result.status !== "invalid") return;
+      expect(result.fieldErrors.attendeeEmail).toEqual([
+        "Check your email address. Did you mean typo.person@gmail.com?",
+      ]);
+      // The suggestion carries the attendee's address; the log must not.
+      expect(JSON.stringify(spy.mock.calls)).not.toContain("typo.person");
+      expect(prismaMock.accreditedCourse.findUnique).not.toHaveBeenCalled();
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
   it("rejects an attendance-code answer on the single-course flow without touching the DB", async () => {
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
     try {
@@ -228,5 +246,41 @@ describe("submitAttendance — certificate email recipient + hardening", () => {
     expect(prismaMock.issuedCertificate.create.mock.calls[0][0].data.completedAt).toEqual(
       new Date(`${input.completionDate}T12:00:00Z`),
     );
+  });
+  it("treats a retired course exactly like an expired one: no row, no balance touch", async () => {
+    prismaMock.accreditedCourse.findUnique.mockResolvedValueOnce({
+      id: "course-1",
+      companyId: "company-1",
+      courseIdNumber: "ACE-LEG-00023",
+      expiresAt: new Date(Date.now() + 864e5),
+      retiredAt: new Date(),
+      quizQuestions: QUESTIONS,
+      application: { courseTitle: "Retired", ceHours: 7, courseType: null, deliveryMethod: null },
+    });
+    const result = await submitAttendance(buildInput({ token: "55555555-5555-5555-5555-555555555555" }));
+
+    expect(result).toEqual({ status: "course_inactive" });
+    expect(prismaMock.issuedCertificate.findMany).not.toHaveBeenCalled();
+    expect(prismaMock.issuedCertificate.create).not.toHaveBeenCalled();
+    expect(prismaMock.$transaction).not.toHaveBeenCalled();
+    expect(sendEmail).not.toHaveBeenCalled();
+  });
+
+  it("re-checks retirement under the company lock and issues nothing if it was retired mid-submit", async () => {
+    const tx = {
+      $executeRaw: vi.fn(),
+      issuedCertificate: { findFirst: vi.fn().mockResolvedValue(null), create: vi.fn() },
+      accreditedCourse: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
+      company: { findUniqueOrThrow: vi.fn().mockResolvedValue({ certBalance: 10 }), update: vi.fn() },
+    };
+    prismaMock.$transaction.mockImplementationOnce(async (fn: (t: typeof tx) => Promise<unknown>) => fn(tx));
+
+    const result = await submitAttendance(buildInput({ token: "66666666-6666-6666-6666-666666666666" }));
+
+    expect(result).toEqual({ status: "course_inactive" });
+    expect(tx.$executeRaw).toHaveBeenCalledTimes(1);
+    expect(tx.company.update).not.toHaveBeenCalled();
+    expect(tx.issuedCertificate.create).not.toHaveBeenCalled();
+    expect(sendEmail).not.toHaveBeenCalled();
   });
 });

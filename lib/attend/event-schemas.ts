@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { attendeeAnswerSchema, isRecentCompletionDate } from "@/lib/attend/schemas";
+import { attendeeAnswerSchema, attendeeEmailSchema, isRecentCompletionDate } from "@/lib/attend/schemas";
 import { COURSE_FORMATS } from "@/lib/forms/application/schemas";
 import { ATTENDANCE_CODE_MAX } from "@/lib/attend/attendance-code";
 import { SURVEY_VERSION_MAX, surveyAnswerInputSchema } from "@/lib/events/survey-schemas";
@@ -28,7 +28,7 @@ export type EventAttendeeAnswer = z.infer<typeof eventAttendeeAnswerSchema>;
 export const eventAttendeeSubmissionSchema = z.object({
   token: z.guid(),
   attendeeName: z.string().trim().min(2, "Please enter your full name").max(200, "Name is too long"),
-  attendeeEmail: z.string().trim().email("Enter a valid email address").max(200, "Email is too long"),
+  attendeeEmail: attendeeEmailSchema,
   licenseNumber: z.string().trim().max(100, "License number is too long").optional(),
   licenseType: z.string().trim().max(100, "License type is too long").optional(),
   licenseStates: z

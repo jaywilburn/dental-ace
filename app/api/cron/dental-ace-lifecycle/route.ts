@@ -93,9 +93,10 @@ export async function GET(request: NextRequest) {
   let lowBalance = 0;
   let exhausted = 0;
 
-  // 1) Course-expiry reminders.
+  // 1) Course-expiry reminders. Retired courses (lib/admin/course-retire.ts)
+  // are not the company's offerings, so they never prompt a renewal.
   const courses = await prisma.accreditedCourse.findMany({
-    where: { expiresAt: { gt: now } },
+    where: { expiresAt: { gt: now }, retiredAt: null },
     select: {
       id: true,
       companyId: true,

@@ -34,8 +34,9 @@ export default async function AdminDashboard() {
     prisma.user.count({ where: { disabledAt: { not: null } } }),
     prisma.user.count({ where: { emailVerifiedAt: null } }),
     // Active standalone courses, checked for a usable certificate quiz below.
+    // Retired courses (lib/admin/course-retire.ts) are closed, not "missing a quiz".
     prisma.accreditedCourse.findMany({
-      where: { eventId: null, supersededAt: null, expiresAt: { gt: new Date() } },
+      where: { eventId: null, supersededAt: null, retiredAt: null, expiresAt: { gt: new Date() } },
       select: { quizQuestions: true, company: { select: { id: true, name: true, certBalance: true } } },
     }),
   ]);

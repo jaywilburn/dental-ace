@@ -68,3 +68,6 @@ Thumbs.db
 # New-companies (July 2026) attendee source CSVs (PII, kept locally like the Pearl CSVs)
 /scripts/data/legacy/new-companies/attendees-*.csv
 /scripts/data/legacy/new-companies/providers.csv
+
+# Client-request intake + one-off script backups/send logs (local only, may hold attendee PII)
+/.scratch/

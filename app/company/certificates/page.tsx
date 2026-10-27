@@ -26,9 +26,10 @@ export default async function CertificateLogPage({
   const pageNum = Math.max(1, Number(page ?? "1") || 1);
   const query = (q ?? "").trim();
 
-  // Course filter options (this company's accredited courses).
+  // Course filter options (this company's accredited courses). Retired courses
+  // are left out, matching buildCertWhere, which hides their certificates.
   const companyCourses = await prisma.accreditedCourse.findMany({
-    where: { companyId: user.companyId ?? "" },
+    where: { companyId: user.companyId ?? "", retiredAt: null },
     orderBy: { approvedAt: "desc" },
     select: {
       id: true,

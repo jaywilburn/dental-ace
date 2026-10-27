@@ -79,6 +79,14 @@ export default async function ReviewerApprovedPage() {
                       <td className="px-4 py-2">
                         <p className="font-medium text-navy">{c.application.courseTitle ?? "Untitled course"}</p>
                         <p className="font-mono text-[11px] text-text-muted">{c.courseIdNumber}</p>
+                        {/* Retired courses stay listed for staff (nothing is deleted)
+                            but are labelled; see lib/admin/course-retire.ts. */}
+                        {c.retiredAt ? (
+                          <span className="mt-1 inline-flex items-center rounded-full bg-surface px-2 py-0.5 text-[10px] font-semibold leading-none text-text-mid tabular-nums">
+                            Retired{" "}
+                            {c.retiredAt.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                          </span>
+                        ) : null}
                       </td>
                       <td className="px-4 py-2 text-text-mid">{c.company.name}</td>
                       <td className="px-4 py-2 text-text-muted">
@@ -97,7 +105,9 @@ export default async function ReviewerApprovedPage() {
                         {c.certsIssuedCount}
                       </td>
                       <td className="px-4 py-2">
-                        {hasQuiz ? (
+                        {c.retiredAt ? (
+                          <span className="text-text-muted">Retired</span>
+                        ) : hasQuiz ? (
                           <span className="flex items-center gap-2 whitespace-nowrap">
                             <span className="text-text-muted">5 questions</span>
                             {isAdmin ? (

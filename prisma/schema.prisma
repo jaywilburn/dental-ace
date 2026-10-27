@@ -254,6 +254,15 @@ enum AdminAuditAction {
   // targetUserId is null; details carries companyId, companyName, eventId,
   // eventName and the question counts.
   EVENT_SURVEY_UPDATED
+  // An admin retired an accredited course (lib/admin/course-retire.ts), in the
+  // SAME transaction as setting accredited_courses.retired_at and decrementing
+  // companies.total_certs_issued. targetUserId is null; details carries
+  // courseIdNumber, companyId, companyName, certsHidden, totalBefore,
+  // totalAfter and reason.
+  COURSE_RETIRED
+  // An admin corrected the attendee email on an issued certificate.
+  // targetUserId is null; the subject is a certificate.
+  CERTIFICATE_EMAIL_CORRECTED
 }
 
 model AdminAuditLog {
@@ -424,6 +433,13 @@ model AccreditedCourse {
   // Set when a renewal of this course is approved; the old row is kept for
   // history (issued certs still reference it) but is no longer the live course.
   supersededAt      DateTime?         @map("superseded_at")
+  // Set by an admin (lib/admin/course-retire.ts) when a course must stop being
+  // presented as a company offering, e.g. a legacy course imported under the
+  // wrong company. Courses are retired, never deleted: a retired course is
+  // hidden from company-facing lists, the Certificate Log/export and the
+  // attendee link, while its issued certificates stay valid in ProTrack and
+  // public Verify. Null = live.
+  retiredAt         DateTime?         @map("retired_at")
   // Denormalized event-scope marker: null = ordinary reusable course; non-null =
   // a session of that event (event-only full-course path), hidden from
   // /company/courses and the attach picker. Set at approval alongside the

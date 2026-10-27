@@ -3,10 +3,12 @@ import { z } from "zod";
 import { COURSE_FORMATS, quizQuestionSchema } from "@/lib/forms/application/schemas";
 import { courseFormatLabel } from "@/lib/pdf/course-format-label";
 import { AttendeeForm } from "@/components/attend/attendee-form";
+import { isCourseClosed } from "@/lib/courses/course-open";
 
 /*
-  Public attendee entry. Fails closed: an invalid token, an expired course, or
-  a company with no remaining cert balance shows a friendly notice and no form.
+  Public attendee entry. Fails closed: an invalid token, an expired or retired
+  course, or a company with no remaining cert balance shows a friendly notice
+  and no form. A retired course reads exactly like an expired one.
 */
 
 export const dynamic = "force-dynamic";
@@ -50,6 +52,7 @@ export default async function AttendPage({
     where: { attendeeLinkToken: token },
     select: {
       expiresAt: true,
+      retiredAt: true,
       quizQuestions: true,
       company: { select: { certBalance: true } },
       application: { select: { courseTitle: true, ceHours: true, deliveryMethod: true } },
@@ -59,7 +62,7 @@ export default async function AttendPage({
   if (!course) {
     return <Notice title="Course not found" body="This certificate link is not valid." />;
   }
-  if (course.expiresAt < new Date()) {
+  if (isCourseClosed(course)) {
     return <Notice title="Course expired" body="This course is no longer accepting certificate claims." />;
   }
   if (course.company.certBalance <= 0) {

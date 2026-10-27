@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { LicenseType } from "@prisma/client";
+import { invalidTldMessage } from "@/lib/attend/email-typo";
 
 /*
   Validation for the public platform sign-up form. Name/email/password are
@@ -10,7 +11,17 @@ import { LicenseType } from "@prisma/client";
 export const registerSchema = z.object({
   firstName: z.string().trim().min(1, "First name is required").max(80),
   lastName: z.string().trim().min(1, "Last name is required").max(80),
-  email: z.string().trim().toLowerCase().email("Enter a valid email address"),
+  // Same non-existent-TLD guard as the attendee forms ("jane@gmail.con"):
+  // the verification email could never arrive.
+  email: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .email("Enter a valid email address")
+    .superRefine((email, ctx) => {
+      const message = invalidTldMessage(email);
+      if (message) ctx.addIssue({ code: "custom", message });
+    }),
   password: z.string().min(8, "Password must be at least 8 characters").max(200),
   licenseType: z
     .enum([LicenseType.RDH, LicenseType.DDS_DMD, LicenseType.DA])

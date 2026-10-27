@@ -22,7 +22,9 @@ export async function startCourseRenewal(formData: FormData): Promise<void> {
   if (!courseId) redirect("/company/courses?error=renew_failed");
 
   const course = await prisma.accreditedCourse.findFirst({
-    where: { id: courseId, companyId: user.companyId },
+    // A retired course (lib/admin/course-retire.ts) is not this company's
+    // offering, so it cannot be renewed into one either.
+    where: { id: courseId, companyId: user.companyId, retiredAt: null },
     select: {
       id: true,
       supersededAt: true,

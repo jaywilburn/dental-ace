@@ -170,3 +170,29 @@ describe("flattenFieldErrors", () => {
     expect(JSON.stringify(fieldErrors)).not.toContain("not-an-email-value");
   });
 });
+
+describe("attendeeSubmissionSchema email typo guard", () => {
+  it("rejects a non-existent TLD with a did-you-mean message on the email field", () => {
+    const parsed = attendeeSubmissionSchema.safeParse({ ...valid, attendeeEmail: "jane@gmail.con" });
+    expect(parsed.success).toBe(false);
+    if (parsed.success) return;
+    expect(flattenFieldErrors(parsed.error).attendeeEmail).toEqual([
+      "Check your email address. Did you mean jane@gmail.com?",
+    ]);
+  });
+
+  it("rejects an uppercase, padded .con address after trimming", () => {
+    const parsed = attendeeSubmissionSchema.safeParse({ ...valid, attendeeEmail: "  JANE@GMAIL.CON " });
+    expect(parsed.success).toBe(false);
+    if (parsed.success) return;
+    expect(flattenFieldErrors(parsed.error).attendeeEmail?.[0]).toBe(
+      "Check your email address. Did you mean JANE@gmail.com?",
+    );
+  });
+
+  it("accepts a provider misspelling (it could be a real domain) and real .cm/.co TLDs", () => {
+    for (const attendeeEmail of ["jane@gmial.com", "jane@example.cm", "jane@example.co"]) {
+      expect(attendeeSubmissionSchema.safeParse({ ...valid, attendeeEmail }).success).toBe(true);
+    }
+  });
+});

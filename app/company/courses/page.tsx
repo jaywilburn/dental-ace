@@ -61,8 +61,9 @@ export default async function MyCoursesPage({
       take: 50,
     }),
     prisma.accreditedCourse.findMany({
-      // eventId:null hides event-scoped session courses from the reusable list.
-      where: { companyId: user.companyId, eventId: null },
+      // eventId:null hides event-scoped session courses from the reusable list;
+      // retiredAt:null hides courses an admin retired (lib/admin/course-retire.ts).
+      where: { companyId: user.companyId, eventId: null, retiredAt: null },
       orderBy: { approvedAt: "desc" },
       take: 50,
       include: {

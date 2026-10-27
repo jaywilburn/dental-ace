@@ -18,6 +18,7 @@
     "import:new-companies": "tsx scripts/import-new-companies.ts",
     "reconcile:certs": "tsx scripts/reconcile-cert-balances.ts",
     "merge:smile-together-certs": "tsx --tsconfig scripts/tsconfig.json scripts/merge-smile-together-certs.ts",
+    "fix:attendee-email-typos": "tsx --tsconfig scripts/tsconfig.json scripts/correct-attendee-email-typos.ts",
     "attach:klowen-quizzes": "tsx scripts/attach-klowen-missing-quizzes.ts",
     "backfill:course-expirations": "tsx scripts/backfill-legacy-course-expirations.ts",
     "backfill:course-assets": "tsx scripts/backfill-legacy-course-assets.ts",

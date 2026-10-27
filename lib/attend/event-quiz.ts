@@ -87,6 +87,8 @@ const SELECT = {
       course: {
         select: {
           quizQuestions: true,
+          // Retired attached courses issue no new credit (see courseRetired).
+          retiredAt: true,
           application: { select: { courseTitle: true, ceHours: true } },
         },
       },
@@ -108,6 +110,7 @@ const PAGE_SELECT = {
       course: {
         select: {
           quizQuestions: true,
+          retiredAt: true,
           application: {
             select: { courseTitle: true, ceHours: true, applicationData: true },
           },
@@ -214,6 +217,17 @@ function eventQuiz(event: EventForAttend): QuizQuestion[] | null {
   return parsed.success ? parsed.data : null;
 }
 
+/**
+ * True when the session's attached course was retired by an admin
+ * (lib/admin/course-retire.ts). A retired course must not earn new credit, so
+ * a selective event stops offering that session and a full-attendance event
+ * (which can only certify every session together) closes its form rather than
+ * certify hours for it. Neither throws: the page shows its usual notice.
+ */
+function courseRetired(session: { course: { retiredAt?: Date | null } | null }): boolean {
+  return session.course?.retiredAt != null;
+}
+
 /** True when every session points at an accredited course (vs legacy inline). */
 function sessionsCourseBacked(event: EventForAttend): boolean {
   return event.sessions.length > 0 && event.sessions.every((s) => s.course != null);
@@ -277,11 +291,15 @@ export function buildPublicForm(event: EventForAttendPage): EventPublicForm | nu
 
   // Course-backed: one MC question per course.
   if (!isSelectiveType(event.eventType)) {
+    if (event.sessions.some(courseRetired)) return null;
     const qs = event.sessions.map(firstCourseMc);
     if (qs.some((q) => q === null)) return null;
     return { mode: "full", questions: (qs as QuizQuestion[]).map(strip) };
   }
-  const items = event.sessions.map((s) => {
+  // Selective: a retired course's session is simply no longer offered.
+  const offered = event.sessions.filter((s) => !courseRetired(s));
+  if (offered.length === 0) return null;
+  const items = offered.map((s) => {
     const q = firstCourseMc(s);
     if (!q) return null;
     const presenters = presenterNames(s.course?.application.applicationData);
@@ -337,6 +355,8 @@ export function assembleForSubmit(
   // Full coverage, course-backed (FULL_PER_COURSE, or event-only under the
   // full-course model): one MC question per course, all of them.
   if (!isSelectiveType(event.eventType)) {
+    // Mirrors buildPublicForm: never certify a retired course's hours.
+    if (event.sessions.some(courseRetired)) return null;
     const qs = event.sessions.map(firstCourseMc);
     if (qs.length === 0 || qs.some((q) => q === null)) return null;
     return {
@@ -370,6 +390,9 @@ export function assembleForSubmit(
       sessionHours.push(s.durationHours ? Number(s.durationHours) : 0);
       sessionNames.push(s.name ?? "Session");
     } else {
+      // A retired course's session is not offered on the page; refuse a
+      // hand-crafted submit that selects it.
+      if (courseRetired(s)) return null;
       const q = firstCourseMc(s);
       if (!q) return null;
       questions.push(q);

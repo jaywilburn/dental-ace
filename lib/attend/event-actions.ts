@@ -4,6 +4,7 @@ import { headers } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { eventAttendeeSubmissionSchema } from "@/lib/attend/event-schemas";
 import { flattenFieldErrors } from "@/lib/attend/schemas";
+import { redactEmails } from "@/lib/attend/email-typo";
 import { loadEventByToken, assembleForSubmit, activeSurvey } from "@/lib/attend/event-quiz";
 import {
   SURVEY_FORM_KEY,
@@ -39,6 +40,15 @@ class AlreadyCertifiedError extends Error {
   }
 }
 
+/** Thrown inside the issue tx when an attached course was retired after the
+ *  pre-tx snapshot. Maps to event_inactive. */
+class EventCourseRetiredError extends Error {
+  constructor() {
+    super("attached course retired");
+    this.name = "EventCourseRetiredError";
+  }
+}
+
 export type EventAttendResult =
   // creditedSessionIds: the sessions on the certificate. On the per-session
   // path (SELECTIVE_INLINE) this can be a subset of those attended, which the
@@ -57,8 +67,9 @@ export async function submitEventAttendance(input: unknown): Promise<EventAttend
   const parsed = eventAttendeeSubmissionSchema.safeParse(input);
   if (!parsed.success) {
     const fieldErrors = flattenFieldErrors(parsed.error);
-    // Field names + static schema messages only, never submitted values.
-    console.error("[submitEventAttendance] invalid submission", JSON.stringify(fieldErrors));
+    // Field names + schema messages only, never submitted values (an email
+    // typo suggestion is the one message carrying an address, so redact).
+    console.error("[submitEventAttendance] invalid submission", redactEmails(JSON.stringify(fieldErrors)));
     return { status: "invalid", fieldErrors };
   }
   const sub = parsed.data;
@@ -192,6 +203,13 @@ export async function submitEventAttendance(input: unknown): Promise<EventAttend
         select: { id: true },
       });
       if (alreadyPassed) throw new AlreadyCertifiedError();
+      // Re-check retirement UNDER the lock: the session snapshot above predates
+      // it, and retireCourse takes this same company lock, so a course retired
+      // mid-form is seen here and earns no credit (same result as expired).
+      const retiredAttached = await tx.eventSession.count({
+        where: { id: { in: assembled.attendedSessionIds }, course: { retiredAt: { not: null } } },
+      });
+      if (retiredAttached > 0) throw new EventCourseRetiredError();
       const cert = await issueEventCertificateTx(tx, {
         eventId: event.id,
         companyId: event.companyId,
@@ -212,6 +230,7 @@ export async function submitEventAttendance(input: unknown): Promise<EventAttend
     });
   } catch (err) {
     if (err instanceof AlreadyCertifiedError) return { status: "already_certified" };
+    if (err instanceof EventCourseRetiredError) return { status: "event_inactive" };
     if (err instanceof CertBalanceExhaustedError) return { status: "balance_exhausted" };
     throw err;
   }

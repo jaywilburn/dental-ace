@@ -16,6 +16,15 @@ export class CertBalanceExhaustedError extends Error {
   }
 }
 
+/** Thrown when the course was retired by an admin (lib/admin/course-retire.ts).
+ *  Callers map it to the same closed result as an expired course. */
+export class CourseRetiredError extends Error {
+  constructor() {
+    super("course retired");
+    this.name = "CourseRetiredError";
+  }
+}
+
 export type IssueCertInput = {
   courseId: string;
   companyId: string;
@@ -50,13 +59,18 @@ export async function issueCertificateTx(
     throw new CertBalanceExhaustedError();
   }
 
+  // The course counter write doubles as the retirement re-check: retireCourse
+  // takes the same company row lock, so a retire that committed while the
+  // attendee was filling in the form matches zero rows here and the whole
+  // transaction (balance included) rolls back.
+  const bumped = await tx.accreditedCourse.updateMany({
+    where: { id: input.courseId, retiredAt: null },
+    data: { certsIssuedCount: { increment: 1 } },
+  });
+  if (bumped.count === 0) throw new CourseRetiredError();
   await tx.company.update({
     where: { id: input.companyId },
     data: { certBalance: { decrement: 1 }, totalCertsIssued: { increment: 1 } },
-  });
-  await tx.accreditedCourse.update({
-    where: { id: input.courseId },
-    data: { certsIssuedCount: { increment: 1 } },
   });
 
   const cert = await tx.issuedCertificate.create({
