@@ -156,49 +156,51 @@ enum NoticeType {
 //   verify_access  -> Verify (admin-granted)
 // ProTrack profile + data (name, tier, licenses, certs) live on / hang off this row.
 model User {
-  id               String    @id @default(uuid()) @db.Uuid
-  email            String    @unique
-  firstName        String?   @map("first_name")
-  lastName         String?   @map("last_name")
-  staffRole        StaffRole @default(NONE) @map("staff_role")
-  companyId        String?   @map("company_id") @db.Uuid
-  company          Company?  @relation(fields: [companyId], references: [id])
-  protrackTier     PlanTier  @default(FREE) @map("protrack_tier")
-  signupIntent     SignupIntent? @map("signup_intent") // what they picked at /signup; tailors the welcome email
-  proExpiresAt     DateTime? @map("pro_expires_at")
-  verifyAccess     Boolean   @default(false) @map("verify_access")
+  id                    String        @id @default(uuid()) @db.Uuid
+  email                 String        @unique
+  firstName             String?       @map("first_name")
+  lastName              String?       @map("last_name")
+  staffRole             StaffRole     @default(NONE) @map("staff_role")
+  companyId             String?       @map("company_id") @db.Uuid
+  company               Company?      @relation(fields: [companyId], references: [id])
+  protrackTier          PlanTier      @default(FREE) @map("protrack_tier")
+  signupIntent          SignupIntent? @map("signup_intent") // what they picked at /signup; tailors the welcome email
+  proExpiresAt          DateTime?     @map("pro_expires_at")
+  verifyAccess          Boolean       @default(false) @map("verify_access")
   // Set for users who registered through /signup/board. Multiple verify users for
   // the same state share one board row (find-or-create on signup).
-  boardId          String?   @map("board_id") @db.Uuid
-  board            Board?    @relation(fields: [boardId], references: [id])
-  reminderSettings Json      @default("{}") @map("reminder_settings") // {d90,d60,d30,d7,categoryGap}
-  emailVerifiedAt  DateTime? @map("email_verified_at") // null until the signup email is confirmed
+  boardId               String?       @map("board_id") @db.Uuid
+  board                 Board?        @relation(fields: [boardId], references: [id])
+  reminderSettings      Json          @default("{}") @map("reminder_settings") // {d90,d60,d30,d7,categoryGap}
+  emailVerifiedAt       DateTime?     @map("email_verified_at") // null until the signup email is confirmed
   // Set by an app admin to suspend the account: blocks sign-in (route + session
   // guard) and is reversible. We never hard-delete a user (compliance/audit), so
   // suspension is the terminal lifecycle state. See lib/admin/users.ts.
-  disabledAt       DateTime? @map("disabled_at")
-  createdAt        DateTime  @default(now()) @map("created_at")
-  lastLogin        DateTime? @map("last_login")
+  disabledAt            DateTime?     @map("disabled_at")
+  createdAt             DateTime      @default(now()) @map("created_at")
+  lastLogin             DateTime?     @map("last_login")
   // Set by scripts/provision-legacy-accounts.ts when this account was created from
   // a migrated legacy attendee email (not a self-serve signup). Marks the cohort
   // eligible for the one-time set-password activation email. Null for everyone else.
-  legacyProvisionedAt   DateTime? @map("legacy_provisioned_at")
+  legacyProvisionedAt   DateTime?     @map("legacy_provisioned_at")
   // Set by scripts/send-legacy-invites.ts when the activation email was sent, so
   // the batch is resumable and never double-sends. Null = not yet invited.
-  activationEmailSentAt DateTime? @map("activation_email_sent_at")
+  activationEmailSentAt DateTime?     @map("activation_email_sent_at")
 
-  reviewedApplications  CourseApplication[] @relation("ReviewedBy")
-  reviewedEvents        Event[]             @relation("EventReviewedBy")
-  licenses              UserLicense[]
-  certificates          CeCertificate[]
-  subscription          ProSubscription?
-  initiatedAuditBatches AuditBatch[]        @relation("InitiatedBy")
-  sentNotices           NoticeSent[]        @relation("SentBy")
-  adminActionsPerformed AdminAuditLog[]     @relation("AdminActor")
-  adminActionsTargeting AdminAuditLog[]     @relation("AdminTarget")
-  accessRequests        AccessRequest[]     @relation("AccessRequester")
-  accessRequestsDecided AccessRequest[]     @relation("AccessDecider")
-  platformSettingsUpdated PlatformSettings[] @relation("PlatformSettingsUpdatedBy")
+  reviewedApplications    CourseApplication[] @relation("ReviewedBy")
+  courseDraftsCreated     AdminCourseDraft[]  @relation("CourseDraftCreatedBy")
+  courseDraftsUpdated     AdminCourseDraft[]  @relation("CourseDraftUpdatedBy")
+  reviewedEvents          Event[]             @relation("EventReviewedBy")
+  licenses                UserLicense[]
+  certificates            CeCertificate[]
+  subscription            ProSubscription?
+  initiatedAuditBatches   AuditBatch[]        @relation("InitiatedBy")
+  sentNotices             NoticeSent[]        @relation("SentBy")
+  adminActionsPerformed   AdminAuditLog[]     @relation("AdminActor")
+  adminActionsTargeting   AdminAuditLog[]     @relation("AdminTarget")
+  accessRequests          AccessRequest[]     @relation("AccessRequester")
+  accessRequestsDecided   AccessRequest[]     @relation("AccessDecider")
+  platformSettingsUpdated PlatformSettings[]  @relation("PlatformSettingsUpdatedBy")
 
   @@map("users")
 }
@@ -263,6 +265,18 @@ enum AdminAuditAction {
   // An admin corrected the attendee email on an issued certificate.
   // targetUserId is null; the subject is a certificate.
   CERTIFICATE_EMAIL_CORRECTED
+  // An admin added an already-approved course to a company
+  // (lib/admin/course-add.ts), e.g. one accredited before DentalACE One that was
+  // never imported. Written in the SAME transaction as the course and its stub
+  // application. targetUserId is null; details carries companyId, companyName,
+  // courseId, courseIdNumber, courseTitle, ceHours, courseType, deliveryMethod,
+  // approvedAt, expiresAt and legacyCourseId.
+  COURSE_ADDED
+  // An admin changed a course's CE hours, subject, format or approval date
+  // (lib/admin/course-details.ts), in the SAME transaction as the change.
+  // targetUserId is null; details carries companyId, companyName, courseId,
+  // courseIdNumber and a from/to pair for each field that changed.
+  COURSE_DETAILS_UPDATED
 }
 
 model AdminAuditLog {
@@ -298,25 +312,25 @@ model PlatformSettings {
 }
 
 model AccessRequest {
-  id              String              @id @default(uuid()) @db.Uuid
-  userId          String              @map("user_id") @db.Uuid
+  id      String              @id @default(uuid()) @db.Uuid
+  userId  String              @map("user_id") @db.Uuid
   // FK ON DELETE RESTRICT: deleting a user who has access requests is blocked; deprovision via the admin user flow first.
   // decidedBy below is SET NULL on admin deletion so historical requests are preserved.
-  user            User                @relation("AccessRequester", fields: [userId], references: [id])
-  kind            AccessRequestKind
-  status          AccessRequestStatus @default(PENDING)
+  user    User                @relation("AccessRequester", fields: [userId], references: [id])
+  kind    AccessRequestKind
+  status  AccessRequestStatus @default(PENDING)
   // Kind-specific data. COMPANY -> full company-register form; BOARD -> {state, boardName}; staff -> {}.
-  payload         Json                @default("{}")
+  payload Json                @default("{}")
   // Optional free-text justification (any kind).
-  note            String?
+  note    String?
   // Denormalized one-line description for the admin queue (no JSON parse needed).
-  label           String
+  label   String
 
-  decidedByUserId String?             @map("decided_by_user_id") @db.Uuid
-  decidedBy       User?               @relation("AccessDecider", fields: [decidedByUserId], references: [id])
-  decidedAt       DateTime?           @map("decided_at")
-  denyReason      String?             @map("deny_reason")
-  createdAt       DateTime            @default(now()) @map("created_at")
+  decidedByUserId String?   @map("decided_by_user_id") @db.Uuid
+  decidedBy       User?     @relation("AccessDecider", fields: [decidedByUserId], references: [id])
+  decidedAt       DateTime? @map("decided_at")
+  denyReason      String?   @map("deny_reason")
+  createdAt       DateTime  @default(now()) @map("created_at")
 
   @@index([status, createdAt])
   @@index([userId, status])
@@ -324,37 +338,38 @@ model AccessRequest {
 }
 
 model Company {
-  id                          String    @id @default(uuid()) @db.Uuid
-  name                        String    @unique
-  contactEmail                String?   @map("contact_email")
-  contactPhone                String?   @map("contact_phone")
-  addressLine1                String?   @map("address_line1")
-  addressLine2                String?   @map("address_line2")
-  city                        String?
-  state                       String?   @db.Char(2)
-  zip                         String?
-  stripeCustomerId            String?   @unique @map("stripe_customer_id")
-  applicationCredits          Int       @default(0) @map("application_credits")
-  certBalance                 Int       @default(0) @map("cert_balance")
-  certAlertThreshold          Int       @default(25) @map("cert_alert_threshold")
-  totalCertsIssued            Int       @default(0) @map("total_certs_issued")
+  id                     String    @id @default(uuid()) @db.Uuid
+  name                   String    @unique
+  contactEmail           String?   @map("contact_email")
+  contactPhone           String?   @map("contact_phone")
+  addressLine1           String?   @map("address_line1")
+  addressLine2           String?   @map("address_line2")
+  city                   String?
+  state                  String?   @db.Char(2)
+  zip                    String?
+  stripeCustomerId       String?   @unique @map("stripe_customer_id")
+  applicationCredits     Int       @default(0) @map("application_credits")
+  certBalance            Int       @default(0) @map("cert_balance")
+  certAlertThreshold     Int       @default(25) @map("cert_alert_threshold")
+  totalCertsIssued       Int       @default(0) @map("total_certs_issued")
   // Set when the customer dismisses the "schedule your onboarding call" banner on
   // the company dashboard. Null = still show the banner (new customer).
-  onboardingDismissedAt       DateTime? @map("onboarding_dismissed_at")
+  onboardingDismissedAt  DateTime? @map("onboarding_dismissed_at")
   // Provenance key for the one-time legacy Google Sheet / Typeform import
   // (scripts/migrate-legacy.ts). Null for every natively-created company.
-  legacyId                    Int?      @unique @map("legacy_id")
+  legacyId               Int?      @unique @map("legacy_id")
   // Admin-gated features (toggled on /admin/companies/[id], audited as
   // COMPANY_FEATURE_CHANGED). surveyEnabled shows the custom attendee survey on
   // this company's event links; attendanceCodesEnabled lets SELECTIVE_INLINE
   // sessions ask for a typed attendance code instead of an MC question.
-  surveyEnabled               Boolean   @default(false) @map("survey_enabled")
-  attendanceCodesEnabled      Boolean   @default(false) @map("attendance_codes_enabled")
-  createdAt                   DateTime  @default(now()) @map("created_at")
+  surveyEnabled          Boolean   @default(false) @map("survey_enabled")
+  attendanceCodesEnabled Boolean   @default(false) @map("attendance_codes_enabled")
+  createdAt              DateTime  @default(now()) @map("created_at")
 
   users               User[]
   applications        CourseApplication[]
   accreditedCourses   AccreditedCourse[]
+  adminCourseDrafts   AdminCourseDraft[]
   issuedCertificates  IssuedCertificate[]
   billingTransactions BillingTransaction[]
   events              Event[]
@@ -391,22 +406,22 @@ model CourseApplication {
   // 2026-07-29). A resubmit clone copies it from its parent, which is what
   // makes the revision free; a RENEWAL clone deliberately leaves it null,
   // because a renewal is a new accreditation and is charged.
-  creditChargedAt   DateTime?         @map("credit_charged_at")
+  creditChargedAt DateTime? @map("credit_charged_at")
 
   // When set, this application is a revision of a rejected one. Mirrors
   // renewalOfCourseId, and gates against starting two revisions at once.
-  resubmitOfId      String?            @map("resubmit_of_id") @db.Uuid
-  resubmitOf        CourseApplication? @relation("ApplicationResubmits", fields: [resubmitOfId], references: [id])
-  resubmissions     CourseApplication[] @relation("ApplicationResubmits")
+  resubmitOfId  String?             @map("resubmit_of_id") @db.Uuid
+  resubmitOf    CourseApplication?  @relation("ApplicationResubmits", fields: [resubmitOfId], references: [id])
+  resubmissions CourseApplication[] @relation("ApplicationResubmits")
 
   // When set, this is an inline, event-scoped session application captured in the
   // Event wizard (event-only full-course path). It is NOT a reusable standalone
   // course: excluded from /company/courses, the event attach picker, the standalone
   // application wizard, and the reviewer's standalone application queue. sessionPosition
   // orders the sessions within the event.
-  eventId         String?           @map("event_id") @db.Uuid
-  event           Event?            @relation("EventSessionApplications", fields: [eventId], references: [id], onDelete: Cascade)
-  sessionPosition Int?              @map("session_position")
+  eventId         String? @map("event_id") @db.Uuid
+  event           Event?  @relation("EventSessionApplications", fields: [eventId], references: [id], onDelete: Cascade)
+  sessionPosition Int?    @map("session_position")
 
   @@index([companyId, status])
   @@index([status, submittedAt])
@@ -506,8 +521,8 @@ model Event {
   survey            Json?
   createdAt         DateTime          @default(now()) @map("created_at")
 
-  sessions           EventSession[]
-  issuedCertificates IssuedCertificate[]
+  sessions            EventSession[]
+  issuedCertificates  IssuedCertificate[]
   // Inline session applications captured in the wizard (event-only full-course
   // path) before approval, and the event-scoped courses they become after.
   sessionApplications CourseApplication[] @relation("EventSessionApplications")
@@ -546,45 +561,45 @@ model EventSession {
 }
 
 model IssuedCertificate {
-  id             String            @id @default(uuid()) @db.Uuid
+  id                 String            @id @default(uuid()) @db.Uuid
   // Course certs set courseId; event certs set eventId. Exactly one is set
   // (enforced by a CHECK in sql-migrations/0014). courseId relaxed to nullable
   // for event certs; existing course certs are unaffected (still set courseId).
-  courseId       String?           @map("course_id") @db.Uuid
-  course         AccreditedCourse? @relation(fields: [courseId], references: [id])
-  eventId        String?           @map("event_id") @db.Uuid
-  event          Event?            @relation(fields: [eventId], references: [id])
-  companyId      String            @map("company_id") @db.Uuid
-  company        Company           @relation(fields: [companyId], references: [id])
-  attendeeName   String            @map("attendee_name")
-  attendeeEmail  String            @map("attendee_email")
-  licenseNumber  String?           @map("license_number")
-  licenseType    String?           @map("license_type")
-  licenseStates  String[]          @map("license_states") // 2-char codes
-  deliveryMethod String?           @map("delivery_method")
-  courseType     String?           @map("course_type")
-  quizResponses  Json              @map("quiz_responses")
-  score          Int
-  passed         Boolean
-  certPdfUrl     String?           @map("cert_pdf_url")
+  courseId           String?           @map("course_id") @db.Uuid
+  course             AccreditedCourse? @relation(fields: [courseId], references: [id])
+  eventId            String?           @map("event_id") @db.Uuid
+  event              Event?            @relation(fields: [eventId], references: [id])
+  companyId          String            @map("company_id") @db.Uuid
+  company            Company           @relation(fields: [companyId], references: [id])
+  attendeeName       String            @map("attendee_name")
+  attendeeEmail      String            @map("attendee_email")
+  licenseNumber      String?           @map("license_number")
+  licenseType        String?           @map("license_type")
+  licenseStates      String[]          @map("license_states") // 2-char codes
+  deliveryMethod     String?           @map("delivery_method")
+  courseType         String?           @map("course_type")
+  quizResponses      Json              @map("quiz_responses")
+  score              Int
+  passed             Boolean
+  certPdfUrl         String?           @map("cert_pdf_url")
   // Stored CE hours for EVENT certs (total for Opt 1/2, attended-sum for Opt
   // 3/4). Null for course certs, which read hours from course.application.ceHours.
-  ceHours        Decimal?          @map("ce_hours") @db.Decimal(5, 2)
+  ceHours            Decimal?          @map("ce_hours") @db.Decimal(5, 2)
   // EventSession ids the attendee selected (Opt 3/4). Null for full-attendance
   // or course certs.
-  attendedSessionIds Json?         @map("attended_session_ids")
+  attendedSessionIds Json?             @map("attended_session_ids")
   // Course completion date as entered by the attendee ("when did you take the
   // course?"). Nullable: legacy rows fall back to issuedAt. Flows to the
   // certificate PDF and the ProTrack CE record (see lib/protrack/ace-sync.ts).
-  completedAt    DateTime?         @map("completed_at")
+  completedAt        DateTime?         @map("completed_at")
   // Dedup/provenance key for the one-time legacy import: the legacy cert_number
   // (e.g. LEGACY-DA255-00001). Unique, so re-running the importer is idempotent.
   // Null for every natively-issued certificate.
-  legacyCertNumber String?         @unique @map("legacy_cert_number")
+  legacyCertNumber   String?           @unique @map("legacy_cert_number")
   // Event survey answers, each a {questionId, type, prompt, value} snapshot so
   // exports survive later question edits. Null when no survey was shown.
-  surveyResponses Json?            @map("survey_responses")
-  issuedAt       DateTime          @default(now()) @map("issued_at")
+  surveyResponses    Json?             @map("survey_responses")
+  issuedAt           DateTime          @default(now()) @map("issued_at")
 
   ceCertificate CeCertificate? // Phase 2: the ProTrack copy once auto-synced
 
@@ -861,6 +876,30 @@ model NoticeSent {
 enum MarketingLeadSource {
   VERIFYIQ
   VERIFY
+}
+
+// An admin's unfinished "Add approved course" form (lib/admin/course-add.ts),
+// saved so they can step away or wait on missing details. Admins only: no
+// company-facing query reads this table, and RLS gives client roles nothing
+// but an ADMIN select (sql-migrations/0017_admin_course_drafts_rls.sql). Deliberately NOT a DRAFT
+// course_applications row: the provider wizard resumes the company's DRAFT
+// applications (ensureDraft) and would pick an admin draft up. `values` is
+// the form as typed (AddCourseValues, every field optional); adding the course
+// deletes the draft in the same transaction.
+model AdminCourseDraft {
+  id          String   @id @default(uuid()) @db.Uuid
+  companyId   String   @map("company_id") @db.Uuid
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  values      Json
+  createdById String   @map("created_by_id") @db.Uuid
+  createdBy   User     @relation("CourseDraftCreatedBy", fields: [createdById], references: [id])
+  updatedById String   @map("updated_by_id") @db.Uuid
+  updatedBy   User     @relation("CourseDraftUpdatedBy", fields: [updatedById], references: [id])
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@index([companyId])
+  @@map("admin_course_drafts")
 }
 
 model MarketingLead {

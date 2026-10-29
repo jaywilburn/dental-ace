@@ -14,6 +14,7 @@ import {
 } from "@/lib/forms/application/detail-rows";
 import { resolveAttachmentLinks } from "@/lib/forms/application/attachments";
 import {
+  isAdminAddedApplicationData,
   isLegacyApplicationData,
   legacyCourseRows,
 } from "@/lib/forms/application/legacy";
@@ -79,22 +80,24 @@ export default async function CompanyApplicationDetailPage({
   // application_data (no original application exists), so render a neutral
   // course-record view instead of trying to parse a full submission.
   if (isLegacyApplicationData(app.applicationData)) {
+    const adminAdded = isAdminAddedApplicationData(app.applicationData);
     return (
       <>
         <PageHeader
           title="Application Details"
-          subtitle={app.courseTitle ?? "Migrated course"}
+          subtitle={app.courseTitle ?? (adminAdded ? "Approved course" : "Migrated course")}
           action={backLink}
         />
         <div className="max-w-2xl space-y-5">
           <div className="rounded-md border border-border bg-surface p-4">
-            <p className="text-[12px] font-semibold text-navy">Migrated course</p>
+            <p className="text-[12px] font-semibold text-navy">
+              {adminAdded ? "Added by AADB" : "Migrated course"}
+            </p>
             <p className="mt-1 text-[13px] leading-relaxed text-text-mid">
-              This course was migrated from the previous ACE records system. The
-              original application predates DentalACE One and is not on file, so
-              full application details are not available. The course record
-              below shows the imported data. If you have questions about this
-              course, contact info@dentalace.org.
+              {adminAdded
+                ? "This course was approved for CE outside DentalACE One and added to your account by AADB. Its original application is not on file, so full application details are not available. The course record below shows its details."
+                : "This course was migrated from the previous ACE records system. The original application predates DentalACE One and is not on file, so full application details are not available. The course record below shows the imported data."}{" "}
+              If you have questions about this course, contact info@dentalace.org.
             </p>
           </div>
           <DetailSection

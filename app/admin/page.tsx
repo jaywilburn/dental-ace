@@ -4,12 +4,15 @@ import { PortalStatCard } from "@/components/portal-stat-card";
 import { requireStaff } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { hasCertificateQuiz } from "@/lib/admin/course-quiz-status";
+import { draftLabel, parseDraftValues } from "@/lib/admin/course-add-rules";
+import { memberDisplayName } from "@/lib/admin/company-members";
 
 /*
   AADB super-admin dashboard. Read-only platform stats. Company management and
   overrides live under /admin/companies; staff provisioning under /admin/users.
   Also surfaces active courses that cannot issue certificates for lack of a
-  quiz, linking each company to its Courses section (Add quiz lives there).
+  quiz, linking each company to its Courses section (Add quiz lives there),
+  and every unfinished "Add approved course" draft, so none is forgotten.
 */
 
 export default async function AdminDashboard() {
@@ -18,7 +21,7 @@ export default async function AdminDashboard() {
   const [
     companyCount, pendingApplications, certAgg, lowBalanceCount,
     totalUsers, staffUsers, dentalAceUsers, proUsers, verifyUsers, suspendedUsers, unverifiedUsers,
-    activeCourses,
+    activeCourses, courseDrafts,
   ] = await Promise.all([
     prisma.company.count(),
     prisma.courseApplication.count({ where: { status: "PENDING" } }),
@@ -38,6 +41,14 @@ export default async function AdminDashboard() {
     prisma.accreditedCourse.findMany({
       where: { eventId: null, supersededAt: null, retiredAt: null, expiresAt: { gt: new Date() } },
       select: { quizQuestions: true, company: { select: { id: true, name: true, certBalance: true } } },
+    }),
+    prisma.adminCourseDraft.findMany({
+      orderBy: { updatedAt: "desc" },
+      select: {
+        id: true, values: true, updatedAt: true,
+        company: { select: { id: true, name: true } },
+        updatedBy: { select: { email: true, firstName: true, lastName: true } },
+      },
     }),
   ]);
 
@@ -119,6 +130,36 @@ export default async function AdminDashboard() {
               </ul>
             </details>
           ) : null}
+        </section>
+      ) : null}
+      {courseDrafts.length > 0 ? (
+        <section aria-labelledby="course-drafts-heading" className="mb-5 rounded-lg border border-border bg-white p-4">
+          <h2 id="course-drafts-heading" className="text-balance text-[13px] font-semibold text-navy tabular-nums">
+            {courseDrafts.length} unfinished course draft{courseDrafts.length === 1 ? "" : "s"}
+          </h2>
+          <p className="mt-1 max-w-prose text-pretty text-[12px] text-text-muted">
+            Saved from Add approved course. Companies can&apos;t see these until an admin adds the finished course.
+          </p>
+          <ul className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {courseDrafts.map((d) => (
+              <li key={d.id}>
+                <Link
+                  href={`/admin/companies/${d.company.id}/courses/new?draft=${d.id}`}
+                  className="flex min-h-11 items-center justify-between gap-3 rounded-md border border-border px-3 py-2 text-[12px] hover:bg-surface"
+                >
+                  <span className="min-w-0">
+                    <span className="block truncate font-medium text-navy">{draftLabel(parseDraftValues(d.values))}</span>
+                    <span className="block truncate text-[11px] text-text-muted tabular-nums">
+                      {d.company.name} · saved{" "}
+                      {d.updatedAt.toLocaleDateString("en-US", { month: "short", day: "numeric" })} by{" "}
+                      {memberDisplayName(d.updatedBy)}
+                    </span>
+                  </span>
+                  <span className="shrink-0 font-semibold text-ace-dark" aria-hidden="true">Continue &rarr;</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
         </section>
       ) : null}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
