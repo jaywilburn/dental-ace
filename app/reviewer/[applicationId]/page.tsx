@@ -12,6 +12,7 @@ import {
 } from "@/lib/forms/application/detail-rows";
 import { resolveAttachmentLinks } from "@/lib/forms/application/attachments";
 import {
+  isAdminAddedApplicationData,
   isLegacyApplicationData,
   legacyCourseRows,
 } from "@/lib/forms/application/legacy";
@@ -54,11 +55,12 @@ export default async function ReviewerApplicationPage({
   // application_data (no original application exists), so there is nothing to
   // review. Show a neutral course-record view instead of a parse error.
   if (isLegacyApplicationData(app.applicationData)) {
+    const adminAdded = isAdminAddedApplicationData(app.applicationData);
     return (
       <>
         <PageHeader
           title="Application Review"
-          subtitle={`${app.company.name} · Migrated course`}
+          subtitle={`${app.company.name} · ${adminAdded ? "Added by an admin" : "Migrated course"}`}
           action={
             <Link
               href="/reviewer"
@@ -70,12 +72,13 @@ export default async function ReviewerApplicationPage({
         />
         <div className="max-w-2xl space-y-5">
           <div className="rounded-md border border-border bg-surface p-4">
-            <p className="text-[12px] font-semibold text-navy">Migrated course</p>
+            <p className="text-[12px] font-semibold text-navy">
+              {adminAdded ? "Added by an admin" : "Migrated course"}
+            </p>
             <p className="mt-1 text-[13px] leading-relaxed text-text-mid">
-              This course was migrated from the previous ACE records system. The
-              original application predates DentalACE One and is not on file, so
-              there is no application to review. The course record below shows
-              the imported data.
+              {adminAdded
+                ? "This course was approved for CE outside DentalACE One and added by an admin. Its application is not on file, so there is no application to review. The course record below shows the details entered when it was added."
+                : "This course was migrated from the previous ACE records system. The original application predates DentalACE One and is not on file, so there is no application to review. The course record below shows the imported data."}
             </p>
           </div>
           <DetailSection

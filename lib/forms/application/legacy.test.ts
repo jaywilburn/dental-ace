@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  isAdminAddedApplicationData,
   isLegacyApplicationData,
   legacyCourseRows,
   stripLegacyStubKeys,
@@ -140,5 +141,20 @@ describe("legacyCourseRows", () => {
       courseIdNumber: null,
     });
     expect(rows).toEqual([{ label: "Status", value: "Pending" }]);
+  });
+});
+
+describe("isAdminAddedApplicationData", () => {
+  it("matches the stub written by Add approved course, which is also a legacy stub", () => {
+    const stub = { legacy: true, legacyCourseId: "DA236", source: "admin-added" };
+    expect(isAdminAddedApplicationData(stub)).toBe(true);
+    expect(isLegacyApplicationData(stub)).toBe(true);
+    expect(isAdminAddedApplicationData({ legacy: true, legacyCourseId: null, source: "admin-added" })).toBe(true);
+  });
+
+  it("does not match migration stubs or real submissions", () => {
+    expect(isAdminAddedApplicationData({ legacy: true, legacyCourseId: "DA194", source: "legacy-migration-v3" })).toBe(false);
+    expect(isAdminAddedApplicationData({ legacy: true, source: "admin-added", courseTitle: "Real" })).toBe(false);
+    expect(isAdminAddedApplicationData(null)).toBe(false);
   });
 });

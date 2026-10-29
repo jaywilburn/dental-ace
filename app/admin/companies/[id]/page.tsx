@@ -8,6 +8,10 @@ import { txnLabel } from "@/lib/billing/transaction-labels";
 import { renameCompany } from "@/lib/admin/company-rename";
 import { renameCourse } from "@/lib/admin/course-rename";
 import { retireCourse } from "@/lib/admin/course-retire";
+import { updateCourseDetails } from "@/lib/admin/course-details";
+import { draftLabel, isoFromDate, parseDraftValues, todayIso } from "@/lib/admin/course-add-rules";
+import { CATEGORIES, COURSE_FORMATS } from "@/lib/forms/application/schemas";
+import { courseFormatLabel } from "@/lib/pdf/course-format-label";
 import { RETIRE_REASON_MAX } from "@/lib/admin/course-retire-rules";
 import { setCompanyFeature } from "@/lib/admin/company-features";
 import {
@@ -71,8 +75,18 @@ export default async function AdminCompanyDetailPage({
         where: { eventId: null, supersededAt: null },
         orderBy: { approvedAt: "desc" },
         select: {
-          id: true, courseIdNumber: true, expiresAt: true, certsIssuedCount: true,
-          retiredAt: true, quizQuestions: true, application: { select: { courseTitle: true } },
+          id: true, courseIdNumber: true, approvedAt: true, expiresAt: true, certsIssuedCount: true,
+          retiredAt: true, quizQuestions: true,
+          application: { select: { courseTitle: true, ceHours: true, courseType: true, deliveryMethod: true } },
+        },
+      },
+      // Unfinished "Add approved course" forms. Admins only: the company never
+      // sees these (lib/admin/course-add.ts).
+      adminCourseDrafts: {
+        orderBy: { updatedAt: "desc" },
+        select: {
+          id: true, values: true, updatedAt: true,
+          updatedBy: { select: { email: true, firstName: true, lastName: true } },
         },
       },
     },
@@ -86,7 +100,16 @@ export default async function AdminCompanyDetailPage({
     hasQuiz: hasCertificateQuiz(c.quizQuestions),
     expired: c.expiresAt < now,
     retired: c.retiredAt !== null,
+    // Edit details pre-selects the canonical equivalent of a pre-2026-06
+    // format ("Live/Online" -> "LIVE Online"); anything unmappable starts blank.
+    formatOption: (COURSE_FORMATS as readonly string[]).includes(courseFormatLabel(c.application.deliveryMethod) ?? "")
+      ? courseFormatLabel(c.application.deliveryMethod)!
+      : "",
+    subjectOption: (CATEGORIES as readonly string[]).includes(c.application.courseType ?? "")
+      ? c.application.courseType!
+      : "",
   }));
+  const today = todayIso();
   // Retired courses are listed (an admin can always see what exists) but are
   // not offerings, so they never count toward "needs a quiz".
   const needsQuiz = courses.filter((c) => !c.hasQuiz && !c.expired && !c.retired).length;
@@ -118,6 +141,12 @@ export default async function AdminCompanyDetailPage({
             ? "Company name updated."
             : ok === "course-renamed"
               ? "Course title updated."
+              : ok === "course-added"
+              ? "Course added. It is on the company's dashboard now, with its attendee link, QR code and approval letter."
+              : ok === "draft-discarded"
+              ? "Draft discarded."
+              : ok === "course-details"
+              ? "Course details updated. The approval letter has been regenerated."
               : ok === "course-retired"
               ? "Course retired. It no longer appears for this company; its certificates stay valid in ProTrack and Verify."
               : ok === "credits"
@@ -283,11 +312,19 @@ export default async function AdminCompanyDetailPage({
       ) : null}
 
       <section id="courses" aria-labelledby="courses-heading" className="mt-5 overflow-hidden rounded-lg border border-border bg-white">
-        <div className="border-b border-border px-4 py-3">
-          <h2 id="courses-heading" className="text-[12px] font-semibold text-navy">Courses</h2>
-          <p className="text-pretty text-[11px] text-text-muted">
-            Attendees can only claim a certificate for a course that has a 5-question certificate quiz.
-          </p>
+        <div className="flex flex-col gap-3 border-b border-border px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <h2 id="courses-heading" className="text-[12px] font-semibold text-navy">Courses</h2>
+            <p className="text-pretty text-[11px] text-text-muted">
+              Attendees can only claim a certificate for a course that has a 5-question certificate quiz.
+            </p>
+          </div>
+          <Link
+            href={`/admin/companies/${company.id}/courses/new`}
+            className="inline-flex min-h-9 shrink-0 items-center self-start rounded-md bg-navy px-3 text-[12px] font-semibold text-white hover:bg-navy/90 sm:min-h-8 sm:self-auto"
+          >
+            Add approved course
+          </Link>
         </div>
         {needsQuiz > 0 ? (
           <div className="border-b border-amber-200 bg-amber-50 px-4 py-3">
@@ -299,6 +336,34 @@ export default async function AdminCompanyDetailPage({
               certificates.&rdquo; Use Add quiz to enter the provider&apos;s 5 questions. The link works as soon as
               the quiz is saved.
             </p>
+          </div>
+        ) : null}
+        {company.adminCourseDrafts.length > 0 ? (
+          <div className="border-b border-border bg-surface px-4 py-3">
+            <p className="text-[12px] font-semibold text-navy tabular-nums">
+              {company.adminCourseDrafts.length} course draft{company.adminCourseDrafts.length === 1 ? "" : "s"}
+              <span className="ml-1.5 font-normal text-text-muted">(only admins can see these)</span>
+            </p>
+            <ul className="mt-2 space-y-2">
+              {company.adminCourseDrafts.map((d) => (
+                <li key={d.id} className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0">
+                    <p className="text-pretty text-[13px] font-medium text-navy">{draftLabel(parseDraftValues(d.values))}</p>
+                    <p className="text-[11px] text-text-muted tabular-nums">
+                      Saved{" "}
+                      {d.updatedAt.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} by{" "}
+                      {memberDisplayName(d.updatedBy)}
+                    </p>
+                  </div>
+                  <Link
+                    href={`/admin/companies/${company.id}/courses/new?draft=${d.id}`}
+                    className="inline-flex min-h-9 shrink-0 items-center self-start rounded-md border border-border bg-white px-3 text-[12px] font-semibold text-navy hover:bg-surface sm:min-h-8 sm:self-auto"
+                  >
+                    Continue draft
+                  </Link>
+                </li>
+              ))}
+            </ul>
           </div>
         ) : null}
         {courses.length === 0 ? (
@@ -384,6 +449,89 @@ export default async function AdminCompanyDetailPage({
                         </p>
                         <button type="submit" className="rounded-md bg-navy px-3 py-1.5 text-[12px] font-semibold text-white">
                           Save title
+                        </button>
+                      </form>
+                    </details>
+                    <details className="group open:basis-full">
+                      <summary className="inline-flex min-h-9 cursor-pointer list-none items-center rounded-md border border-border bg-white px-3 text-[12px] font-semibold text-navy hover:bg-surface sm:min-h-8 [&::-webkit-details-marker]:hidden">
+                        <span className="group-open:hidden">Edit details</span>
+                        <span className="hidden group-open:inline">Cancel edit</span>
+                      </summary>
+                      <form action={updateCourseDetails} className="mt-3 space-y-3 rounded-md border border-border bg-surface p-3">
+                        <input type="hidden" name="courseId" value={c.id} />
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <label className="block text-[12px] font-semibold text-navy">
+                            CE hours
+                            <input
+                              type="number"
+                              name="ceHours"
+                              inputMode="decimal"
+                              min={0.5}
+                              max={40}
+                              step={0.01}
+                              defaultValue={c.application.ceHours === null ? "" : Number(c.application.ceHours)}
+                              required
+                              className="mt-1 w-full rounded-md border border-border bg-white px-3 py-2 text-[13px] font-normal tabular-nums"
+                            />
+                          </label>
+                          <label className="block text-[12px] font-semibold text-navy">
+                            Approval date
+                            <input
+                              type="date"
+                              name="approvedOn"
+                              // A reviewer approval in the US evening is already
+                              // tomorrow in UTC; never let max block an unchanged date.
+                              max={isoFromDate(c.approvedAt) > today ? isoFromDate(c.approvedAt) : today}
+                              defaultValue={isoFromDate(c.approvedAt)}
+                              required
+                              className="mt-1 w-full rounded-md border border-border bg-white px-3 py-2 text-[13px] font-normal"
+                            />
+                          </label>
+                          <label className="block text-[12px] font-semibold text-navy">
+                            Subject
+                            <select
+                              name="courseType"
+                              defaultValue={c.subjectOption}
+                              required
+                              className="mt-1 w-full rounded-md border border-border bg-white px-3 py-2 text-[13px] font-normal"
+                            >
+                              <option value="" disabled>
+                                Choose a subject
+                              </option>
+                              {CATEGORIES.map((v) => (
+                                <option key={v} value={v}>
+                                  {v}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <label className="block text-[12px] font-semibold text-navy">
+                            Course format
+                            <select
+                              name="deliveryMethod"
+                              defaultValue={c.formatOption}
+                              required
+                              className="mt-1 w-full rounded-md border border-border bg-white px-3 py-2 text-[13px] font-normal"
+                            >
+                              <option value="" disabled>
+                                Choose a format
+                              </option>
+                              {COURSE_FORMATS.map((v) => (
+                                <option key={v} value={v}>
+                                  {v}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                        </div>
+                        <p className="text-pretty text-[11px] text-text-muted">
+                          Changing the approval date moves the expiry with it (3 years later). New hours show in the
+                          Certificate Log, on certificates issued from now on and in ProTrack records synced from this
+                          course. Certificates already downloaded are not reissued. The approval letter is regenerated
+                          and the change is recorded in the audit log.
+                        </p>
+                        <button type="submit" className="rounded-md bg-navy px-3 py-1.5 text-[12px] font-semibold text-white">
+                          Save details
                         </button>
                       </form>
                     </details>

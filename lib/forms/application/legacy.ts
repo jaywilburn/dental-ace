@@ -32,6 +32,19 @@ export function isLegacyApplicationData(applicationData: unknown): boolean {
   return legacyStubSchema.safeParse(applicationData).success;
 }
 
+/*
+  Courses an admin added through "Add approved course" (lib/admin/course-add.ts)
+  use the same stub with this source. They were approved outside DentalACE One
+  but not necessarily migrated, so the detail pages word their panel
+  differently.
+*/
+export const ADMIN_ADDED_SOURCE = "admin-added";
+
+export function isAdminAddedApplicationData(applicationData: unknown): boolean {
+  const parsed = legacyStubSchema.safeParse(applicationData);
+  return parsed.success && parsed.data.source === ADMIN_ADDED_SOURCE;
+}
+
 const LEGACY_STUB_KEYS = ["legacy", "legacyCourseId", "source"] as const;
 
 /**

@@ -8,9 +8,7 @@ import { requireStaff } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { recordAdminAction } from "@/lib/admin/audit";
 import { validateCourseRename } from "@/lib/admin/course-rename-rules";
-import { getLetterSignatory } from "@/lib/admin/letter-settings";
-import { renderApprovalLetterPdf } from "@/lib/pdf/approval-letter";
-import { uploadToStorage } from "@/lib/storage";
+import { rerenderApprovalLetter, type LetterJob } from "@/lib/admin/course-letter";
 
 /*
   Admin course rename. Runs in one transaction: row lock on the course's
@@ -34,10 +32,8 @@ import { uploadToStorage } from "@/lib/storage";
   Event-scoped courses (eventId set) are refused: their titles are session
   titles, edited through the event, and they never appear on this page.
 
-  After commit, the stored approval letter is re-rendered in place. The
-  self-heal path in lib/courses/course-assets.ts only regenerates a MISSING
-  object, so an existing letter would otherwise keep the old title forever.
-  A letter failure is logged, not surfaced: the rename itself has committed.
+  After commit, the stored approval letter is re-rendered in place
+  (lib/admin/course-letter.ts), so it never keeps the old title.
 */
 
 class RenameError extends Error {}
@@ -50,19 +46,6 @@ const renameCourseFormSchema = z.object({
   courseId: z.string().uuid(),
   title: z.string(),
 });
-
-// Everything the post-commit letter re-render needs, captured inside the
-// transaction and returned from it (a closure assignment would not narrow).
-type LetterJob = {
-  path: string;
-  companyName: string;
-  courseTitle: string;
-  courseIdNumber: string;
-  ceHours: number;
-  deliveryMethod: string | null;
-  approvedAt: Date;
-  expiresAt: Date;
-};
 
 export async function renameCourse(formData: FormData) {
   const admin = await requireStaff("ADMIN");
@@ -190,28 +173,8 @@ export async function renameCourse(formData: FormData) {
     throw err;
   }
 
-  // Outside the transaction: PDF render + storage IO must not hold the row
-  // lock, and a failure here must not roll back a committed rename.
-  if (letter) {
-    try {
-      const body = await renderApprovalLetterPdf({
-        companyName: letter.companyName,
-        courseTitle: letter.courseTitle,
-        courseIdNumber: letter.courseIdNumber,
-        ceHours: letter.ceHours,
-        deliveryMethod: letter.deliveryMethod,
-        approvedAt: letter.approvedAt,
-        expiresAt: letter.expiresAt,
-        ...(await getLetterSignatory()),
-      });
-      await uploadToStorage({ kind: "uploads", path: letter.path, body, contentType: "application/pdf" });
-    } catch (err) {
-      console.error(
-        `[renameCourse] approval letter re-render failed (courseId=${courseId}, path=${letter.path})`,
-        err,
-      );
-    }
-  }
+  // Outside the transaction, so the render never holds the row lock.
+  if (letter) await rerenderApprovalLetter(letter, { action: "renameCourse", courseId });
 
   revalidatePath(`/admin/companies/${companyId}`);
   revalidatePath("/company/courses");
