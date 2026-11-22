@@ -910,8 +910,16 @@ model MarketingLead {
   organization String
   email        String
   message      String?
+  /// Caught by the anti-spam checks (lib/leads/spam.ts): saved, but no email sent.
+  isSpam       Boolean             @default(false) @map("is_spam")
+  /// Which check caught it (a SpamReason), null when not spam.
+  spamReason   String?             @map("spam_reason")
+  /// Keyed hash of the submitter IP (lib/leads/form-token.ts), for the rate limit.
+  ipHash       String?             @map("ip_hash")
   createdAt    DateTime            @default(now()) @map("created_at")
 
   @@index([createdAt])
+  @@index([ipHash, createdAt])
+  @@index([email, createdAt])
   @@map("marketing_leads")
 }
