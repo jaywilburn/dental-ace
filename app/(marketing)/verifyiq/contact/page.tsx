@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { BrandMark } from "@/components/brand-mark";
 import { submitMarketingLead } from "@/lib/leads/actions";
+import { LeadFormGuards } from "@/components/leads/lead-form-guards";
 
 /*
   /verifyiq/contact — early-access waitlist / inquiry form for VerifyIQ. VerifyIQ
@@ -67,20 +68,7 @@ export default async function VerifyIQContactPage({
         <div className="rounded-xl border border-border bg-white p-6 shadow-sm">
           <form action={submitMarketingLead} className="relative space-y-4">
             <input type="hidden" name="source" value="VERIFYIQ" />
-            {/* Honeypot: hidden from humans; a bot that fills it gets a silent no-op. */}
-            <div
-              aria-hidden="true"
-              className="absolute left-[-9999px] top-[-9999px] h-0 w-0 overflow-hidden"
-            >
-              <label htmlFor="company_url">Leave this field empty</label>
-              <input
-                id="company_url"
-                name="company_url"
-                type="text"
-                tabIndex={-1}
-                autoComplete="off"
-              />
-            </div>
+            <LeadFormGuards />
 
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
