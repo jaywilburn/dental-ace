@@ -190,13 +190,20 @@ export default async function CompanyRegisterPage({
                   </select>
                 </div>
                 <div>
-                  <FormLabel required>ZIP</FormLabel>
+                  <FormLabel required>ZIP/Postal Code</FormLabel>
+                  {/* Shape check only: either format passes here, and the
+                      server matches the format to the selected state or
+                      province. The hyphen is escaped because browsers compile
+                      `pattern` with the `v` flag, where a bare "-" in a
+                      character class is a syntax error that silently disables
+                      the whole pattern. */}
                   <FormInput
                     name="zip"
                     required
-                    pattern="\d{5}(-\d{4})?"
+                    pattern="\d{5}(-\d{4})?|[A-Za-z]\d[A-Za-z][ \-]?\d[A-Za-z]\d"
+                    title="US ZIP code (12345 or 12345-6789) or Canadian postal code (A1A 1A1)"
                     maxLength={10}
-                    placeholder="78701"
+                    placeholder="78701 or A1A 1A1"
                     autoComplete="postal-code"
                   />
                 </div>
