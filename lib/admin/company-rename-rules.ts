@@ -1,4 +1,4 @@
-import { companyRegisterSchema } from "@/lib/company/register-schema";
+import { companyNameSchema } from "@/lib/company/register-schema";
 
 /*
   Pure validation for the admin company-rename action. No DB, no server-only —
@@ -16,7 +16,7 @@ export function validateCompanyRename(
   rawName: string,
   currentName: string,
 ): CompanyRenameValidation {
-  const parsed = companyRegisterSchema.shape.name.safeParse(rawName);
+  const parsed = companyNameSchema.safeParse(rawName);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Enter a valid name." };
   }
